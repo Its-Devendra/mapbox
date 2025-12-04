@@ -1,0 +1,127 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id String  @id @default(cuid())
+  name String
+  slug String @unique
+  clientBuildingIcon String? @db.Text // Custom SVG icon for client building marker
+  clientBuildingIconWidth Int? @default(40) // Width of client building icon in pixels
+  clientBuildingIconHeight Int? @default(40) // Height of client building icon in pixels
+
+  clientBuildingUrl String? // URL to open when client building is clicked
+  logo String? @db.Text // Project logo (Base64 or URL)
+  logoWidth Int? @default(120) // Width of the logo in pixels
+  logoHeight Int? @default(40) // Height of the logo in pixels
+  clientBuildingLat Float? // Latitude of client building location
+  clientBuildingLng Float? // Longitude of client building location
+  clientBuildingName String? // Display name for client building
+  clientBuildingDescription String? @db.Text // Description text for client building
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isActive Boolean @default(true)
+
+  //relations
+  themes Theme[]
+  landmarks Landmark[]
+  nearByPlaces NearBy[]
+  categories Category[]
+  settings MapSetting[]
+}
+
+model Theme {
+  id String  @id @default(cuid())
+  projectId String
+  project Project @relation(fields: [projectId], references: [id])
+  primary String
+  secondary String
+  mapboxStyle String
+  customStyleUrl String?
+  isActive Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Landmark {
+  id String @id @default(cuid())
+  projectId String
+  project Project @relation(fields: [projectId], references: [id])
+  title String
+  description String
+  latitude Float
+  longitude Float
+  categoryId String
+  category Category @relation(fields: [categoryId], references: [id])
+  icon String? @db.Text // Custom SVG icon for this landmark
+  iconWidth Int? @default(32) // Width of the icon in pixels
+  iconHeight Int? @default(32) // Height of the icon in pixels
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MapSetting {
+  id                      String  @id @default(cuid())
+  projectId               String
+  project                 Project @relation(fields: [projectId], references: [id])
+  defaultCenterLat        Float   @default(28.49)
+  defaultCenterLng        Float   @default(77.08)
+  defaultZoom             Int     @default(12)
+  minZoom                 Int     @default(8)
+  maxZoom                 Int     @default(18)
+  enableRotation          Boolean @default(true)
+  enablePitch             Boolean @default(true)
+  routeLineColor          String  @default("#3b82f6")
+  routeLineWidth          Int     @default(4)
+  initialAnimationDuration Float  @default(3.0)
+  routeAnimationDuration   Float  @default(1.0)
+  southWestLat            Float?
+  southWestLng            Float?
+  northEastLat            Float?
+  northEastLng            Float?
+  isActive                Boolean @default(false)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model Category {
+  id String @id @default(cuid())
+  name String
+  icon String? 
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  projectId String
+  project Project @relation(fields: [projectId], references: [id])
+  landmarks Landmark[]
+  nearByPlaces NearBy[]
+}
+
+model NearBy {
+  id String @id @default(cuid())
+  projectId String
+  project Project @relation(fields: [projectId], references: [id])
+  title String
+  latitude Float
+  longitude Float
+  categoryId String
+  category Category @relation(fields: [categoryId], references: [id])
+  icon String? @db.Text // Custom SVG icon for this nearby place
+  iconWidth Int? @default(32) // Width of the icon in pixels
+  iconHeight Int? @default(32) // Height of the icon in pixels
+  color String? // Custom color for the tooltip
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

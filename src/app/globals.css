@@ -1,7 +1,9 @@
 @import "tailwindcss";
+@import "../styles/design-tokens.css";
+@import "../styles/animations.css";
 
 :root {
-  --background: #ffffff;
+  --background: #fafafa;
   --foreground: #171717;
 }
 
@@ -22,5 +24,43 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans, Arial, Helvetica, sans-serif);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Mapbox custom markers - Official approach */
+
+/* Custom marker containers */
+.marker {
+  /* Container for custom marker content */
+  display: block;
+}
+
+.client-marker,
+.landmark-marker {
+  /* Custom marker styling */
+  display: block;
+  transition: all 0.2s ease;
+}
+
+/* Smooth hover transitions */
+.landmark-marker:hover {
+  transition: all 0.2s ease;
+}
+
+/* Premium Nearby Popup Styling */
+.nearby-popup-premium .mapboxgl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+.nearby-popup-premium .mapboxgl-popup-tip {
+  display: none !important; /* Hide the default tip for a cleaner floating look */
+}
+
+.nearby-popup-premium {
+  z-index: 50; /* Ensure it's above other elements */
 }
