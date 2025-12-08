@@ -129,7 +129,8 @@ function MapPageContent() {
         // Handle themes (important but not critical)
         let activeTheme = null;
         if (themesRes.status === 'fulfilled' && themesRes.value.ok) {
-          const themesData = await themesRes.value.json();
+          const themesResponse = await themesRes.value.json();
+          const themesData = Array.isArray(themesResponse) ? themesResponse : (themesResponse.items || themesResponse.themes || []);
           const theme = themesData.find(t => t.isActive && t.projectId === projectId);
           if (theme) {
             activeTheme = {
@@ -148,7 +149,8 @@ function MapPageContent() {
         // Handle map settings (important for coordinates)
         let settings = null;
         if (settingsRes.status === 'fulfilled' && settingsRes.value.ok) {
-          const settingsData = await settingsRes.value.json();
+          const settingsResponse = await settingsRes.value.json();
+          const settingsData = Array.isArray(settingsResponse) ? settingsResponse : (settingsResponse.items || settingsResponse.settings || []);
           const activeSetting = settingsData.find(s => s.isActive && s.projectId === projectId);
           if (activeSetting) {
             settings = activeSetting;
@@ -161,7 +163,8 @@ function MapPageContent() {
         // Handle landmarks (can be empty)
         let transformedLandmarks = [];
         if (landmarksRes.status === 'fulfilled' && landmarksRes.value.ok) {
-          const landmarksData = await landmarksRes.value.json();
+          const landmarksResponse = await landmarksRes.value.json();
+          const landmarksData = Array.isArray(landmarksResponse) ? landmarksResponse : (landmarksResponse.landmarks || landmarksResponse.items || []);
 
           // Validate and transform landmarks
           transformedLandmarks = landmarksData
@@ -181,7 +184,8 @@ function MapPageContent() {
         // Handle nearby places (can be empty)
         let transformedNearbyPlaces = [];
         if (nearbyRes.status === 'fulfilled' && nearbyRes.value.ok) {
-          const nearbyData = await nearbyRes.value.json();
+          const nearbyResponse = await nearbyRes.value.json();
+          const nearbyData = Array.isArray(nearbyResponse) ? nearbyResponse : (nearbyResponse.places || nearbyResponse.nearby || nearbyResponse.items || []);
 
           // Validate and transform nearby places
           transformedNearbyPlaces = nearbyData
@@ -207,7 +211,8 @@ function MapPageContent() {
         // Handle categories (can be empty)
         let categoriesDataParsed = [];
         if (categoriesRes.status === 'fulfilled' && categoriesRes.value.ok) {
-          const categoriesData = await categoriesRes.value.json();
+          const categoriesResponse = await categoriesRes.value.json();
+          const categoriesData = Array.isArray(categoriesResponse) ? categoriesResponse : (categoriesResponse.categories || categoriesResponse.items || []);
           categoriesDataParsed = categoriesData;
           setCategories(categoriesData);
         } else {

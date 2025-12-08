@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { useTheme } from '@/context/ThemeContext';
-import { Plus, Edit, Trash2, Palette, CheckCircle2, XCircle, Eye, MapPin, X, ChevronLeft, ChevronRight, Folder, Utensils, Car, Building } from 'lucide-react';
+import { Plus, Edit, Trash2, Palette, CheckCircle2, XCircle, Eye, MapPin, X, ChevronLeft, ChevronRight, Folder, Utensils, Car, Building, Wand2 } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import StyleBuilderAgent from './StyleBuilderAgent';
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
   process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ||
@@ -17,6 +18,7 @@ export default function ProjectThemes({ projectId }) {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingTheme, setEditingTheme] = useState(null);
+  const [showStyleAgent, setShowStyleAgent] = useState(false);
 
   const [formData, setFormData] = useState({
     primary: '#1e3a8a',
@@ -152,14 +154,41 @@ export default function ProjectThemes({ projectId }) {
           <h3 className="text-base font-semibold text-gray-900">Themes</h3>
           <p className="text-sm text-gray-500 mt-1">Customize map colors and visual styles</p>
         </div>
-        <button
-          onClick={() => { setEditingTheme(null); resetForm(); setShowModal(true); }}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-black hover:bg-gray-800 text-white text-sm font-medium rounded-full transition-all hover:shadow-lg hover:-translate-y-0.5 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" strokeWidth={2} />
-          New Theme
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowStyleAgent(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-sm font-medium rounded-full transition-all hover:shadow-lg hover:-translate-y-0.5 cursor-pointer"
+          >
+            <Wand2 className="w-4 h-4" strokeWidth={2} />
+            AI Style Agent
+          </button>
+          <button
+            onClick={() => { setEditingTheme(null); resetForm(); setShowModal(true); }}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-black hover:bg-gray-800 text-white text-sm font-medium rounded-full transition-all hover:shadow-lg hover:-translate-y-0.5 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" strokeWidth={2} />
+            New Theme
+          </button>
+        </div>
       </div>
+
+      {/* AI Style Builder Agent Modal */}
+      {showStyleAgent && (
+        <StyleBuilderAgent
+          onStyleGenerated={(styleConfig) => {
+            setFormData(prev => ({
+              ...prev,
+              primary: styleConfig.primary || prev.primary,
+              secondary: styleConfig.secondary || prev.secondary,
+              mapboxStyle: styleConfig.mapboxStyle || prev.mapboxStyle
+            }));
+            setShowStyleAgent(false);
+            setShowModal(true);
+            toast.success('Style generated! Review and save your theme.');
+          }}
+          onClose={() => setShowStyleAgent(false)}
+        />
+      )}
 
       {themes.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

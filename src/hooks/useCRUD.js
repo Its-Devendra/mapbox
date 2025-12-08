@@ -39,7 +39,13 @@ export default function useCRUD({
         throw new Error('Failed to fetch data');
       }
       
-      let data = await response.json();
+      let responseData = await response.json();
+      
+      // Handle paginated response format { projects: [...], total, page, ... }
+      // or legacy array format [...]
+      let data = Array.isArray(responseData) 
+        ? responseData 
+        : (responseData.projects || responseData.items || responseData.landmarks || responseData.places || []);
       
       // Filter by projectId if provided
       if (projectId) {

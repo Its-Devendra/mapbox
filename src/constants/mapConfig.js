@@ -92,7 +92,8 @@ export const LAYER_IDS = {
   ROUTE_GLOW: 'route-glow',
   CLUSTERS: 'clusters',
   CLUSTER_COUNT: 'cluster-count',
-  UNCLUSTERED_POINT: 'unclustered-point'
+  UNCLUSTERED_POINT: 'unclustered-point',
+  BUILDINGS_3D: '3d-buildings'
 };
 
 export const SOURCE_IDS = {

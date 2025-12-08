@@ -129,7 +129,8 @@ export default function MapContainer({
       LAYER_IDS.NEARBY_PLACES_HOVER,
       LAYER_IDS.NEARBY_PLACES,
       LAYER_IDS.LANDMARKS,
-      LAYER_IDS.CLIENT_BUILDING
+      LAYER_IDS.CLIENT_BUILDING,
+      LAYER_IDS.BUILDINGS_3D
     ];
 
     const sourcesToRemove = [
@@ -592,6 +593,62 @@ export default function MapContainer({
   }, []);
 
   /**
+   * Add 3D buildings layer to the map
+   */
+  const add3DBuildings = useCallback(() => {
+    if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
+
+    try {
+      // Check if composite source exists (available in most Mapbox styles)
+      if (mapRef.current.getSource('composite')) {
+        // Only add if layer doesn't already exist
+        if (!mapRef.current.getLayer(LAYER_IDS.BUILDINGS_3D)) {
+          // Find a label layer to insert the 3D buildings layer before it
+          const layers = mapRef.current.getStyle().layers;
+          const labelLayerId = layers.find(layer =>
+            layer.type === 'symbol' &&
+            layer.layout &&
+            layer.layout['text-field']
+          )?.id;
+
+          mapRef.current.addLayer({
+            id: LAYER_IDS.BUILDINGS_3D,
+            source: 'composite',
+            'source-layer': 'building',
+            filter: ['==', 'extrude', 'true'],
+            type: 'fill-extrusion',
+            minzoom: 15,
+            paint: {
+              'fill-extrusion-color': '#aaa',
+              'fill-extrusion-height': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                15,
+                0,
+                15.05,
+                ['get', 'height']
+              ],
+              'fill-extrusion-base': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                15,
+                0,
+                15.05,
+                ['get', 'min_height']
+              ],
+              'fill-extrusion-opacity': 0.6
+            }
+          }, labelLayerId);
+        }
+      }
+    } catch (error) {
+      console.warn('Could not add 3D buildings layer:', error);
+    }
+  }, []);
+
+  /**
    * Initialize map
    */
   useEffect(() => {
@@ -623,6 +680,10 @@ export default function MapContainer({
     // Animate to location after load
     mapRef.current.on('load', () => {
       setIsMapLoaded(true);
+
+      // Add 3D buildings layer
+      add3DBuildings();
+
       const duration = mapSettings?.initialAnimationDuration || MAPBOX_CONFIG.INITIAL_ANIMATION_DURATION;
 
       // Determine target center: prioritize client building, fallback to map center
@@ -669,7 +730,7 @@ export default function MapContainer({
       }
       loadedIconsRef.current.clear();
     };
-  }, [theme.mapboxStyle, themeLoading, getMapConfig, mapSettings, clearRoute, cleanup]);
+  }, [theme.mapboxStyle, themeLoading, getMapConfig, mapSettings, clearRoute, cleanup, add3DBuildings]);
 
   /**
    * Update map style when theme changes
@@ -680,23 +741,36 @@ export default function MapContainer({
       // Clear loaded icons cache as they need to be reloaded with new style
       // Icons are part of the map style, so changing style removes them
       loadedIconsRef.current.clear();
+
+      // Re-add 3D buildings layer after style loads
+      mapRef.current.once('load', () => {
+        add3DBuildings();
+      });
     }
-  }, [theme.mapboxStyle, themeLoading]);
+  }, [theme.mapboxStyle, themeLoading, add3DBuildings]);
 
   /**
    * Update markers when data changes
    */
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || !isMapLoaded) return;
+
+    let retryCount = 0;
+    const maxRetries = 50; // Max 5 seconds (50 * 100ms)
 
     const updateMarkers = async () => {
-      console.log('updateMarkers called, style loaded:', mapRef.current?.isStyleLoaded());
+      console.log('updateMarkers called, style loaded:', mapRef.current?.isStyleLoaded(), 'map loaded:', isMapLoaded, 'retry:', retryCount);
 
-      // Wait for style to load
-      if (!mapRef.current.isStyleLoaded()) {
-        console.log('Style not loaded, waiting for styledata event...');
-        mapRef.current.once('styledata', updateMarkers);
-        return;
+      // Wait for style to load with polling instead of relying on styledata event
+      if (!mapRef.current || !mapRef.current.isStyleLoaded()) {
+        retryCount++;
+        if (retryCount < maxRetries) {
+          console.log('Style not loaded, retrying in 100ms...');
+          setTimeout(updateMarkers, 100);
+          return;
+        } else {
+          console.warn('Max retries reached, proceeding anyway');
+        }
       }
 
       console.log('Style loaded, proceeding with marker update...');

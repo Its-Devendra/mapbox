@@ -26,6 +26,9 @@ model Project {
   logo String? @db.Text // Project logo (Base64 or URL)
   logoWidth Int? @default(120) // Width of the logo in pixels
   logoHeight Int? @default(40) // Height of the logo in pixels
+  secondaryLogo String? @db.Text // Secondary logo (Base64 or URL)
+  secondaryLogoWidth Int? @default(120) // Width of secondary logo in pixels
+  secondaryLogoHeight Int? @default(40) // Height of secondary logo in pixels
   clientBuildingLat Float? // Latitude of client building location
   clientBuildingLng Float? // Longitude of client building location
   clientBuildingName String? // Display name for client building
@@ -40,12 +43,17 @@ model Project {
   nearByPlaces NearBy[]
   categories Category[]
   settings MapSetting[]
+
+  // Indexes for faster queries
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([slug])
 }
 
 model Theme {
   id String  @id @default(cuid())
   projectId String
-  project Project @relation(fields: [projectId], references: [id])
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   primary String
   secondary String
   mapboxStyle String
@@ -53,29 +61,39 @@ model Theme {
   isActive Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Indexes for faster queries
+  @@index([projectId])
+  @@index([isActive])
+  @@index([projectId, isActive])
 }
 
 model Landmark {
   id String @id @default(cuid())
   projectId String
-  project Project @relation(fields: [projectId], references: [id])
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title String
   description String
   latitude Float
   longitude Float
   categoryId String
-  category Category @relation(fields: [categoryId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   icon String? @db.Text // Custom SVG icon for this landmark
   iconWidth Int? @default(32) // Width of the icon in pixels
   iconHeight Int? @default(32) // Height of the icon in pixels
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Indexes for faster queries
+  @@index([projectId])
+  @@index([categoryId])
+  @@index([projectId, categoryId])
 }
 
 model MapSetting {
   id                      String  @id @default(cuid())
   projectId               String
-  project                 Project @relation(fields: [projectId], references: [id])
+  project                 Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   defaultCenterLat        Float   @default(28.49)
   defaultCenterLng        Float   @default(77.08)
   defaultZoom             Int     @default(12)
@@ -94,6 +112,11 @@ model MapSetting {
   isActive                Boolean @default(false)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
+
+  // Indexes for faster queries
+  @@index([projectId])
+  @@index([isActive])
+  @@index([projectId, isActive])
 }
 
 model Category {
@@ -104,24 +127,34 @@ model Category {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   projectId String
-  project Project @relation(fields: [projectId], references: [id])
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   landmarks Landmark[]
   nearByPlaces NearBy[]
+
+  // Indexes for faster queries
+  @@index([projectId])
+  @@index([isActive])
+  @@index([projectId, isActive])
 }
 
 model NearBy {
   id String @id @default(cuid())
   projectId String
-  project Project @relation(fields: [projectId], references: [id])
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title String
   latitude Float
   longitude Float
   categoryId String
-  category Category @relation(fields: [categoryId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   icon String? @db.Text // Custom SVG icon for this nearby place
   iconWidth Int? @default(32) // Width of the icon in pixels
   iconHeight Int? @default(32) // Height of the icon in pixels
   color String? // Custom color for the tooltip
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Indexes for faster queries
+  @@index([projectId])
+  @@index([categoryId])
+  @@index([projectId, categoryId])
 }
