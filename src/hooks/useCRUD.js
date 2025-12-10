@@ -24,8 +24,12 @@ export default function useCRUD({
   // Build URL with projectId filter if needed
   const buildUrl = useCallback((path = '') => {
     const base = `${endpoint}${path}`;
+    // Add projectId as query parameter if provided (for GET requests)
+    if (projectId && !path) {
+      return `${base}?projectId=${projectId}`;
+    }
     return base;
-  }, [endpoint]);
+  }, [endpoint, projectId]);
 
   // Fetch all items
   const fetchAll = useCallback(async () => {
@@ -46,11 +50,6 @@ export default function useCRUD({
       let data = Array.isArray(responseData) 
         ? responseData 
         : (responseData.projects || responseData.items || responseData.landmarks || responseData.places || []);
-      
-      // Filter by projectId if provided
-      if (projectId) {
-        data = data.filter(item => item.projectId === projectId);
-      }
       
       setItems(data);
       return data;

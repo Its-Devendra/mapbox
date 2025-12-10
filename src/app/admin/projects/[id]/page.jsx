@@ -187,9 +187,9 @@ export default function ProjectDetailPage() {
         {/* Main Content */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm min-h-[500px]">
           {/* Tab Navigation */}
-          <div className="p-6 border-b border-gray-100">
-            <nav className="flex flex-wrap gap-2" aria-label="Tabs">
-              <div className="bg-gray-100/80 p-1 rounded-xl inline-flex">
+          <div className="p-4 sm:p-6 border-b border-gray-100 overflow-x-auto">
+            <nav className="flex min-w-max" aria-label="Tabs">
+              <div className="bg-gray-100/80 p-1 rounded-xl inline-flex gap-1">
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
@@ -197,13 +197,14 @@ export default function ProjectDetailPage() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${isActive
-                          ? 'bg-white text-black shadow-sm'
-                          : 'text-gray-500 hover:text-gray-900'
+                      className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${isActive
+                        ? 'bg-white text-black shadow-sm'
+                        : 'text-gray-500 hover:text-gray-900'
                         }`}
                     >
-                      <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-black' : 'text-gray-400'}`} strokeWidth={2} />
-                      <span>{tab.label}</span>
+                      <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-black' : 'text-gray-400'}`} strokeWidth={2} />
+                      <span className="hidden sm:inline">{tab.label}</span>
+                      <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
                     </button>
                   );
                 })}

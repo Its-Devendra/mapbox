@@ -17,6 +17,45 @@ import { MAPBOX_CONFIG, LAYER_IDS, SOURCE_IDS } from "@/constants/mapConfig";
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
   "pk.eyJ1IjoiZGV2Yml0czA5IiwiYSI6ImNtYzkyZTR2dDE0MDAyaXMzdXRndjJ0M2EifQ.Jhhx-1tf_NzrZNfGX8wp_w";
 
+/**
+ * Convert various Mapbox style URL formats to the mapbox:// format
+ * Supports:
+ * - mapbox://styles/username/style-id (already correct)
+ * - https://api.mapbox.com/styles/v1/username/style-id.html?... (HTML preview)
+ * - https://api.mapbox.com/styles/v1/username/style-id?... (API URL)
+ * - username/style-id (shorthand)
+ */
+function convertToMapboxStyleUrl(input) {
+  if (!input || typeof input !== 'string') {
+    return null;
+  }
+
+  const trimmed = input.trim();
+
+  // Already in correct format
+  if (trimmed.startsWith('mapbox://styles/')) {
+    return trimmed;
+  }
+
+  // Handle https://api.mapbox.com/styles/v1/username/style-id format
+  // This covers both .html and .json variants, and with query params
+  const apiUrlMatch = trimmed.match(/api\.mapbox\.com\/styles\/v1\/([^\/]+)\/([^\.\/\?#]+)/);
+  if (apiUrlMatch) {
+    const username = apiUrlMatch[1];
+    const styleId = apiUrlMatch[2];
+    return `mapbox://styles/${username}/${styleId}`;
+  }
+
+  // Handle shorthand format: username/style-id
+  const shorthandMatch = trimmed.match(/^([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)$/);
+  if (shorthandMatch) {
+    return `mapbox://styles/${shorthandMatch[1]}/${shorthandMatch[2]}`;
+  }
+
+  // If it doesn't match any known format, return as-is (might be a valid mapbox:// URL)
+  return trimmed;
+}
+
 export default function MapContainer({
   landmarks = [],
   nearbyPlaces = [],
@@ -59,6 +98,8 @@ export default function MapContainer({
   const eventHandlersRef = useRef([]);
   const nearbyPlacePopupRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const isCreatingRouteRef = useRef(false); // Track when route is being created
+  const routeGenerationRef = useRef(0); // Generation counter to track route creation attempts
 
   // State
   const [selectedLandmark, setSelectedLandmark] = useState(null);
@@ -72,12 +113,19 @@ export default function MapContainer({
    * Get map settings with fallbacks
    */
   const getMapConfig = useCallback(() => {
+    // Check if all bound values are valid numbers (not null/undefined)
+    const hasBounds =
+      mapSettings?.southWestLat != null &&
+      mapSettings?.southWestLng != null &&
+      mapSettings?.northEastLat != null &&
+      mapSettings?.northEastLng != null;
+
     const config = {
       center: [
-        mapSettings?.defaultCenterLng || MAPBOX_CONFIG.DEFAULT_CENTER.lng,
-        mapSettings?.defaultCenterLat || MAPBOX_CONFIG.DEFAULT_CENTER.lat
+        mapSettings?.defaultCenterLng ?? MAPBOX_CONFIG.DEFAULT_CENTER.lng,
+        mapSettings?.defaultCenterLat ?? MAPBOX_CONFIG.DEFAULT_CENTER.lat
       ],
-      zoom: mapSettings?.defaultZoom || MAPBOX_CONFIG.DEFAULT_ZOOM,
+      zoom: mapSettings?.defaultZoom ?? MAPBOX_CONFIG.DEFAULT_ZOOM,
       minZoom: mapSettings?.minZoom ?? 0, // Default to 0 (fully zoomed out) if not set
       maxZoom: mapSettings?.maxZoom ?? 22, // Default to 22 (fully zoomed in) if not set
       pitch: mapSettings?.enablePitch ? 60 : 0,
@@ -85,14 +133,14 @@ export default function MapContainer({
       interactive: interactive,
       dragRotate: mapSettings?.enableRotation ?? true,
       pitchWithRotate: mapSettings?.enablePitch ?? true,
-      maxBounds: (mapSettings?.southWestLat && mapSettings?.southWestLng && mapSettings?.northEastLat && mapSettings?.northEastLng)
+      maxBounds: hasBounds
         ? [
           [mapSettings.southWestLng, mapSettings.southWestLat], // Southwest coordinates
           [mapSettings.northEastLng, mapSettings.northEastLat]  // Northeast coordinates
         ]
         : undefined // Default to no bounds
     };
-    console.log('Map Config:', config, 'Settings:', mapSettings);
+    console.log('Map Config:', config, 'Settings:', mapSettings, 'Has Bounds:', hasBounds);
     return config;
   }, [mapSettings, interactive]);
 
@@ -164,39 +212,67 @@ export default function MapContainer({
       cancelAnimationFrame(animationFrameRef.current);
     }
   }, []);
-
   /**
    * Clear route and restore viewport
    */
   const clearRoute = useCallback(() => {
-    if (!mapRef.current || !routeRef.current) return;
+    // Clear even if route is being created
+    if (!mapRef.current) return;
+    if (!routeRef.current && !isCreatingRouteRef.current) return;
 
-    if (mapRef.current.isStyleLoaded()) {
+    console.log('clearRoute called, routeRef:', routeRef.current, 'isCreating:', isCreatingRouteRef.current);
+
+    // FIRST: Cancel any ongoing animation to prevent race conditions
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    // Increment generation to invalidate any in-progress route creation
+    routeGenerationRef.current += 1;
+
+    // Cancel route creation flag
+    isCreatingRouteRef.current = false;
+
+    // Remove layers and source - try regardless of style loaded state
+    try {
       if (mapRef.current.getLayer(LAYER_IDS.ROUTE)) {
         mapRef.current.removeLayer(LAYER_IDS.ROUTE);
       }
+    } catch (e) {
+      console.warn('Could not remove route layer:', e);
+    }
+
+    try {
       if (mapRef.current.getLayer(LAYER_IDS.ROUTE_GLOW)) {
         mapRef.current.removeLayer(LAYER_IDS.ROUTE_GLOW);
       }
+    } catch (e) {
+      console.warn('Could not remove route glow layer:', e);
+    }
+
+    try {
       if (mapRef.current.getSource(SOURCE_IDS.ROUTE)) {
         mapRef.current.removeSource(SOURCE_IDS.ROUTE);
       }
+    } catch (e) {
+      console.warn('Could not remove route source:', e);
     }
 
     routeRef.current = null;
     activeLandmarkRef.current = null;
 
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-
     // Restore original viewport
-    if (originalViewportRef.current) {
-      mapRef.current.flyTo({
-        center: originalViewportRef.current.center,
-        zoom: originalViewportRef.current.zoom,
-        duration: MAPBOX_CONFIG.ROUTE_ANIMATION_DURATION
-      });
+    if (originalViewportRef.current && mapRef.current) {
+      try {
+        mapRef.current.flyTo({
+          center: originalViewportRef.current.center,
+          zoom: originalViewportRef.current.zoom,
+          duration: MAPBOX_CONFIG.ROUTE_ANIMATION_DURATION
+        });
+      } catch (e) {
+        console.warn('Could not fly to original viewport:', e);
+      }
     }
 
     // Deselect landmark
@@ -282,9 +358,28 @@ export default function MapContainer({
   const getDirections = useCallback(async (destination) => {
     if (!mapRef.current || !clientBuilding) return;
 
+    // Capture current generation - if this changes during execution, we should abort
+    const currentGeneration = routeGenerationRef.current;
+
+    // Mark that we're creating a route
+    isCreatingRouteRef.current = true;
+
+    // Helper to check if this route creation is still valid
+    const isStillValid = () => {
+      return routeGenerationRef.current === currentGeneration && isCreatingRouteRef.current;
+    };
+
     try {
       // Store current viewport before showing route (if no route is currently active)
-      if (!routeRef.current) {
+      if (!routeRef.current && !isCreatingRouteRef.current) {
+        originalViewportRef.current = {
+          center: mapRef.current.getCenter().toArray(),
+          zoom: mapRef.current.getZoom()
+        };
+      }
+
+      // Store viewport if not already stored
+      if (!originalViewportRef.current) {
         originalViewportRef.current = {
           center: mapRef.current.getCenter().toArray(),
           zoom: mapRef.current.getZoom()
@@ -293,7 +388,22 @@ export default function MapContainer({
 
       // Remove existing route if any
       if (routeRef.current) {
-        clearRoute();
+        // Don't restore viewport when switching routes
+        if (mapRef.current.isStyleLoaded()) {
+          if (mapRef.current.getLayer(LAYER_IDS.ROUTE)) {
+            mapRef.current.removeLayer(LAYER_IDS.ROUTE);
+          }
+          if (mapRef.current.getLayer(LAYER_IDS.ROUTE_GLOW)) {
+            mapRef.current.removeLayer(LAYER_IDS.ROUTE_GLOW);
+          }
+          if (mapRef.current.getSource(SOURCE_IDS.ROUTE)) {
+            mapRef.current.removeSource(SOURCE_IDS.ROUTE);
+          }
+        }
+        routeRef.current = null;
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
       }
 
       const start = clientBuilding.coordinates;
@@ -314,6 +424,11 @@ export default function MapContainer({
         throw new Error('No route found');
       }
 
+      // Check if route creation was cancelled while fetching
+      if (!isStillValid()) {
+        return; // User clicked elsewhere, abort route creation
+      }
+
       const route = apiData.routes[0];
       const data = {
         geometry: route.geometry,
@@ -322,6 +437,11 @@ export default function MapContainer({
       };
 
       if (data && data.geometry) {
+        // Check if cancelled before adding source
+        if (!isStillValid()) {
+          return;
+        }
+
         // Add route to map
         if (!mapRef.current.getSource(SOURCE_IDS.ROUTE)) {
           mapRef.current.addSource(SOURCE_IDS.ROUTE, {
@@ -332,6 +452,17 @@ export default function MapContainer({
               geometry: data.geometry
             }
           });
+        }
+
+        // Check if cancelled after adding source but before layers
+        if (!isStillValid()) {
+          // Clean up the source we just added
+          try {
+            if (mapRef.current.getSource(SOURCE_IDS.ROUTE)) {
+              mapRef.current.removeSource(SOURCE_IDS.ROUTE);
+            }
+          } catch (e) { /* ignore */ }
+          return;
         }
 
         const routeColor = mapSettings?.routeLineColor || MAPBOX_CONFIG.ROUTE_LINE_COLOR;
@@ -372,6 +503,23 @@ export default function MapContainer({
           }, LAYER_IDS.LANDMARKS);
         }
 
+        // Check if cancelled after adding layers
+        if (!isStillValid()) {
+          // Clean up everything we just added
+          try {
+            if (mapRef.current.getLayer(LAYER_IDS.ROUTE)) {
+              mapRef.current.removeLayer(LAYER_IDS.ROUTE);
+            }
+            if (mapRef.current.getLayer(LAYER_IDS.ROUTE_GLOW)) {
+              mapRef.current.removeLayer(LAYER_IDS.ROUTE_GLOW);
+            }
+            if (mapRef.current.getSource(SOURCE_IDS.ROUTE)) {
+              mapRef.current.removeSource(SOURCE_IDS.ROUTE);
+            }
+          } catch (e) { /* ignore */ }
+          return;
+        }
+
         // Store reference for cleanup
         routeRef.current = LAYER_IDS.ROUTE;
         activeLandmarkRef.current = destination;
@@ -388,12 +536,18 @@ export default function MapContainer({
           essential: true // Force animation
         });
 
-        // Animate the route drawing
+        // Animate the route drawing - capture generation for animation closure
+        const animationGeneration = currentGeneration;
         const animateRoute = () => {
           const animationDuration = 2500; // 2.5 seconds for a smoother feel
           const startTime = performance.now();
 
           const animate = (currentTime) => {
+            // Stop animation if route was cleared (generation changed OR refs cleared)
+            if (routeGenerationRef.current !== animationGeneration || !routeRef.current) {
+              return;
+            }
+
             const elapsedTime = currentTime - startTime;
             const progress = Math.min(elapsedTime / animationDuration, 1);
             const easedProgress = easeInOutCubic(progress);
@@ -432,8 +586,9 @@ export default function MapContainer({
       }
     } catch (error) {
       console.error('Error getting directions:', error);
+      isCreatingRouteRef.current = false;
     }
-  }, [clientBuilding, mapSettings, clearRoute]);
+  }, [clientBuilding, mapSettings]);
 
   /**
    * Handle nearby place hover (raw function without debounce)
@@ -656,9 +811,12 @@ export default function MapContainer({
 
     const config = getMapConfig();
 
+    // Convert style URL to proper mapbox:// format
+    const styleUrl = convertToMapboxStyleUrl(theme.mapboxStyle) || MAPBOX_CONFIG.DEFAULT_STYLE || 'mapbox://styles/mapbox/dark-v11';
+
     mapRef.current = new mapboxgl.Map({
       container: mapContainerRef.current,
-      style: theme.mapboxStyle,
+      style: styleUrl,
       center: config.center,
       zoom: MAPBOX_CONFIG.GLOBE_ZOOM, // Start with globe view
       minZoom: config.minZoom,
@@ -709,9 +867,21 @@ export default function MapContainer({
 
     // Add map click listener to clear routes and deselect landmark
     const mapClickHandler = (e) => {
-      // If clicking on map background (not on a feature), clear everything
-      if (!e.defaultPrevented) {
-        if (routeRef.current) {
+      // Check if the click was on any interactive layer (landmark, client building, nearby place)
+      const interactiveLayers = [
+        LAYER_IDS.LANDMARKS,
+        LAYER_IDS.CLIENT_BUILDING,
+        LAYER_IDS.NEARBY_PLACES
+      ].filter(layerId => mapRef.current.getLayer(layerId));
+
+      const features = mapRef.current.queryRenderedFeatures(e.point, {
+        layers: interactiveLayers
+      });
+
+      // Only clear if clicking on empty map area (no features under click)
+      if (features.length === 0) {
+        // Clear route if one exists OR is being created
+        if (routeRef.current || isCreatingRouteRef.current) {
           clearRoute();
         }
         setSelectedLandmark(null);
@@ -737,7 +907,8 @@ export default function MapContainer({
    */
   useEffect(() => {
     if (mapRef.current && !themeLoading && mapRef.current.isStyleLoaded()) {
-      mapRef.current.setStyle(theme.mapboxStyle);
+      const styleUrl = convertToMapboxStyleUrl(theme.mapboxStyle) || theme.mapboxStyle;
+      mapRef.current.setStyle(styleUrl);
       // Clear loaded icons cache as they need to be reloaded with new style
       // Icons are part of the map style, so changing style removes them
       loadedIconsRef.current.clear();

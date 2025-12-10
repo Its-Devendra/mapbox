@@ -55,9 +55,17 @@ export default function ProjectThemes({ projectId }) {
       const url = editingTheme ? `/api/themes/${editingTheme.id}` : '/api/themes';
       const method = editingTheme ? 'PUT' : 'POST';
 
-      const finalMapboxStyle = formData.mapboxStyle === 'custom'
-        ? formData.customStyle
-        : formData.mapboxStyle;
+      let finalMapboxStyle = formData.mapboxStyle;
+
+      if (formData.mapboxStyle === 'custom') {
+        // Convert the custom style URL to the correct format
+        finalMapboxStyle = convertToMapboxStyleUrl(formData.customStyle);
+
+        if (!finalMapboxStyle) {
+          toast.error('Invalid Mapbox style URL. Please enter a valid URL in the format: mapbox://styles/username/style-id or paste an API URL');
+          return;
+        }
+      }
 
       const response = await fetch(url, {
         method,
@@ -195,14 +203,16 @@ export default function ProjectThemes({ projectId }) {
           {themes.map((theme) => (
             <div key={theme.id} className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md hover:border-gray-200 transition-all">
               <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex -space-x-2">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="flex -space-x-2 flex-shrink-0">
                     <div className="w-8 h-8 rounded-full border-2 border-white shadow-sm" style={{ backgroundColor: theme.primary }} />
                     <div className="w-8 h-8 rounded-full border-2 border-white shadow-sm" style={{ backgroundColor: theme.secondary }} />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <h4 className="font-semibold text-gray-900 text-sm">Theme</h4>
-                    <p className="text-xs text-gray-500">{theme.mapboxStyle.replace('mapbox://styles/mapbox/', '')}</p>
+                    <p className="text-xs text-gray-500 truncate" title={theme.mapboxStyle}>
+                      {theme.mapboxStyle.replace('mapbox://styles/mapbox/', '').replace('mapbox://styles/', '')}
+                    </p>
                   </div>
                 </div>
                 <div className="flex gap-1">
@@ -287,6 +297,46 @@ const MAPBOX_STYLES = [
 ];
 
 /**
+ * Convert various Mapbox style URL formats to the mapbox:// format
+ * Supports:
+ * - mapbox://styles/username/style-id (already correct)
+ * - https://api.mapbox.com/styles/v1/username/style-id.html?... (HTML preview)
+ * - https://api.mapbox.com/styles/v1/username/style-id?... (API URL)
+ * - username/style-id (shorthand)
+ */
+function convertToMapboxStyleUrl(input) {
+  if (!input || typeof input !== 'string') {
+    return null;
+  }
+
+  const trimmed = input.trim();
+
+  // Already in correct format
+  if (trimmed.startsWith('mapbox://styles/')) {
+    return trimmed;
+  }
+
+  // Handle https://api.mapbox.com/styles/v1/username/style-id format
+  // This covers both .html and .json variants, and with query params
+  const apiUrlMatch = trimmed.match(/api\.mapbox\.com\/styles\/v1\/([^\/]+)\/([^\.\/\?#]+)/);
+  if (apiUrlMatch) {
+    const username = apiUrlMatch[1];
+    const styleId = apiUrlMatch[2];
+    return `mapbox://styles/${username}/${styleId}`;
+  }
+
+  // Handle shorthand format: username/style-id
+  const shorthandMatch = trimmed.match(/^([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)$/);
+  if (shorthandMatch) {
+    return `mapbox://styles/${shorthandMatch[1]}/${shorthandMatch[2]}`;
+  }
+
+  // If it doesn't match any known format, return null
+  return null;
+}
+
+
+/**
  * Theme Editor Modal Component
  * Features:
  * - Two swipeable preview cards (Landmark/Filter and Map)
@@ -306,7 +356,9 @@ function ThemeEditorModal({ formData, setFormData, handleInputChange, handleSubm
   // Initialize map when switching to map preview
   useEffect(() => {
     if (activePreview === 1 && mapContainerRef.current && !mapRef.current) {
-      const styleUrl = formData.mapboxStyle === 'custom' ? formData.customStyle : formData.mapboxStyle;
+      const rawStyleUrl = formData.mapboxStyle === 'custom' ? formData.customStyle : formData.mapboxStyle;
+      // Convert to proper mapbox:// format
+      const styleUrl = convertToMapboxStyleUrl(rawStyleUrl) || rawStyleUrl;
       const token = mapboxgl.accessToken;
 
       if (!token) {
@@ -390,7 +442,8 @@ function ThemeEditorModal({ formData, setFormData, handleInputChange, handleSubm
   // Update map style when changed
   useEffect(() => {
     if (mapRef.current) {
-      const styleUrl = formData.mapboxStyle === 'custom' ? formData.customStyle : formData.mapboxStyle;
+      const rawStyleUrl = formData.mapboxStyle === 'custom' ? formData.customStyle : formData.mapboxStyle;
+      const styleUrl = convertToMapboxStyleUrl(rawStyleUrl) || rawStyleUrl;
       if (styleUrl && styleUrl.startsWith('mapbox://')) {
         try {
           mapRef.current.setStyle(styleUrl);
@@ -525,14 +578,16 @@ function ThemeEditorModal({ formData, setFormData, handleInputChange, handleSubm
             {formData.mapboxStyle === 'custom' && (
               <div className="animate-fadeIn">
                 <label className="block text-sm font-medium text-gray-900 mb-1">Custom Style URL</label>
-                <p className="text-xs text-gray-500 mb-2">Enter your Mapbox Studio style URL</p>
+                <p className="text-xs text-gray-500 mb-2">
+                  Paste a Mapbox Studio share URL or enter in format: mapbox://styles/username/style-id
+                </p>
                 <input
                   type="text"
                   name="customStyle"
                   value={formData.customStyle}
                   onChange={handleInputChange}
                   onFocus={handleMapStyleFocus}
-                  placeholder="mapbox://styles/username/style-id"
+                  placeholder="Paste URL or mapbox://styles/username/style-id"
                   className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"
                 />
               </div>

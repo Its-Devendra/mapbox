@@ -7,8 +7,14 @@ export async function GET(req) {
         const { searchParams } = new URL(req.url);
         const projectId = searchParams.get('projectId');
 
-        const nearbyPlaces = await getNearbyPlaces(projectId);
-        return NextResponse.json(nearbyPlaces);
+        // Return empty array if no projectId provided
+        if (!projectId) {
+            return NextResponse.json([]);
+        }
+
+        const result = await getNearbyPlaces(projectId);
+        // getNearbyPlaces returns { places, total, page, hasMore } - extract just the array
+        return NextResponse.json(result.places || []);
     } catch (error) {
         console.error('Error in GET /api/nearby:', error);
         return NextResponse.json(

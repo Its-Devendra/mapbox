@@ -9,6 +9,13 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
     quaternary: '#f1f5f9'
   };
 
+  // Helper to check if content is SVG
+  const isSvgContent = (content) => {
+    if (!content || typeof content !== 'string') return false;
+    const trimmed = content.trim().toLowerCase();
+    return trimmed.startsWith('<svg') || trimmed.includes('<svg');
+  };
+
   // Helper to get icon content
   const renderIcon = (category) => {
     // Handle "All" case
@@ -23,9 +30,17 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
 
     // Handle category object
     if (typeof category === 'object') {
-      if (category.icon && category.icon.includes('<svg')) {
+      // Check if icon is SVG content
+      if (isSvgContent(category.icon)) {
         return <div dangerouslySetInnerHTML={{ __html: category.icon }} className="w-5 h-5 [&>svg]:w-full [&>svg]:h-full" />;
       }
+
+      // If icon exists and is not SVG, treat as emoji
+      if (category.icon && category.icon.length > 0) {
+        return <span className="text-base leading-none">{category.icon}</span>;
+      }
+
+      // Fallback to default tag icon
       return (
         <div className="w-5 h-5 text-current">
           <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

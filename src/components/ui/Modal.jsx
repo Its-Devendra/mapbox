@@ -56,8 +56,21 @@ export default function Modal({
             document.body.style.overflow = 'hidden';
             document.addEventListener('keydown', handleKeyDown);
 
-            // Focus the modal
-            setTimeout(() => modalRef.current?.focus(), 0);
+            // Only focus the modal on initial open, not on re-renders
+            // We check if the currently focused element is not inside the modal
+            const modalElement = modalRef.current;
+            if (modalElement && !modalElement.contains(document.activeElement)) {
+                // Focus the first focusable element inside the modal, or the modal itself
+                const focusableElements = modalElement.querySelectorAll(
+                    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+                );
+                const firstFocusable = focusableElements[0];
+                if (firstFocusable) {
+                    setTimeout(() => firstFocusable.focus(), 0);
+                } else {
+                    setTimeout(() => modalElement.focus(), 0);
+                }
+            }
         } else {
             document.body.style.overflow = '';
             document.removeEventListener('keydown', handleKeyDown);

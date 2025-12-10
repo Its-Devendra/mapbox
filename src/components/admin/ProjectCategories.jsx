@@ -74,7 +74,8 @@ export default function ProjectCategories({ projectId }) {
 
   // Handle edit
   const handleEdit = (category) => {
-    const hasSvg = category.icon && category.icon.includes('<svg');
+    const hasSvg = category.icon && typeof category.icon === 'string' &&
+      (category.icon.trim().toLowerCase().startsWith('<svg') || category.icon.includes('<svg'));
     setIconType(hasSvg ? 'svg' : 'emoji');
 
     modal.openEdit(category, (item) => ({
@@ -127,12 +128,16 @@ export default function ProjectCategories({ projectId }) {
             <Card key={category.id} className="hover:shadow-md hover:border-gray-200 transition-all">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                    {category.icon && category.icon.includes('<svg') ? (
-                      <div dangerouslySetInnerHTML={{ __html: category.icon }} className="w-6 h-6 [&>svg]:w-full [&>svg]:h-full" />
-                    ) : (
-                      <span className="text-lg">{category.icon || '🏷️'}</span>
-                    )}
+                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
+                    {(() => {
+                      const icon = category.icon;
+                      // Check if it's SVG content
+                      if (icon && typeof icon === 'string' && (icon.trim().toLowerCase().startsWith('<svg') || icon.includes('<svg'))) {
+                        return <div dangerouslySetInnerHTML={{ __html: icon }} className="w-6 h-6 [&>svg]:w-full [&>svg]:h-full" />;
+                      }
+                      // Otherwise display as emoji/text
+                      return <span className="text-lg">{icon || '🏷️'}</span>;
+                    })()}
                   </div>
                   <div>
                     <h4 className="font-semibold text-gray-900 text-sm">{category.name}</h4>
@@ -218,8 +223,8 @@ export default function ProjectCategories({ projectId }) {
                       modal.updateField('iconSvg', null);
                     }}
                     className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${iconType === 'emoji'
-                        ? 'bg-white text-black shadow-sm'
-                        : 'text-gray-500 hover:text-gray-900'
+                      ? 'bg-white text-black shadow-sm'
+                      : 'text-gray-500 hover:text-gray-900'
                       }`}
                   >
                     Emoji
@@ -231,8 +236,8 @@ export default function ProjectCategories({ projectId }) {
                       modal.updateField('icon', '🏷️');
                     }}
                     className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${iconType === 'svg'
-                        ? 'bg-white text-black shadow-sm'
-                        : 'text-gray-500 hover:text-gray-900'
+                      ? 'bg-white text-black shadow-sm'
+                      : 'text-gray-500 hover:text-gray-900'
                       }`}
                   >
                     Upload SVG

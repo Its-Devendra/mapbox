@@ -39,11 +39,11 @@ export default function ProjectLandmarks({ projectId }) {
 
   const fetchLandmarks = async () => {
     try {
-      const response = await fetch('/api/landmarks');
+      const response = await fetch(`/api/landmarks?projectId=${projectId}`);
       if (response.ok) {
         const data = await response.json();
-        const projectLandmarks = data.filter(landmark => landmark.projectId === projectId);
-        setLandmarks(projectLandmarks);
+        // Data is already filtered by projectId on the server
+        setLandmarks(Array.isArray(data) ? data : []);
       }
     } catch (error) {
       console.error('Error fetching landmarks:', error);
@@ -54,11 +54,22 @@ export default function ProjectLandmarks({ projectId }) {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/categories');
+      const response = await fetch(`/api/categories?projectId=${projectId}`);
       if (response.ok) {
         const data = await response.json();
-        const projectCategories = data.filter(cat => cat.projectId === projectId);
-        setCategories(projectCategories);
+        const categoryList = Array.isArray(data) ? data : [];
+        setCategories(categoryList);
+
+        // Find or use the 'Landmark' category as default
+        const landmarkCategory = categoryList.find(c =>
+          c.name.toLowerCase() === 'landmark'
+        );
+        if (landmarkCategory) {
+          setFormData(prev => ({ ...prev, categoryId: landmarkCategory.id }));
+        } else if (categoryList.length > 0) {
+          // Fallback to first category if 'Landmark' doesn't exist
+          setFormData(prev => ({ ...prev, categoryId: categoryList[0].id }));
+        }
       }
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -138,12 +149,16 @@ export default function ProjectLandmarks({ projectId }) {
   };
 
   const resetForm = () => {
+    // Find the default category (Landmark or first available)
+    const landmarkCategory = categories.find(c => c.name.toLowerCase() === 'landmark');
+    const defaultCategoryId = landmarkCategory?.id || (categories.length > 0 ? categories[0].id : '');
+
     setFormData({
       title: '',
       description: '',
       latitude: 28.49,
       longitude: 77.08,
-      categoryId: '',
+      categoryId: defaultCategoryId,
       icon: null,
       iconWidth: 32,
       iconHeight: 32
@@ -166,7 +181,12 @@ export default function ProjectLandmarks({ projectId }) {
 
   const getCategoryIcon = (categoryId) => {
     const category = categories.find(c => c.id === categoryId);
-    return category?.icon || '📍';
+    return category?.icon || null;
+  };
+
+  // Helper to check if icon is SVG
+  const isSvgIcon = (icon) => {
+    return icon && typeof icon === 'string' && (icon.trim().startsWith('<svg') || icon.trim().startsWith('<SVG'));
   };
 
   // Skeleton loading
@@ -239,12 +259,21 @@ export default function ProjectLandmarks({ projectId }) {
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4 flex-1">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-100 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
-                    {landmark.icon ? (
-                      <div dangerouslySetInnerHTML={{ __html: landmark.icon }} className="w-6 h-6 [&>svg]:w-full [&>svg]:h-full" />
-                    ) : (
-                      <span className="text-lg">{getCategoryIcon(landmark.categoryId)}</span>
-                    )}
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-100 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform overflow-hidden">
+                    {(() => {
+                      // Get icon from landmark or category, only if it's a valid string
+                      const landmarkIcon = landmark.icon && typeof landmark.icon === 'string' && landmark.icon.length > 0 ? landmark.icon : null;
+                      const iconToShow = landmarkIcon || getCategoryIcon(landmark.categoryId);
+
+                      if (iconToShow && isSvgIcon(iconToShow)) {
+                        return <div dangerouslySetInnerHTML={{ __html: iconToShow }} className="w-6 h-6 [&>svg]:w-full [&>svg]:h-full" />;
+                      } else if (iconToShow && typeof iconToShow === 'string' && iconToShow.length > 0 && iconToShow.length < 10) {
+                        // Only show as emoji if it's a short string (likely an emoji)
+                        return <span className="text-lg">{iconToShow}</span>;
+                      } else {
+                        return <MapPin className="w-5 h-5 text-gray-400" />;
+                      }
+                    })()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-semibold text-gray-900 text-sm mb-1">{landmark.title}</h4>
@@ -491,24 +520,7 @@ function LandmarkEditorModal({ formData, setFormData, handleInputChange, handleS
               />
             </div>
 
-            {/* Category */}
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-1">Category</label>
-              <select
-                name="categoryId"
-                value={formData.categoryId}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm cursor-pointer transition-all"
-                required
-              >
-                <option value="">Select a category</option>
-                {categories.map(category => (
-                  <option key={category.id} value={category.id}>
-                    {category.icon} {category.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+
 
             {/* Coordinates */}
             <div className="grid grid-cols-2 gap-3">

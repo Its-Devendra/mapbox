@@ -3,30 +3,18 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import {
-    Calendar,
-    ChevronRight,
     MapPin,
-    Navigation,
-    Palette,
     Settings,
-    Tag,
     ExternalLink
 } from 'lucide-react';
-import MapContainer from '@/components/MapContainer';
-import FilterBar from '@/components/FilterBar';
-import ProjectLogo from '@/components/ProjectLogo';
-import { validateAndTransformMarker, fetchWithTimeout, retryWithBackoff } from '@/utils/mapUtils';
-import { MAPBOX_CONFIG } from '@/constants/mapConfig';
 
 export default function ProjectOverview({ projectId }) {
     const [project, setProject] = useState(null);
-    const [projectTheme, setProjectTheme] = useState(null);
     const [mapSettings, setMapSettings] = useState(null);
     const [landmarks, setLandmarks] = useState([]);
     const [nearbyPlaces, setNearbyPlaces] = useState([]);
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [activeFilter, setActiveFilter] = useState('All');
 
     useEffect(() => {
         if (projectId) {
@@ -40,18 +28,16 @@ export default function ProjectOverview({ projectId }) {
             // Parallel fetch of all required data
             const [
                 projectRes,
-                themesRes,
                 landmarksRes,
                 categoriesRes,
                 nearbyRes,
                 settingsRes
             ] = await Promise.allSettled([
-                retryWithBackoff(() => fetchWithTimeout(`/api/projects/${projectId}`)),
-                retryWithBackoff(() => fetchWithTimeout(`/api/themes?projectId=${projectId}`)),
-                retryWithBackoff(() => fetchWithTimeout(`/api/landmarks?projectId=${projectId}`)),
-                retryWithBackoff(() => fetchWithTimeout(`/api/categories?projectId=${projectId}`)),
-                retryWithBackoff(() => fetchWithTimeout(`/api/nearby?projectId=${projectId}`)),
-                retryWithBackoff(() => fetchWithTimeout(`/api/mapSettings?projectId=${projectId}`))
+                fetch(`/api/projects/${projectId}`),
+                fetch(`/api/landmarks?projectId=${projectId}`),
+                fetch(`/api/categories?projectId=${projectId}`),
+                fetch(`/api/nearby?projectId=${projectId}`),
+                fetch(`/api/mapSettings?projectId=${projectId}`)
             ]);
 
             // Handle Project
@@ -59,21 +45,6 @@ export default function ProjectOverview({ projectId }) {
                 setProject(await projectRes.value.json());
             } else {
                 throw new Error('Failed to load project details');
-            }
-
-            // Handle Themes
-            if (themesRes.status === 'fulfilled' && themesRes.value.ok) {
-                const themesData = await themesRes.value.json();
-                const activeTheme = themesData.find(t => t.isActive && t.projectId === projectId);
-                if (activeTheme) {
-                    setProjectTheme({
-                        primary: activeTheme.primary,
-                        secondary: activeTheme.secondary,
-                        tertiary: '#64748b',
-                        quaternary: '#f1f5f9',
-                        mapboxStyle: activeTheme.mapboxStyle
-                    });
-                }
             }
 
             // Handle Settings
@@ -88,31 +59,25 @@ export default function ProjectOverview({ projectId }) {
             // Handle Landmarks
             if (landmarksRes.status === 'fulfilled' && landmarksRes.value.ok) {
                 const landmarksData = await landmarksRes.value.json();
-                const transformed = landmarksData
-                    .map(landmark => validateAndTransformMarker({
-                        ...landmark,
-                        category: typeof landmark.category === 'object' ? landmark.category?.name : landmark.category
-                    }))
-                    .filter(Boolean);
-                setLandmarks(transformed);
+                if (Array.isArray(landmarksData)) {
+                    setLandmarks(landmarksData);
+                }
             }
 
             // Handle Nearby Places
             if (nearbyRes.status === 'fulfilled' && nearbyRes.value.ok) {
                 const nearbyData = await nearbyRes.value.json();
-                const transformed = nearbyData
-                    .map(place => validateAndTransformMarker({
-                        ...place,
-                        categoryName: typeof place.category === 'object' ? place.category?.name : place.category,
-                        categoryIcon: typeof place.category === 'object' ? place.category?.icon : null
-                    }))
-                    .filter(Boolean);
-                setNearbyPlaces(transformed);
+                if (Array.isArray(nearbyData)) {
+                    setNearbyPlaces(nearbyData);
+                }
             }
 
             // Handle Categories
             if (categoriesRes.status === 'fulfilled' && categoriesRes.value.ok) {
-                setCategories(await categoriesRes.value.json());
+                const categoriesData = await categoriesRes.value.json();
+                if (Array.isArray(categoriesData)) {
+                    setCategories(categoriesData);
+                }
             }
 
         } catch (error) {
@@ -122,35 +87,6 @@ export default function ProjectOverview({ projectId }) {
             setLoading(false);
         }
     };
-
-    // Client building logic
-    const clientBuilding = React.useMemo(() => {
-        if (!project) return null;
-        if (project.clientBuildingLat && project.clientBuildingLng) {
-            return {
-                name: project.clientBuildingName || "Client Building",
-                coordinates: [project.clientBuildingLng, project.clientBuildingLat],
-                description: project.clientBuildingDescription || "Starting point for all directions"
-            };
-        }
-        if (mapSettings) {
-            return {
-                name: "Client Building",
-                coordinates: [mapSettings.defaultCenterLng, mapSettings.defaultCenterLat],
-                description: "Starting point for all directions"
-            };
-        }
-        return {
-            name: "Client Building",
-            coordinates: [MAPBOX_CONFIG.DEFAULT_CENTER.lng, MAPBOX_CONFIG.DEFAULT_CENTER.lat],
-            description: "Starting point for all directions"
-        };
-    }, [project, mapSettings]);
-
-    const categoryNames = [...new Set(categories.map((cat) => cat.name))];
-    const filteredLandmarks = activeFilter === 'All'
-        ? landmarks
-        : landmarks.filter((landmark) => landmark.category === activeFilter);
 
     if (loading) {
         return (
@@ -271,43 +207,6 @@ export default function ProjectOverview({ projectId }) {
                             <div className="text-xs font-medium text-gray-600/80">Settings</div>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            {/* Live Map Preview */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-                    <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                        <Navigation className="w-4 h-4" /> Live Map Preview
-                    </h3>
-                    <span className="text-xs text-gray-500">Interactive Preview</span>
-                </div>
-
-                <div className="relative h-[600px] w-full bg-gray-100">
-                    <MapContainer
-                        landmarks={filteredLandmarks}
-                        nearbyPlaces={nearbyPlaces}
-                        clientBuilding={clientBuilding}
-                        project={project}
-                        projectTheme={projectTheme}
-                        mapSettings={mapSettings}
-                    />
-
-                    {/* Project Logo */}
-                    <ProjectLogo
-                        logo={project?.logo}
-                        width={project?.logoWidth}
-                        height={project?.logoHeight}
-                    />
-
-                    {/* Filter Bar */}
-                    <FilterBar
-                        categories={categories}
-                        onFilterChange={setActiveFilter}
-                        activeFilter={activeFilter}
-                        theme={projectTheme}
-                        className="absolute bottom-6 left-1/2 transform -translate-x-1/2"
-                    />
                 </div>
             </div>
         </div>

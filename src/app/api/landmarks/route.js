@@ -7,8 +7,14 @@ export async function GET(req) {
         const { searchParams } = new URL(req.url);
         const projectId = searchParams.get('projectId');
 
-        const landmarks = await getLandmarks(projectId);
-        return NextResponse.json(landmarks);
+        // Return empty array if no projectId provided
+        if (!projectId) {
+            return NextResponse.json([]);
+        }
+
+        const result = await getLandmarks(projectId);
+        // getLandmarks returns { landmarks, total, page, hasMore } - extract just the array
+        return NextResponse.json(result.landmarks || []);
     } catch (error) {
         console.error('Error in GET /api/landmarks:', error);
         return NextResponse.json(
