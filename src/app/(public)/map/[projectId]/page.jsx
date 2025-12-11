@@ -24,7 +24,7 @@ function MapPageContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [activeFilter, setActiveFilter] = useState('All');
+  const [activeFilter, setActiveFilter] = useState([]);
 
   // Client building from project configuration or fallback to settings
   const CLIENT_BUILDING = React.useMemo(() => {
@@ -250,11 +250,44 @@ function MapPageContent() {
   // Derive unique category names from categories
   const categoryNames = [...new Set(categories.map((cat) => cat.name))];
 
-  // Filter landmarks based on the active filter
-  const filteredLandmarks =
-    activeFilter === 'All'
-      ? landmarks
-      : landmarks.filter((landmark) => landmark.category === activeFilter);
+  // Filter landmarks based on the active filter (now supports multi-select)
+  const filteredLandmarks = React.useMemo(() => {
+    if (!landmarks.length) return [];
+
+    if (!activeFilter || activeFilter.length === 0 || (activeFilter.length === 1 && activeFilter[0] === 'All')) {
+      return landmarks;
+    }
+
+    const filtered = landmarks.filter((landmark) => {
+      if (!landmark.category) return false;
+      // Loose comparison just in case of formatting diffs
+      const match = activeFilter.some(filterName =>
+        String(filterName).trim().toLowerCase() === String(landmark.category).trim().toLowerCase()
+      );
+      return match;
+    });
+
+    return filtered;
+  }, [activeFilter, landmarks]);
+
+  // Filter nearby places based on the active filter
+  const filteredNearbyPlaces = React.useMemo(() => {
+    if (!nearbyPlaces.length) return [];
+
+    if (!activeFilter || activeFilter.length === 0 || (activeFilter.length === 1 && activeFilter[0] === 'All')) {
+      return nearbyPlaces;
+    }
+
+    return nearbyPlaces.filter((place) => {
+      // nearbyPlaces use 'categoryName' instead of 'category'
+      const category = place.categoryName || place.category;
+      if (!category) return false;
+
+      return activeFilter.some(filterName =>
+        String(filterName).trim().toLowerCase() === String(category).trim().toLowerCase()
+      );
+    });
+  }, [activeFilter, nearbyPlaces]);
 
   // Loading state with skeleton
   if (loading) {
@@ -307,7 +340,7 @@ function MapPageContent() {
       <div className="flex-1 relative">
         <MapContainer
           landmarks={filteredLandmarks}
-          nearbyPlaces={nearbyPlaces}
+          nearbyPlaces={filteredNearbyPlaces}
           clientBuilding={CLIENT_BUILDING}
           project={project}
           projectTheme={projectTheme}

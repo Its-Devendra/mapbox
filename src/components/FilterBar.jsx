@@ -1,6 +1,6 @@
 
 
-export default function FilterSidebar({ categories = [], onFilterChange, activeFilter, theme, className = "fixed bottom-6 left-1/2 transform -translate-x-1/2" }) {
+export default function FilterSidebar({ categories = [], onFilterChange, activeFilter = [], theme, className = "fixed bottom-6 left-1/2 transform -translate-x-1/2" }) {
   // Use provided theme or fallback to default
   const filterTheme = theme || {
     primary: '#1e3a8a',
@@ -8,6 +8,10 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
     tertiary: '#64748b',
     quaternary: '#f1f5f9'
   };
+
+  // Normalize activeFilter to always be an array
+  const activeFilters = Array.isArray(activeFilter) ? activeFilter : [activeFilter];
+  const isAllActive = activeFilters.length === 0 || activeFilters.includes('All');
 
   // Helper to check if content is SVG
   const isSvgContent = (content) => {
@@ -64,7 +68,27 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
 
   const getCategoryName = (category) => {
     if (category === 'All') return 'All';
+    if (!category) return '';
     return typeof category === 'object' ? category.name : category;
+  };
+
+  // Handle filter toggle for multi-select
+  const handleFilterClick = (name) => {
+    if (name === 'All') {
+      // Clicking "All" resets to show all (empty array or ['All'])
+      onFilterChange([]);
+    } else {
+      // Toggle the category in/out of the active filters
+      if (activeFilters.includes(name)) {
+        // Remove it from the list
+        const newFilters = activeFilters.filter(f => f !== name && f !== 'All');
+        onFilterChange(newFilters.length === 0 ? [] : newFilters);
+      } else {
+        // Add it to the list, removing 'All' if present
+        const newFilters = activeFilters.filter(f => f !== 'All');
+        onFilterChange([...newFilters, name]);
+      }
+    }
   };
 
   // Prepare list including "All"
@@ -82,14 +106,21 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
         }}
       >
         <div className="flex items-center space-x-2 overflow-x-auto max-w-[90vw] no-scrollbar">
-          {displayCategories.map((category, index) => {
+          {displayCategories.reduce((acc, category) => {
             const name = getCategoryName(category);
-            const isActive = activeFilter === name;
+            // Deduplicate based on name
+            if (!acc.find(item => getCategoryName(item) === name)) {
+              acc.push(category);
+            }
+            return acc;
+          }, []).map((category, index) => {
+            const name = getCategoryName(category);
+            const isActive = name === 'All' ? isAllActive : activeFilters.includes(name);
 
             return (
               <button
                 key={typeof category === 'object' ? (category.id || category.name) : name}
-                onClick={() => onFilterChange(name)}
+                onClick={() => handleFilterClick(name)}
                 className="flex items-center space-x-2 px-4 py-2 rounded-full transition-all duration-300 cursor-pointer whitespace-nowrap"
                 style={{
                   backgroundColor: isActive ? filterTheme.secondary : 'transparent',
