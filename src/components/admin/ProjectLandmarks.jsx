@@ -6,12 +6,13 @@ import { useTheme } from '@/context/ThemeContext';
 import SvgIconUploader from '@/components/SvgIconUploader';
 import S3ImageUploader from '@/components/S3ImageUploader';
 import { Plus, Edit, Trash2, MapPin, Search, X, Navigation, Eye, Crosshair } from 'lucide-react';
+import { Modal } from '@/components/ui';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
   process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ||
-  "pk.eyJ1IjoiZGV2Yml0czA5IiwiYSI6ImNtYzkyZTR2dDE0MDAyaXMzdXRndjJ0M2EifQ.Jhhx-1tf_NzrZNfGX8wp_w";
+  "pk.eyJ1IjoiZGV2Yml0czA5IiwiYSI6ImNtYzkyZTR2dDE0MDAyaXMzdXRndjJ0M2EifQ.Jhhx-1tf_NzrZNjGX8wp_w";
 
 export default function ProjectLandmarks({ projectId }) {
   const { theme } = useTheme();
@@ -338,8 +339,14 @@ export default function ProjectLandmarks({ projectId }) {
       )}
 
       {/* Enhanced Modal with Map */}
-      {showModal && (
-        <LandmarkEditorModal
+      <Modal
+        isOpen={showModal}
+        onClose={() => { setShowModal(false); setEditingLandmark(null); resetForm(); }}
+        title={editingLandmark ? 'Edit Landmark' : 'Create New Landmark'}
+        description="Add a point of interest to your map"
+        size="4xl"
+      >
+        <LandmarkEditorContent
           formData={formData}
           setFormData={setFormData}
           handleInputChange={handleInputChange}
@@ -349,15 +356,15 @@ export default function ProjectLandmarks({ projectId }) {
           onClose={() => { setShowModal(false); setEditingLandmark(null); resetForm(); }}
           theme={theme}
         />
-      )}
+      </Modal>
     </div>
   );
 }
 
 /**
- * Landmark Editor Modal with Map Picker
+ * Landmark Editor Content
  */
-function LandmarkEditorModal({ formData, setFormData, handleInputChange, handleSubmit, editingLandmark, categories, onClose, theme }) {
+function LandmarkEditorContent({ formData, setFormData, handleInputChange, handleSubmit, editingLandmark, categories, onClose, theme }) {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
@@ -447,19 +454,9 @@ function LandmarkEditorModal({ formData, setFormData, handleInputChange, handleS
   };
 
   return (
-    <div
-      className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row animate-scale-in"
-      onClick={(e) => e.stopPropagation()}
-    >
+    <div className="flex flex-col lg:flex-row h-full">
       {/* Left: Form */}
-      <div className="w-full md:w-1/2 p-6 overflow-y-auto border-r border-gray-100">
-        <div className="mb-6">
-          <h3 className="text-xl font-semibold text-gray-900">
-            {editingLandmark ? 'Edit Landmark' : 'Create New Landmark'}
-          </h3>
-          <p className="text-sm text-gray-500 mt-1">Add a point of interest to your map</p>
-        </div>
-
+      <div className="w-full lg:w-1/2 p-6 border-r border-gray-100 overflow-y-auto max-h-[70vh] lg:max-h-[80vh]">
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Title */}
           <div>
@@ -587,7 +584,7 @@ function LandmarkEditorModal({ formData, setFormData, handleInputChange, handleS
       </div>
 
       {/* Right: Map */}
-      <div className="w-full md:w-1/2 bg-gray-100 relative">
+      <div className="w-full lg:w-1/2 bg-gray-100 relative min-h-[400px] overflow-hidden">
         {/* Map Header */}
         <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-sm rounded-full px-4 py-2 shadow-sm border border-gray-200/50">
           <span className="text-xs font-semibold text-gray-900 flex items-center gap-2">
@@ -606,7 +603,7 @@ function LandmarkEditorModal({ formData, setFormData, handleInputChange, handleS
         </button>
 
         {/* Map Container */}
-        <div ref={mapContainerRef} className="w-full h-full min-h-[400px]" />
+        <div ref={mapContainerRef} className="w-full h-full overflow-hidden" />
 
         {/* Coordinates Display */}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm border border-gray-200/50">

@@ -95,11 +95,11 @@ export default function LandmarkCard({ landmark, clientBuilding, onClose, isVisi
         <div className="relative h-40 bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700">
           <div className="absolute inset-0 bg-black/20"></div>
           <img
-            src={getLandmarkImage(categoryName)}
+            src={landmark.image || getLandmarkImage(categoryName)}
             alt={landmark.title}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-fit"
             onError={(e) => {
-              e.target.style.display = 'none';
+              e.target.src = getLandmarkImage(categoryName);
             }}
           />
           <div className="absolute top-4 right-4">
