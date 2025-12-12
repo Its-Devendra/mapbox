@@ -80,6 +80,7 @@ model Landmark {
   categoryId String
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   icon String? @db.Text // Custom SVG icon for this landmark
+  image String? @db.Text // Image for this landmark
   iconWidth Int? @default(32) // Width of the icon in pixels
   iconHeight Int? @default(32) // Height of the icon in pixels
   createdAt DateTime @default(now())

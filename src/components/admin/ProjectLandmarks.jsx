@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { useTheme } from '@/context/ThemeContext';
 import SvgIconUploader from '@/components/SvgIconUploader';
+import S3ImageUploader from '@/components/S3ImageUploader';
 import { Plus, Edit, Trash2, MapPin, Search, X, Navigation, Eye, Crosshair } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -27,6 +28,7 @@ export default function ProjectLandmarks({ projectId }) {
     latitude: 28.49,
     longitude: 77.08,
     categoryId: '',
+    image: null,
     icon: null,
     iconWidth: 32,
     iconHeight: 32
@@ -124,6 +126,7 @@ export default function ProjectLandmarks({ projectId }) {
       latitude: landmark.latitude,
       longitude: landmark.longitude,
       categoryId: landmark.categoryId,
+      image: landmark.image || null,
       icon: landmark.icon || null,
       iconWidth: landmark.iconWidth || 32,
       iconHeight: landmark.iconHeight || 32
@@ -159,6 +162,7 @@ export default function ProjectLandmarks({ projectId }) {
       latitude: 28.49,
       longitude: 77.08,
       categoryId: defaultCategoryId,
+      image: null,
       icon: null,
       iconWidth: 32,
       iconHeight: 32
@@ -259,8 +263,13 @@ export default function ProjectLandmarks({ projectId }) {
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4 flex-1">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-100 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform overflow-hidden">
+                  <div className="w-16 h-16 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform overflow-hidden">
                     {(() => {
+                      // Show image if available
+                      if (landmark.image) {
+                        return <img src={landmark.image} alt={landmark.title} className="w-full h-full object-cover" />;
+                      }
+
                       // Get icon from landmark or category, only if it's a valid string
                       const landmarkIcon = landmark.icon && typeof landmark.icon === 'string' && landmark.icon.length > 0 ? landmark.icon : null;
                       const iconToShow = landmarkIcon || getCategoryIcon(landmark.categoryId);
@@ -438,170 +447,177 @@ function LandmarkEditorModal({ formData, setFormData, handleInputChange, handleS
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
-      <div
-        className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row animate-scale-in"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Left: Form */}
-        <div className="w-full md:w-1/2 p-6 overflow-y-auto border-r border-gray-100">
-          <div className="mb-6">
-            <h3 className="text-xl font-semibold text-gray-900">
-              {editingLandmark ? 'Edit Landmark' : 'Create New Landmark'}
-            </h3>
-            <p className="text-sm text-gray-500 mt-1">Add a point of interest to your map</p>
+    <div
+      className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row animate-scale-in"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Left: Form */}
+      <div className="w-full md:w-1/2 p-6 overflow-y-auto border-r border-gray-100">
+        <div className="mb-6">
+          <h3 className="text-xl font-semibold text-gray-900">
+            {editingLandmark ? 'Edit Landmark' : 'Create New Landmark'}
+          </h3>
+          <p className="text-sm text-gray-500 mt-1">Add a point of interest to your map</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Title */}
+          <div>
+            <label className="block text-sm font-medium text-gray-900 mb-1">Title</label>
+            <input
+              type="text"
+              name="title"
+              value={formData.title}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm transition-all"
+              placeholder="e.g., Central Park Entrance"
+              required
+            />
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Title */}
+          {/* Icon Upload */}
+          <div>
+            <SvgIconUploader
+              label="Custom Icon (Optional)"
+              currentIcon={formData.icon}
+              onUpload={(svgContent) => setFormData({ ...formData, icon: svgContent })}
+              theme={theme}
+            />
+          </div>
+
+          {/* Icon Dimensions */}
+          {formData.icon && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Width (px)</label>
+                <input
+                  type="number"
+                  name="iconWidth"
+                  value={formData.iconWidth}
+                  onChange={handleInputChange}
+                  min="10"
+                  max="200"
+                  className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Height (px)</label>
+                <input
+                  type="number"
+                  name="iconHeight"
+                  value={formData.iconHeight}
+                  onChange={handleInputChange}
+                  min="10"
+                  max="200"
+                  className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm transition-all"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-gray-900 mb-1">Description</label>
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleInputChange}
+              rows={3}
+              className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm transition-all resize-none"
+              placeholder="Describe this landmark..."
+            />
+          </div>
+
+          {/* Image Upload */}
+          <div>
+            <S3ImageUploader
+              label="Landmark Image (Optional)"
+              currentImage={formData.image}
+              onUpload={(url) => setFormData({ ...formData, image: url })}
+              folder="landmarks"
+              accept="image/*"
+            />
+          </div>
+
+          {/* Coordinates */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-900 mb-1">Title</label>
+              <label className="block text-sm font-medium text-gray-900 mb-1">Latitude</label>
               <input
-                type="text"
-                name="title"
-                value={formData.title}
+                type="number"
+                step="any"
+                name="latitude"
+                value={formData.latitude}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm transition-all"
-                placeholder="e.g., Central Park Entrance"
+                className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm font-mono transition-all"
                 required
               />
             </div>
-
-            {/* Icon Upload */}
             <div>
-              <SvgIconUploader
-                label="Custom Icon (Optional)"
-                currentIcon={formData.icon}
-                onUpload={(svgContent) => setFormData({ ...formData, icon: svgContent })}
-                theme={theme}
-              />
-            </div>
-
-            {/* Icon Dimensions */}
-            {formData.icon && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Width (px)</label>
-                  <input
-                    type="number"
-                    name="iconWidth"
-                    value={formData.iconWidth}
-                    onChange={handleInputChange}
-                    min="10"
-                    max="200"
-                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Height (px)</label>
-                  <input
-                    type="number"
-                    name="iconHeight"
-                    value={formData.iconHeight}
-                    onChange={handleInputChange}
-                    min="10"
-                    max="200"
-                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm transition-all"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Description */}
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-1">Description</label>
-              <textarea
-                name="description"
-                value={formData.description}
+              <label className="block text-sm font-medium text-gray-900 mb-1">Longitude</label>
+              <input
+                type="number"
+                step="any"
+                name="longitude"
+                value={formData.longitude}
                 onChange={handleInputChange}
-                rows={3}
-                className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm transition-all resize-none"
-                placeholder="Describe this landmark..."
+                className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm font-mono transition-all"
+                required
               />
             </div>
+          </div>
 
+          {/* Actions */}
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2.5 text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 font-medium text-sm transition-all cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-medium text-sm rounded-xl transition-all cursor-pointer"
+            >
+              {editingLandmark ? 'Update' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </div>
 
-
-            {/* Coordinates */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-1">Latitude</label>
-                <input
-                  type="number"
-                  step="any"
-                  name="latitude"
-                  value={formData.latitude}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm font-mono transition-all"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-1">Longitude</label>
-                <input
-                  type="number"
-                  step="any"
-                  name="longitude"
-                  value={formData.longitude}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm font-mono transition-all"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-5 py-2.5 text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 font-medium text-sm transition-all cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-medium text-sm rounded-xl transition-all cursor-pointer"
-              >
-                {editingLandmark ? 'Update' : 'Create'}
-              </button>
-            </div>
-          </form>
+      {/* Right: Map */}
+      <div className="w-full md:w-1/2 bg-gray-100 relative">
+        {/* Map Header */}
+        <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-sm rounded-full px-4 py-2 shadow-sm border border-gray-200/50">
+          <span className="text-xs font-semibold text-gray-900 flex items-center gap-2">
+            <Eye className="w-3.5 h-3.5 text-gray-600" /> Pick Location
+          </span>
         </div>
 
-        {/* Right: Map */}
-        <div className="w-full md:w-1/2 bg-gray-100 relative">
-          {/* Map Header */}
-          <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-sm rounded-full px-4 py-2 shadow-sm border border-gray-200/50">
-            <span className="text-xs font-semibold text-gray-900 flex items-center gap-2">
-              <Eye className="w-3.5 h-3.5 text-gray-600" /> Pick Location
-            </span>
-          </div>
+        {/* Center on location button */}
+        <button
+          type="button"
+          onClick={handleCenterOnLocation}
+          className="absolute top-4 right-4 z-20 bg-white/90 backdrop-blur-sm rounded-full p-2.5 shadow-sm border border-gray-200/50 hover:bg-white transition-colors cursor-pointer"
+          title="Use my location"
+        >
+          <Crosshair className="w-4 h-4 text-gray-700" />
+        </button>
 
-          {/* Center on location button */}
-          <button
-            type="button"
-            onClick={handleCenterOnLocation}
-            className="absolute top-4 right-4 z-20 bg-white/90 backdrop-blur-sm rounded-full p-2.5 shadow-sm border border-gray-200/50 hover:bg-white transition-colors cursor-pointer"
-            title="Use my location"
-          >
-            <Crosshair className="w-4 h-4 text-gray-700" />
-          </button>
+        {/* Map Container */}
+        <div ref={mapContainerRef} className="w-full h-full min-h-[400px]" />
 
-          {/* Map Container */}
-          <div ref={mapContainerRef} className="w-full h-full min-h-[400px]" />
+        {/* Coordinates Display */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm border border-gray-200/50">
+          <span className="text-xs font-mono text-gray-600">
+            {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+          </span>
+        </div>
 
-          {/* Coordinates Display */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm border border-gray-200/50">
-            <span className="text-xs font-mono text-gray-600">
-              {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
-            </span>
-          </div>
-
-          {/* Instructions */}
-          <div className="absolute bottom-4 right-4 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full">
-            Click or drag marker to set location
-          </div>
+        {/* Instructions */}
+        <div className="absolute bottom-4 right-4 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full">
+          Click or drag marker to set location
         </div>
       </div>
     </div>
