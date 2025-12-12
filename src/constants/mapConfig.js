@@ -43,7 +43,7 @@ export const MAPBOX_CONFIG = {
   
   // Marker settings
   DEFAULT_MARKER_SIZE: 1,
-  NEARBY_PLACE_OPACITY: 0.7,
+  NEARBY_PLACE_OPACITY: 1.0,
   NEARBY_PLACE_SIZE_FACTOR: 0.8,
   
   // Popup settings

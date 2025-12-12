@@ -99,8 +99,8 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
       <div
         className="backdrop-blur-md rounded-full px-4 py-3 shadow-2xl"
         style={{
-          backgroundColor: `${filterTheme.primary}90`,
-          borderColor: `${filterTheme.tertiary}50`,
+          backgroundColor: filterTheme.primary,
+          borderColor: filterTheme.tertiary,
           borderWidth: '1px',
           borderStyle: 'solid'
         }}
@@ -121,25 +121,26 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
               <button
                 key={typeof category === 'object' ? (category.id || category.name) : name}
                 onClick={() => handleFilterClick(name)}
-                className="flex items-center space-x-2 px-4 py-2 rounded-full transition-all duration-300 cursor-pointer whitespace-nowrap"
+                className="flex items-center space-x-2 px-4 py-2 rounded-full transition-all duration-300 cursor-pointer whitespace-nowrap relative group"
                 style={{
                   backgroundColor: isActive ? filterTheme.secondary : 'transparent',
                   color: isActive ? filterTheme.primary : filterTheme.secondary,
                   boxShadow: isActive ? '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' : 'none'
                 }}
-                onMouseEnter={(e) => {
-                  if (!isActive) {
-                    e.target.style.backgroundColor = `${filterTheme.secondary}10`;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) {
-                    e.target.style.backgroundColor = 'transparent';
-                  }
-                }}
               >
-                {renderIcon(category)}
-                <span className="text-sm font-medium">{name}</span>
+                {/* Semi-transparent white overlay for hover effect - only shown when not active */}
+                {!isActive && (
+                  <div
+                    className="absolute inset-0 rounded-full transition-opacity duration-300 pointer-events-none opacity-0 group-hover:opacity-100"
+                    style={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.2)'
+                    }}
+                  />
+                )}
+                <div className="relative z-10 flex items-center space-x-2">
+                  {renderIcon(category)}
+                  <span className="text-sm font-medium">{name}</span>
+                </div>
               </button>
             );
           })}

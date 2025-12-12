@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useTheme } from '@/context/ThemeContext';
 import { toast } from 'react-toastify';
 import SvgIconUploader from '@/components/SvgIconUploader';
+import AudioUploader from '@/components/AudioUploader';
 
 export default function ProjectsManager() {
   const { theme } = useTheme();
@@ -22,7 +23,10 @@ export default function ProjectsManager() {
     clientBuildingIcon: null,
     clientBuildingIconWidth: 40,
     clientBuildingIconHeight: 40,
-    clientBuildingUrl: ''
+    clientBuildingIconWidth: 40,
+    clientBuildingIconHeight: 40,
+    clientBuildingUrl: '',
+    introAudio: null
   });
 
   // Fetch projects
@@ -51,10 +55,10 @@ export default function ProjectsManager() {
   // Filter projects based on search and status
   const filteredProjects = projects.filter(project => {
     const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         project.slug.toLowerCase().includes(searchTerm.toLowerCase());
+      project.slug.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' ||
-                         (statusFilter === 'active' && project.isActive) ||
-                         (statusFilter === 'inactive' && !project.isActive);
+      (statusFilter === 'active' && project.isActive) ||
+      (statusFilter === 'inactive' && !project.isActive);
     return matchesSearch && matchesStatus;
   });
 
@@ -78,7 +82,7 @@ export default function ProjectsManager() {
         fetchProjects();
         setShowModal(false);
         setEditingProject(null);
-        setFormData({ name: '', slug: '', isActive: true, clientBuildingIcon: null, clientBuildingIconWidth: 40, clientBuildingIconHeight: 40, clientBuildingUrl: '' });
+        setFormData({ name: '', slug: '', isActive: true, clientBuildingIcon: null, clientBuildingIconWidth: 40, clientBuildingIconHeight: 40, clientBuildingUrl: '', introAudio: null });
       } else {
         const errorData = await response.json();
         toast.error(errorData.error || 'Failed to save project');
@@ -99,7 +103,9 @@ export default function ProjectsManager() {
       clientBuildingIcon: project.clientBuildingIcon || null,
       clientBuildingIconWidth: project.clientBuildingIconWidth || 40,
       clientBuildingIconHeight: project.clientBuildingIconHeight || 40,
-      clientBuildingUrl: project.clientBuildingUrl || ''
+      clientBuildingIconHeight: project.clientBuildingIconHeight || 40,
+      clientBuildingUrl: project.clientBuildingUrl || '',
+      introAudio: project.introAudio || null
     });
     setShowModal(true);
   };
@@ -128,14 +134,14 @@ export default function ProjectsManager() {
   // Handle input change
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    
+
     let parsedValue = value;
     if (type === 'checkbox') {
       parsedValue = checked;
     } else if (type === 'number' && value !== '') {
       parsedValue = parseFloat(value);
     }
-    
+
     setFormData(prev => ({
       ...prev,
       [name]: parsedValue
@@ -186,11 +192,10 @@ export default function ProjectsManager() {
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  statusFilter === status
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-100'
-                }`}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${statusFilter === status
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
               >
                 {status === 'all' ? 'All' : status === 'active' ? 'Active' : 'Inactive'}
               </button>
@@ -241,9 +246,8 @@ export default function ProjectsManager() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      project.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${project.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
                       {project.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
@@ -433,13 +437,21 @@ export default function ProjectsManager() {
                 </p>
               </div>
 
+              {/* Intro Audio Upload */}
+              <AudioUploader
+                label="Intro Audio (Optional)"
+                currentAudio={formData.introAudio}
+                onUpload={(url) => setFormData({ ...formData, introAudio: url })}
+                theme={theme}
+              />
+
               <div className="flex justify-end space-x-3 pt-4">
                 <button
                   type="button"
                   onClick={() => {
                     setShowModal(false);
                     setEditingProject(null);
-                    setFormData({ name: '', slug: '', isActive: true, clientBuildingIcon: null, clientBuildingIconWidth: 40, clientBuildingIconHeight: 40, clientBuildingUrl: '' });
+                    setFormData({ name: '', slug: '', isActive: true, clientBuildingIcon: null, clientBuildingIconWidth: 40, clientBuildingIconHeight: 40, clientBuildingUrl: '', introAudio: null });
                   }}
                   className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
                 >

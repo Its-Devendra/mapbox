@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
+import { toast } from 'react-toastify';
 import LandmarkCard from "./landmarkCard";
 import {
   createSVGImage,
@@ -61,6 +62,7 @@ export default function MapContainer({
   nearbyPlaces = [],
   clientBuilding = null,
   project = null,
+  introAudio = null,
   projectTheme = null,
   mapSettings = null,
   interactive = true
@@ -100,6 +102,18 @@ export default function MapContainer({
   const animationFrameRef = useRef(null);
   const isCreatingRouteRef = useRef(false); // Track when route is being created
   const routeGenerationRef = useRef(0); // Generation counter to track route creation attempts
+  const audioRef = useRef(null); // Audio reference
+  const introPlayedRef = useRef(false); // Track if intro has played
+  const initialZoomDoneRef = useRef(false); // Track if initial zoom is done
+
+  // Intro State
+  const [showIntroButton, setShowIntroButton] = useState(false); // Show button if autoplay blocks
+  const introAudioRef = useRef(introAudio); // Track introAudio prop for non-reactive access
+
+  // Update introAudioRef when prop changes
+  useEffect(() => {
+    introAudioRef.current = introAudio;
+  }, [introAudio]);
 
   // State
   const [selectedLandmark, setSelectedLandmark] = useState(null);
@@ -140,9 +154,92 @@ export default function MapContainer({
         ]
         : undefined // Default to no bounds
     };
-    console.log('Map Config:', config, 'Settings:', mapSettings, 'Has Bounds:', hasBounds);
     return config;
   }, [mapSettings, interactive]);
+
+  /**
+   * Intro Sequence Logic
+   */
+  useEffect(() => {
+    // Only run if map exists, style loaded, intro audio exists, and hasn't played yet
+    if (!mapRef.current || !isMapLoaded || !introAudio || introPlayedRef.current || !clientBuilding) return;
+
+    // Mark as played to prevent multiple runs
+    introPlayedRef.current = true;
+
+    // Create audio element
+    const audio = new Audio(introAudio);
+    audioRef.current = audio;
+
+    // Zoom to client building when audio starts
+    const playSequence = async () => {
+      try {
+        await audio.play();
+
+        setShowIntroButton(false); // Hide button if it was shown
+
+        // Fly to client building
+        if (clientBuilding && clientBuilding.coordinates) {
+          if (!mapRef.current) return;
+
+          mapRef.current.flyTo({
+            center: clientBuilding.coordinates,
+            zoom: 17.5,
+            pitch: 60,
+            bearing: 45,
+            duration: 3000, // Reduced from 4000 for snappier feel
+            essential: true
+          });
+        }
+
+        // On audio end, zoom back out
+        audio.onended = () => {
+          resetCamera();
+        };
+
+      } catch (err) {
+        console.warn('Autoplay blocked:', err.message);
+        setShowIntroButton(true);
+      }
+    };
+
+    playSequence();
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, [introAudio, isMapLoaded, clientBuilding]);
+
+  /**
+   * Manual trigger for intro sequence
+   */
+  const handleStartIntro = () => {
+    if (!audioRef.current) return;
+
+    // Retry sequence
+    audioRef.current.play().then(() => {
+      setShowIntroButton(false);
+      console.log('🎵 Manually started audio');
+
+      if (clientBuilding && clientBuilding.coordinates) {
+        mapRef.current.flyTo({
+          center: clientBuilding.coordinates,
+          zoom: 17.5,
+          pitch: 60,
+          bearing: 45,
+          duration: 4000,
+          essential: true
+        });
+      }
+
+      audioRef.current.onended = () => {
+        resetCamera();
+      };
+    }).catch(e => console.error('Manual play failed', e));
+  };
 
   /**
    * Cleanup function for all map resources
@@ -849,6 +946,19 @@ export default function MapContainer({
         ? clientBuilding.coordinates
         : config.center;
 
+      // Store original viewport using client building location if available
+      originalViewportRef.current = {
+        center: targetCenter,
+        zoom: config.zoom
+      };
+
+      // CRITICAL: If intro audio exists, skip the standard initial animation.
+      // The intro sequence will handle the camera movement (Zoom from space -> Building)
+      if (introAudioRef.current) {
+        console.log('🎵 Intro audio detected, skipping default initial animation to allow intro sequence');
+        return;
+      }
+
       setTimeout(() => {
         mapRef.current.flyTo({
           center: targetCenter,
@@ -858,11 +968,7 @@ export default function MapContainer({
         });
       }, 500);
 
-      // Store original viewport using client building location if available
-      originalViewportRef.current = {
-        center: targetCenter,
-        zoom: config.zoom
-      };
+
     });
 
     // Add map click listener to clear routes and deselect landmark
@@ -1312,13 +1418,50 @@ export default function MapContainer({
     clearRoute();
   }, [clearRoute]);
 
+  /**
+   * Reset camera to default view (centered on client building if available)
+   */
+  const resetCamera = useCallback(() => {
+    if (!mapRef.current) return;
+
+    const config = getMapConfig();
+
+    // Use client building as center if available, otherwise fall back to config center
+    const targetCenter = clientBuilding?.coordinates || config.center;
+
+    mapRef.current.flyTo({
+      center: targetCenter,
+      zoom: config.zoom,
+      pitch: config.pitch,
+      bearing: config.bearing,
+      duration: 2000, // Reduced for snappier feel
+      essential: true
+    });
+  }, [getMapConfig, clientBuilding]);
+
+  /**
+   * Expose functionality via refs or context if needed in future
+   */
+
   return (
     <>
       <div
         ref={mapContainerRef}
-        className="w-full h-screen"
-        style={{ minHeight: '100vh' }}
+        className="w-full h-full relative"
       />
+
+      {/* Intro Button Overlay */}
+      {showIntroButton && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all duration-300">
+          <button
+            onClick={handleStartIntro}
+            className="bg-white text-black px-8 py-3 rounded-full font-bold text-lg shadow-xl hover:scale-105 transition-transform flex items-center gap-2"
+          >
+            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+            Start Experience
+          </button>
+        </div>
+      )}
       <LandmarkCard
         landmark={selectedLandmark}
         clientBuilding={clientBuilding}

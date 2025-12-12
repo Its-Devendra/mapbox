@@ -33,6 +33,7 @@ model Project {
   clientBuildingLng Float? // Longitude of client building location
   clientBuildingName String? // Display name for client building
   clientBuildingDescription String? @db.Text // Description text for client building
+  introAudio String? @db.Text // URL for the intro audio file (S3)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   isActive Boolean @default(true)

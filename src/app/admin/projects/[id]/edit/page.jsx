@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'react-toastify';
 import { useTheme } from '@/context/ThemeContext';
 import SvgIconUploader from '@/components/SvgIconUploader';
+import AudioUploader from '@/components/AudioUploader';
 import LogoUploader from '@/components/LogoUploader';
 import { ArrowLeft, Save } from 'lucide-react';
 
@@ -21,10 +22,8 @@ export default function EditProjectPage() {
     clientBuildingIcon: null,
     clientBuildingIconWidth: 40,
     clientBuildingIconHeight: 40,
-    clientBuildingUrl: '',
-    logo: null,
-    logoWidth: 120,
-    logoHeight: 40
+    logoHeight: 40,
+    introAudio: null
   });
 
   useEffect(() => {
@@ -45,10 +44,8 @@ export default function EditProjectPage() {
           clientBuildingIcon: project.clientBuildingIcon || null,
           clientBuildingIconWidth: project.clientBuildingIconWidth || 40,
           clientBuildingIconHeight: project.clientBuildingIconHeight || 40,
-          clientBuildingUrl: project.clientBuildingUrl || '',
-          logo: project.logo || null,
-          logoWidth: project.logoWidth || 120,
-          logoHeight: project.logoHeight || 40
+          logoHeight: project.logoHeight || 40,
+          introAudio: project.introAudio || null
         });
       } else {
         toast.error('Failed to load project');
@@ -290,6 +287,15 @@ export default function EditProjectPage() {
               <p className="text-xs text-gray-500 mt-2">
                 When clicked, the client building marker will open this URL in a new tab
               </p>
+            </div>
+
+            <div className="border-t border-gray-100 pt-6">
+              <AudioUploader
+                label="Intro Audio (Optional)"
+                currentAudio={formData.introAudio}
+                onUpload={(url) => setFormData({ ...formData, introAudio: url })}
+                theme={theme}
+              />
             </div>
 
             <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">

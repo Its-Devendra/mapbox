@@ -343,6 +343,7 @@ function MapPageContent() {
           nearbyPlaces={filteredNearbyPlaces}
           clientBuilding={CLIENT_BUILDING}
           project={project}
+          introAudio={project.introAudio}
           projectTheme={projectTheme}
           mapSettings={mapSettings}
         />

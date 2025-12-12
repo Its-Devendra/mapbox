@@ -13,7 +13,11 @@ const ALLOWED_TYPES = [
     'image/png',
     'image/webp',
     'image/svg+xml',
-    'image/gif'
+    'image/gif',
+    'audio/mpeg',
+    'audio/wav',
+    'audio/mp3',
+    'audio/aac'
 ];
 
 // Max file size: 10MB
