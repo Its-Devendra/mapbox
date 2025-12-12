@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import { toast } from 'react-toastify';
-import LandmarkCard from "./landmarkCard";
+import LandmarkCard from "./LandmarkCard";
 import {
   createSVGImage,
   debounce,
