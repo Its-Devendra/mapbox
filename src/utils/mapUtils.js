@@ -385,6 +385,30 @@ export function groupMarkersByProximity(markers, threshold = 0.01) {
 }
 
 /**
+ * Get icon size with hierarchical fallback
+ * Priority: 
+ * - If category.useCategoryDefaults is true: Category default → Global default (32px)
+ * - Otherwise: Individual size → Category default → Global default (32px)
+ * @param {Object} item - Landmark or nearby place object
+ * @param {Object} category - Category object (optional)
+ * @returns {Object} Object with width and height properties
+ */
+export function getIconSize(item, category = null) {
+  // If category forces defaults, ignore individual sizes
+  if (category?.useCategoryDefaults) {
+    const width = category?.defaultIconWidth ?? 32;
+    const height = category?.defaultIconHeight ?? 32;
+    return { width, height };
+  }
+  
+  // Otherwise use normal hierarchy: individual → category → global
+  const width = item?.iconWidth ?? category?.defaultIconWidth ?? 32;
+  const height = item?.iconHeight ?? category?.defaultIconHeight ?? 32;
+    
+  return { width, height };
+}
+
+/**
  * Easing function for smooth animation (Ease In Out Cubic)
  * @param {number} t - Progress (0 to 1)
  * @returns {number} Eased progress

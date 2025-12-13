@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
 import { useTheme } from '@/context/ThemeContext';
 import SvgIconUploader from '@/components/SvgIconUploader';
+import AudioUploader from '@/components/AudioUploader';
 import LogoUploader from '@/components/LogoUploader';
+import AspectRatioSizeInput from '@/components/AspectRatioSizeInput';
 import { ArrowLeft, Save } from 'lucide-react';
 
 export default function NewProjectPage() {
@@ -21,7 +23,11 @@ export default function NewProjectPage() {
     clientBuildingUrl: '',
     logo: null,
     logoWidth: 120,
-    logoHeight: 40
+    logoHeight: 40,
+    secondaryLogo: null,
+    secondaryLogoWidth: 120,
+    secondaryLogoHeight: 40,
+    introAudio: null
   });
 
   const handleInputChange = (e) => {
@@ -143,6 +149,13 @@ export default function NewProjectPage() {
                 label=""
                 currentLogo={formData.logo}
                 onUpload={(content) => setFormData({ ...formData, logo: content })}
+                onDimensionsExtracted={(dimensions) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    logoWidth: dimensions.width,
+                    logoHeight: dimensions.height
+                  }));
+                }}
                 theme={theme}
               />
 
@@ -183,11 +196,70 @@ export default function NewProjectPage() {
             </div>
 
             <div className="border-t border-gray-100 pt-6">
+              <h3 className="text-sm font-semibold text-gray-900 mb-4">Secondary Logo (Right Side)</h3>
+              <LogoUploader
+                label=""
+                currentLogo={formData.secondaryLogo}
+                onUpload={(content) => setFormData({ ...formData, secondaryLogo: content })}
+                onDimensionsExtracted={(dimensions) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    secondaryLogoWidth: dimensions.width,
+                    secondaryLogoHeight: dimensions.height
+                  }));
+                }}
+                theme={theme}
+              />
+
+              {formData.secondaryLogo && (
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Logo Width (px)
+                    </label>
+                    <input
+                      type="number"
+                      name="secondaryLogoWidth"
+                      value={formData.secondaryLogoWidth}
+                      onChange={handleInputChange}
+                      min="10"
+                      max="500"
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm placeholder:text-gray-400 transition-all cursor-text"
+                      placeholder="120"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Logo Height (px)
+                    </label>
+                    <input
+                      type="number"
+                      name="secondaryLogoHeight"
+                      value={formData.secondaryLogoHeight}
+                      onChange={handleInputChange}
+                      min="10"
+                      max="500"
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm placeholder:text-gray-400 transition-all cursor-text"
+                      placeholder="40"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-gray-100 pt-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-4">Client Building Icon</h3>
               <SvgIconUploader
                 label=""
                 currentIcon={formData.clientBuildingIcon}
                 onUpload={(svgContent) => setFormData({ ...formData, clientBuildingIcon: svgContent })}
+                onDimensionsExtracted={(dimensions) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    clientBuildingIconWidth: dimensions.width,
+                    clientBuildingIconHeight: dimensions.height
+                  }));
+                }}
                 theme={theme}
               />
 
@@ -242,6 +314,15 @@ export default function NewProjectPage() {
               <p className="text-xs text-gray-500 mt-2">
                 When clicked, the client building marker will open this URL in a new tab
               </p>
+            </div>
+
+            <div className="border-t border-gray-100 pt-6">
+              <AudioUploader
+                label="Intro Audio (Optional)"
+                currentAudio={formData.introAudio}
+                onUpload={(url) => setFormData({ ...formData, introAudio: url })}
+                theme={theme}
+              />
             </div>
 
             <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">

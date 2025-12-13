@@ -13,7 +13,10 @@ const initialFormData = {
   name: '',
   icon: '🏷️',
   iconSvg: null,
-  isActive: true
+  isActive: true,
+  defaultIconWidth: 32,
+  defaultIconHeight: 32,
+  useCategoryDefaults: false
 };
 
 const EMOJI_OPTIONS = [
@@ -82,7 +85,10 @@ export default function ProjectCategories({ projectId }) {
       name: item.name,
       icon: hasSvg ? '🏷️' : (item.icon || '🏷️'),
       iconSvg: hasSvg ? item.icon : null,
-      isActive: item.isActive
+      isActive: item.isActive,
+      defaultIconWidth: item.defaultIconWidth || 32,
+      defaultIconHeight: item.defaultIconHeight || 32,
+      useCategoryDefaults: item.useCategoryDefaults || false
     }));
   };
 
@@ -154,7 +160,7 @@ export default function ProjectCategories({ projectId }) {
                         </Badge>
                       )}
                       <span className="text-xs text-gray-500">
-                        {category.landmarks?.length || 0} landmarks
+                        {(category._count?.landmarks || 0) + (category._count?.nearByPlaces || 0)} items
                       </span>
                     </div>
                   </div>
@@ -267,6 +273,49 @@ export default function ProjectCategories({ projectId }) {
                     theme={theme}
                   />
                 )}
+              </div>
+
+              {/* Default Icon Size */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Default Icon Size for Items</label>
+                <p className="text-xs text-gray-500 mb-3">
+                  Set default icon size for all landmarks and nearby places in this category
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Width (px)"
+                    type="number"
+                    name="defaultIconWidth"
+                    value={modal.formData.defaultIconWidth}
+                    onChange={modal.handleInputChange}
+                    min="10"
+                    max="200"
+                  />
+                  <Input
+                    label="Height (px)"
+                    type="number"
+                    name="defaultIconHeight"
+                    value={modal.formData.defaultIconHeight}
+                    onChange={modal.handleInputChange}
+                    min="10"
+                    max="200"
+                  />
+                </div>
+              </div>
+
+              {/* Force Category Defaults Checkbox */}
+              <div className="flex items-center p-3 rounded-xl bg-blue-50/50 border border-blue-100">
+                <input
+                  type="checkbox"
+                  name="useCategoryDefaults"
+                  checked={modal.formData.useCategoryDefaults}
+                  onChange={modal.handleInputChange}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                />
+                <div className="ml-3">
+                  <label className="text-sm font-medium text-gray-700 cursor-pointer">Force category defaults for all items</label>
+                  <p className="text-xs text-gray-500 mt-0.5">When enabled, all items in this category will use the category default sizes, ignoring individual item sizes</p>
+                </div>
               </div>
 
               <div className="flex items-center p-3 rounded-xl bg-gray-50/50 border border-gray-100">

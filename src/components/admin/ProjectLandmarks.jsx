@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { useTheme } from '@/context/ThemeContext';
 import SvgIconUploader from '@/components/SvgIconUploader';
+import AspectRatioSizeInput from '@/components/AspectRatioSizeInput';
 import S3ImageUploader from '@/components/S3ImageUploader';
 import { Plus, Edit, Trash2, MapPin, Search, X, Navigation, Eye, Crosshair } from 'lucide-react';
 import { Modal } from '@/components/ui';
@@ -478,37 +479,35 @@ function LandmarkEditorContent({ formData, setFormData, handleInputChange, handl
               label="Custom Icon (Optional)"
               currentIcon={formData.icon}
               onUpload={(svgContent) => setFormData({ ...formData, icon: svgContent })}
+              onDimensionsExtracted={(dimensions) => {
+                setFormData(prev => ({
+                  ...prev,
+                  iconWidth: dimensions.width,
+                  iconHeight: dimensions.height
+                }));
+              }}
               theme={theme}
             />
           </div>
 
           {/* Icon Dimensions */}
           {formData.icon && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Width (px)</label>
-                <input
-                  type="number"
-                  name="iconWidth"
-                  value={formData.iconWidth}
-                  onChange={handleInputChange}
-                  min="10"
-                  max="200"
-                  className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm transition-all"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Height (px)</label>
-                <input
-                  type="number"
-                  name="iconHeight"
-                  value={formData.iconHeight}
-                  onChange={handleInputChange}
-                  min="10"
-                  max="200"
-                  className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm transition-all"
-                />
-              </div>
+            <div>
+              <AspectRatioSizeInput
+                width={formData.iconWidth}
+                height={formData.iconHeight}
+                widthName="iconWidth"
+                heightName="iconHeight"
+                onWidthChange={handleInputChange}
+                onHeightChange={handleInputChange}
+                widthLabel="Icon Width (px)"
+                heightLabel="Icon Height (px)"
+                min={10}
+                max={200}
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Leave empty to use category default size
+              </p>
             </div>
           )}
 

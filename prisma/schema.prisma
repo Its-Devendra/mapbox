@@ -126,6 +126,9 @@ model Category {
   name String
   icon String? 
   isActive Boolean @default(true)
+  defaultIconWidth Int? @default(32)
+  defaultIconHeight Int? @default(32)
+  useCategoryDefaults Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   projectId String

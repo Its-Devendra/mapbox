@@ -2,11 +2,53 @@
 
 import { useState, useRef } from 'react';
 
-export default function SvgIconUploader({ label, currentIcon, onUpload, theme }) {
+export default function SvgIconUploader({ label, currentIcon, onUpload, onDimensionsExtracted, theme }) {
   const [preview, setPreview] = useState(currentIcon || null);
   const [error, setError] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
+
+  const extractSvgDimensions = (svgContent) => {
+    try {
+      // Create a temporary DOM parser
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(svgContent, 'image/svg+xml');
+      const svgElement = doc.querySelector('svg');
+
+      if (!svgElement) return null;
+
+      // Try to get width and height from attributes
+      let width = svgElement.getAttribute('width');
+      let height = svgElement.getAttribute('height');
+
+      // If width/height are not set, try to get from viewBox
+      if (!width || !height) {
+        const viewBox = svgElement.getAttribute('viewBox');
+        if (viewBox) {
+          const parts = viewBox.split(/\s+/);
+          if (parts.length === 4) {
+            width = parts[2];
+            height = parts[3];
+          }
+        }
+      }
+
+      // Parse to numbers and remove units (px, pt, etc.)
+      const parseSize = (size) => {
+        if (!size) return null;
+        const num = parseFloat(size.toString().replace(/[^0-9.]/g, ''));
+        return isNaN(num) ? null : Math.round(num);
+      };
+
+      const parsedWidth = parseSize(width);
+      const parsedHeight = parseSize(height);
+
+      return parsedWidth && parsedHeight ? { width: parsedWidth, height: parsedHeight } : null;
+    } catch (error) {
+      console.error('Error extracting SVG dimensions:', error);
+      return null;
+    }
+  };
 
   const validateAndReadSvg = (file) => {
     setError(null);
@@ -27,15 +69,23 @@ export default function SvgIconUploader({ label, currentIcon, onUpload, theme })
     const reader = new FileReader();
     reader.onload = (e) => {
       const svgContent = e.target.result;
-      
+
       // Basic validation that it's valid SVG
       if (!svgContent.includes('<svg')) {
         setError('Invalid SVG file');
         return;
       }
 
+      // Extract dimensions
+      const dimensions = extractSvgDimensions(svgContent);
+
       setPreview(svgContent);
       onUpload(svgContent);
+
+      // Call the dimensions callback if provided
+      if (onDimensionsExtracted && dimensions) {
+        onDimensionsExtracted(dimensions);
+      }
     };
     reader.onerror = () => {
       setError('Error reading file');
@@ -53,7 +103,7 @@ export default function SvgIconUploader({ label, currentIcon, onUpload, theme })
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
-    
+
     const file = e.dataTransfer.files[0];
     if (file) {
       validateAndReadSvg(file);
@@ -95,18 +145,17 @@ export default function SvgIconUploader({ label, currentIcon, onUpload, theme })
           {label}
         </label>
       )}
-      
+
       {/* Upload Area */}
       <div
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onClick={() => fileInputRef.current?.click()}
-        className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
-          isDragging 
-            ? 'border-gray-400 bg-gray-50' 
+        className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${isDragging
+            ? 'border-gray-400 bg-gray-50'
             : 'border-gray-200 bg-gray-50/50 hover:border-gray-300 hover:bg-gray-50'
-        }`}
+          }`}
       >
         <input
           ref={fileInputRef}
@@ -120,7 +169,7 @@ export default function SvgIconUploader({ label, currentIcon, onUpload, theme })
           <div className="space-y-3">
             {/* Preview */}
             <div className="flex justify-center items-center">
-              <div 
+              <div
                 className="w-16 h-16 flex items-center justify-center"
                 dangerouslySetInnerHTML={{ __html: preview }}
               />

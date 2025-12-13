@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useTheme } from '@/context/ThemeContext';
 import SvgIconUploader from '@/components/SvgIconUploader';
+import AspectRatioSizeInput from '@/components/AspectRatioSizeInput';
 import { Button, Input, Select, Modal, Card, Badge, Skeleton, EmptyState } from '@/components/ui';
 import useCRUD from '@/hooks/useCRUD';
 import useSearch from '@/hooks/useSearch';
@@ -88,11 +89,13 @@ export default function ProjectNearBy({ projectId }) {
     return category ? category.name : 'Unknown';
   };
 
-  // Category options for select
-  const categoryOptions = categories.items.map(cat => ({
-    value: cat.id,
-    label: cat.name
-  }));
+  // Category options for select (exclude "Landmarks" category)
+  const categoryOptions = categories.items
+    .filter(cat => cat.name.toLowerCase() !== 'landmarks')
+    .map(cat => ({
+      value: cat.id,
+      label: cat.name
+    }));
 
   // Loading state
   if (nearbyPlaces.loading) {
@@ -218,30 +221,31 @@ export default function ProjectNearBy({ projectId }) {
                   label=""
                   currentIcon={modal.formData.icon}
                   onUpload={(svgContent) => modal.updateField('icon', svgContent)}
+                  onDimensionsExtracted={(dimensions) => {
+                    modal.updateField('iconWidth', dimensions.width);
+                    modal.updateField('iconHeight', dimensions.height);
+                  }}
                   theme={theme}
                 />
               </div>
 
               {modal.formData.icon && (
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    label="Icon Width (px)"
-                    type="number"
-                    name="iconWidth"
-                    value={modal.formData.iconWidth}
-                    onChange={modal.handleInputChange}
-                    min="10"
-                    max="200"
+                <div>
+                  <AspectRatioSizeInput
+                    width={modal.formData.iconWidth}
+                    height={modal.formData.iconHeight}
+                    widthName="iconWidth"
+                    heightName="iconHeight"
+                    onWidthChange={modal.handleInputChange}
+                    onHeightChange={modal.handleInputChange}
+                    widthLabel="Icon Width (px)"
+                    heightLabel="Icon Height (px)"
+                    min={10}
+                    max={200}
                   />
-                  <Input
-                    label="Icon Height (px)"
-                    type="number"
-                    name="iconHeight"
-                    value={modal.formData.iconHeight}
-                    onChange={modal.handleInputChange}
-                    min="10"
-                    max="200"
-                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    Leave empty to use category default size
+                  </p>
                 </div>
               )}
 

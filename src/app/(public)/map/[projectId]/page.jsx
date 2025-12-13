@@ -348,11 +348,20 @@ function MapPageContent() {
           mapSettings={mapSettings}
         />
 
-        {/* Project Logo */}
+        {/* Project Logo (Left) */}
         <ProjectLogo
           logo={project?.logo}
           width={project?.logoWidth}
           height={project?.logoHeight}
+          position="left"
+        />
+
+        {/* Secondary Logo (Right) */}
+        <ProjectLogo
+          logo={project?.secondaryLogo}
+          width={project?.secondaryLogoWidth}
+          height={project?.secondaryLogoHeight}
+          position="right"
         />
       </div>
 

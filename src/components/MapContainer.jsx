@@ -9,7 +9,8 @@ import {
   debounce,
   formatDistance,
   formatDuration,
-  easeInOutCubic // Add this utility
+  easeInOutCubic,
+  getIconSize
 } from "@/utils/mapUtils";
 import { useMapboxDirections } from "@/hooks/useMapboxDirections";
 import { MAPBOX_CONFIG, LAYER_IDS, SOURCE_IDS } from "@/constants/mapConfig";
@@ -399,11 +400,12 @@ export default function MapContainer({
     landmarks.forEach(landmark => {
       const iconId = `landmark-icon-${landmark.id}`;
       if (landmark.icon && !loadedIconsRef.current.has(iconId)) {
+        const { width, height } = getIconSize(landmark, landmark.category);
         iconsToLoad.push({
           id: iconId,
           svg: landmark.icon,
-          width: landmark.iconWidth || MAPBOX_CONFIG.DEFAULT_ICON_WIDTH,
-          height: landmark.iconHeight || MAPBOX_CONFIG.DEFAULT_ICON_HEIGHT
+          width,
+          height
         });
       }
     });
@@ -413,11 +415,12 @@ export default function MapContainer({
       const iconToUse = place.icon || place.categoryIcon;
       const iconId = `nearby-icon-${place.id}`;
       if (iconToUse && !loadedIconsRef.current.has(iconId)) {
+        const { width, height } = getIconSize(place, place.category);
         iconsToLoad.push({
           id: iconId,
           svg: iconToUse,
-          width: place.iconWidth || MAPBOX_CONFIG.DEFAULT_ICON_WIDTH,
-          height: place.iconHeight || MAPBOX_CONFIG.DEFAULT_ICON_HEIGHT
+          width,
+          height
         });
       }
     });

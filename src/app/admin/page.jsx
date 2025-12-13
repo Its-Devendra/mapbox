@@ -11,10 +11,6 @@ import {
     FolderKanban,
     Plus,
     Search,
-    MapPin,
-    Palette,
-    Tag,
-    Settings,
     Edit,
     Trash2,
     Eye
@@ -123,8 +119,8 @@ export default function AdminDashboard() {
                                 key={status}
                                 onClick={() => setFilter('status', status)}
                                 className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer capitalize ${filters.status === status
-                                        ? 'bg-white text-black shadow-sm'
-                                        : 'text-gray-500 hover:text-gray-900'
+                                    ? 'bg-white text-black shadow-sm'
+                                    : 'text-gray-500 hover:text-gray-900'
                                     }`}
                             >
                                 {status}
@@ -137,13 +133,6 @@ export default function AdminDashboard() {
                 {filteredProjects.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 stagger-children">
                         {filteredProjects.map((project) => {
-                            const stats = {
-                                themes: project.themes?.length || 0,
-                                landmarks: project.landmarks?.length || 0,
-                                categories: project.categories?.length || 0,
-                                settings: project.settings?.length || 0
-                            };
-
                             return (
                                 <Card
                                     key={project.id}
@@ -153,7 +142,7 @@ export default function AdminDashboard() {
                                     className="flex flex-col h-full group"
                                 >
                                     <div className="p-5 flex-1">
-                                        <div className="flex items-start justify-between mb-4">
+                                        <div className="flex items-start justify-between">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center group-hover:bg-gray-100 transition-colors">
                                                     <FolderKanban className="w-5 h-5 text-gray-600" strokeWidth={1.5} />
@@ -166,13 +155,6 @@ export default function AdminDashboard() {
                                                 </div>
                                             </div>
                                             <div className={`w-2 h-2 rounded-full ${project.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <StatItem icon={Palette} label="Themes" value={stats.themes} color="blue" />
-                                            <StatItem icon={Tag} label="Categories" value={stats.categories} color="purple" />
-                                            <StatItem icon={MapPin} label="Landmarks" value={stats.landmarks} color="orange" />
-                                            <StatItem icon={Settings} label="Settings" value={stats.settings} color="gray" />
                                         </div>
                                     </div>
 
@@ -233,21 +215,3 @@ export default function AdminDashboard() {
     );
 }
 
-/**
- * Stat Item Component
- */
-function StatItem({ icon: Icon, label, value, color }) {
-    const colors = {
-        blue: 'text-blue-500',
-        purple: 'text-purple-500',
-        orange: 'text-orange-500',
-        gray: 'text-gray-500',
-    };
-
-    return (
-        <div className="flex items-center gap-2 p-2 rounded-lg bg-gray-50/50 border border-gray-100/50">
-            <Icon className={`w-3.5 h-3.5 ${colors[color]}`} />
-            <span className="text-xs text-gray-600 font-medium">{value} {label}</span>
-        </div>
-    );
-}

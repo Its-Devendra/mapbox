@@ -7,6 +7,7 @@ import { useTheme } from '@/context/ThemeContext';
 import SvgIconUploader from '@/components/SvgIconUploader';
 import AudioUploader from '@/components/AudioUploader';
 import LogoUploader from '@/components/LogoUploader';
+import AspectRatioSizeInput from '@/components/AspectRatioSizeInput';
 import { ArrowLeft, Save } from 'lucide-react';
 
 export default function EditProjectPage() {
@@ -19,10 +20,15 @@ export default function EditProjectPage() {
     name: '',
     slug: '',
     isActive: true,
+    logo: null,
+    logoWidth: 120,
+    logoHeight: 40,
+    secondaryLogo: null,
+    secondaryLogoWidth: 120,
+    secondaryLogoHeight: 40,
     clientBuildingIcon: null,
     clientBuildingIconWidth: 40,
     clientBuildingIconHeight: 40,
-    logoHeight: 40,
     introAudio: null
   });
 
@@ -41,10 +47,15 @@ export default function EditProjectPage() {
           name: project.name,
           slug: project.slug,
           isActive: project.isActive,
+          logo: project.logo || null,
+          logoWidth: project.logoWidth || 120,
+          logoHeight: project.logoHeight || 40,
+          secondaryLogo: project.secondaryLogo || null,
+          secondaryLogoWidth: project.secondaryLogoWidth || 120,
+          secondaryLogoHeight: project.secondaryLogoHeight || 40,
           clientBuildingIcon: project.clientBuildingIcon || null,
           clientBuildingIconWidth: project.clientBuildingIconWidth || 40,
           clientBuildingIconHeight: project.clientBuildingIconHeight || 40,
-          logoHeight: project.logoHeight || 40,
           introAudio: project.introAudio || null
         });
       } else {
@@ -188,41 +199,60 @@ export default function EditProjectPage() {
                 label=""
                 currentLogo={formData.logo}
                 onUpload={(content) => setFormData({ ...formData, logo: content })}
+                onDimensionsExtracted={(dimensions) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    logoWidth: dimensions.width,
+                    logoHeight: dimensions.height
+                  }));
+                }}
                 theme={theme}
               />
 
               {formData.logo && (
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Logo Width (px)
-                    </label>
-                    <input
-                      type="number"
-                      name="logoWidth"
-                      value={formData.logoWidth}
-                      onChange={handleInputChange}
-                      min="10"
-                      max="500"
-                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm placeholder:text-gray-400 transition-all cursor-text"
-                      placeholder="120"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Logo Height (px)
-                    </label>
-                    <input
-                      type="number"
-                      name="logoHeight"
-                      value={formData.logoHeight}
-                      onChange={handleInputChange}
-                      min="10"
-                      max="500"
-                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm placeholder:text-gray-400 transition-all cursor-text"
-                      placeholder="40"
-                    />
-                  </div>
+                <div className="mt-4">
+                  <AspectRatioSizeInput
+                    width={formData.logoWidth}
+                    height={formData.logoHeight}
+                    widthName="logoWidth"
+                    heightName="logoHeight"
+                    onWidthChange={handleInputChange}
+                    onHeightChange={handleInputChange}
+                    widthLabel="Logo Width (px)"
+                    heightLabel="Logo Height (px)"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-gray-100 pt-6">
+              <h3 className="text-sm font-semibold text-gray-900 mb-4">Secondary Logo (Right Side)</h3>
+              <LogoUploader
+                label=""
+                currentLogo={formData.secondaryLogo}
+                onUpload={(content) => setFormData({ ...formData, secondaryLogo: content })}
+                onDimensionsExtracted={(dimensions) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    secondaryLogoWidth: dimensions.width,
+                    secondaryLogoHeight: dimensions.height
+                  }));
+                }}
+                theme={theme}
+              />
+
+              {formData.secondaryLogo && (
+                <div className="mt-4">
+                  <AspectRatioSizeInput
+                    width={formData.secondaryLogoWidth}
+                    height={formData.secondaryLogoHeight}
+                    widthName="secondaryLogoWidth"
+                    heightName="secondaryLogoHeight"
+                    onWidthChange={handleInputChange}
+                    onHeightChange={handleInputChange}
+                    widthLabel="Logo Width (px)"
+                    heightLabel="Logo Height (px)"
+                  />
                 </div>
               )}
             </div>
@@ -233,6 +263,13 @@ export default function EditProjectPage() {
                 label=""
                 currentIcon={formData.clientBuildingIcon}
                 onUpload={(svgContent) => setFormData({ ...formData, clientBuildingIcon: svgContent })}
+                onDimensionsExtracted={(dimensions) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    clientBuildingIconWidth: dimensions.width,
+                    clientBuildingIconHeight: dimensions.height
+                  }));
+                }}
                 theme={theme}
               />
 
