@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '@/context/ThemeContext';
 import SvgIconUploader from '@/components/SvgIconUploader';
+import AspectRatioSizeInput from '@/components/AspectRatioSizeInput';
 import FilterBar from '@/components/FilterBar';
 import { Button, Input, Modal, Card, Badge, Skeleton, EmptyState } from '@/components/ui';
 import useCRUD from '@/hooks/useCRUD';
@@ -270,6 +271,10 @@ export default function ProjectCategories({ projectId }) {
                     label=""
                     currentIcon={modal.formData.iconSvg}
                     onUpload={(svgContent) => modal.updateField('iconSvg', svgContent)}
+                    onDimensionsExtracted={(dimensions) => {
+                      modal.updateField('defaultIconWidth', dimensions.width);
+                      modal.updateField('defaultIconHeight', dimensions.height);
+                    }}
                     theme={theme}
                   />
                 )}
@@ -281,26 +286,18 @@ export default function ProjectCategories({ projectId }) {
                 <p className="text-xs text-gray-500 mb-3">
                   Set default icon size for all landmarks and nearby places in this category
                 </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    label="Width (px)"
-                    type="number"
-                    name="defaultIconWidth"
-                    value={modal.formData.defaultIconWidth}
-                    onChange={modal.handleInputChange}
-                    min="10"
-                    max="200"
-                  />
-                  <Input
-                    label="Height (px)"
-                    type="number"
-                    name="defaultIconHeight"
-                    value={modal.formData.defaultIconHeight}
-                    onChange={modal.handleInputChange}
-                    min="10"
-                    max="200"
-                  />
-                </div>
+                <AspectRatioSizeInput
+                  width={modal.formData.defaultIconWidth}
+                  height={modal.formData.defaultIconHeight}
+                  widthName="defaultIconWidth"
+                  heightName="defaultIconHeight"
+                  onWidthChange={modal.handleInputChange}
+                  onHeightChange={modal.handleInputChange}
+                  widthLabel="Width (px)"
+                  heightLabel="Height (px)"
+                  min={10}
+                  max={200}
+                />
               </div>
 
               {/* Force Category Defaults Checkbox */}
