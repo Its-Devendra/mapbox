@@ -13,6 +13,7 @@ export default function LandmarkCard({ landmark, clientBuilding, onClose, isVisi
   const [distance, setDistance] = useState(null);
   const [duration, setDuration] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [imageError, setImageError] = useState(false); // Track if image failed to load
 
   // Calculate distance and duration when landmark changes
   useEffect(() => {
@@ -20,6 +21,11 @@ export default function LandmarkCard({ landmark, clientBuilding, onClose, isVisi
       calculateDistanceAndTime();
     }
   }, [landmark, clientBuilding]);
+
+  // Reset image error when landmark changes
+  useEffect(() => {
+    setImageError(false);
+  }, [landmark?.id]);
 
   const calculateDistanceAndTime = async () => {
     if (!landmark || !clientBuilding) return;
@@ -67,18 +73,15 @@ export default function LandmarkCard({ landmark, clientBuilding, onClose, isVisi
     return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
   };
 
-  // Get landmark image based on category
-  const getLandmarkImage = (category) => {
-    const images = {
-      'Office': '/images/office-building.jpg',
-      'Food': '/images/restaurant.jpg',
-      'Parking': '/images/parking.jpg',
-      'Entrance': '/images/entrance.jpg',
-      'Meeting': '/images/meeting-room.jpg',
-      'Recreation': '/images/recreation.jpg'
-    };
-    return images[category] || '/images/default-landmark.jpg';
-  };
+  // Placeholder gradient background (no external image needed)
+  const renderPlaceholder = () => (
+    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700">
+      <svg className="w-16 h-16 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    </div>
+  );
 
   return (
     <div className={`${className} z-20 w-full max-w-sm`}>
@@ -92,16 +95,18 @@ export default function LandmarkCard({ landmark, clientBuilding, onClose, isVisi
         }}
       >
         {/* Hero Image Section */}
-        <div className="relative h-40 bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700">
-          <div className="absolute inset-0 bg-black/20"></div>
-          <img
-            src={landmark.image || getLandmarkImage(categoryName)}
-            alt={landmark.title}
-            className="w-full h-full object-fit"
-            onError={(e) => {
-              e.target.src = getLandmarkImage(categoryName);
-            }}
-          />
+        <div className="relative h-40 overflow-hidden">
+          {/* Show image only if we have one and it hasn't errored */}
+          {landmark.image && !imageError ? (
+            <img
+              src={landmark.image}
+              alt={landmark.title}
+              className="w-full h-full object-cover"
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            renderPlaceholder()
+          )}
           <div className="absolute top-4 right-4">
             <button
               onClick={onClose}

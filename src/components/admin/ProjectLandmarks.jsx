@@ -6,7 +6,8 @@ import { useTheme } from '@/context/ThemeContext';
 import SvgIconUploader from '@/components/SvgIconUploader';
 import AspectRatioSizeInput from '@/components/AspectRatioSizeInput';
 import S3ImageUploader from '@/components/S3ImageUploader';
-import { Plus, Edit, Trash2, MapPin, Search, X, Navigation, Eye, Crosshair } from 'lucide-react';
+import BulkImportModal from '@/components/admin/BulkImportModal';
+import { Plus, Edit, Trash2, MapPin, Search, X, Navigation, Eye, Crosshair, Upload } from 'lucide-react';
 import { Modal } from '@/components/ui';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -21,6 +22,7 @@ export default function ProjectLandmarks({ projectId }) {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [editingLandmark, setEditingLandmark] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -231,13 +233,22 @@ export default function ProjectLandmarks({ projectId }) {
           <h3 className="text-base font-semibold text-gray-900">Landmarks</h3>
           <p className="text-sm text-gray-500 mt-1">Add and manage points of interest on your maps</p>
         </div>
-        <button
-          onClick={() => { setEditingLandmark(null); resetForm(); setShowModal(true); }}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-black hover:bg-gray-800 text-white text-sm font-medium rounded-full transition-all hover:shadow-lg hover:-translate-y-0.5 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" strokeWidth={2} />
-          New Landmark
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-full transition-all border border-gray-200 hover:border-gray-300 cursor-pointer"
+          >
+            <Upload className="w-4 h-4" strokeWidth={2} />
+            Import Excel
+          </button>
+          <button
+            onClick={() => { setEditingLandmark(null); resetForm(); setShowModal(true); }}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-black hover:bg-gray-800 text-white text-sm font-medium rounded-full transition-all hover:shadow-lg hover:-translate-y-0.5 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" strokeWidth={2} />
+            New Landmark
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -358,6 +369,18 @@ export default function ProjectLandmarks({ projectId }) {
           theme={theme}
         />
       </Modal>
+
+      {/* Bulk Import Modal */}
+      <BulkImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        projectId={projectId}
+        onImportComplete={() => {
+          fetchLandmarks();
+          fetchCategories();
+          setShowImportModal(false);
+        }}
+      />
     </div>
   );
 }

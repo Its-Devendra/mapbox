@@ -36,7 +36,7 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
     if (typeof category === 'object') {
       // Check if icon is SVG content
       if (isSvgContent(category.icon)) {
-        return <div dangerouslySetInnerHTML={{ __html: category.icon }} className="w-5 h-5 [&>svg]:w-full [&>svg]:h-full" />;
+        return <div dangerouslySetInnerHTML={{ __html: category.icon }} className="flex items-center justify-center [&>svg]:max-w-5 [&>svg]:max-h-5 [&>svg]:w-auto [&>svg]:h-auto" />;
       }
 
       // If icon exists and is not SVG, treat as emoji

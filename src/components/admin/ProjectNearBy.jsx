@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTheme } from '@/context/ThemeContext';
 import SvgIconUploader from '@/components/SvgIconUploader';
 import AspectRatioSizeInput from '@/components/AspectRatioSizeInput';
+import BulkImportModal from '@/components/admin/BulkImportModal';
 import { Button, Input, Select, Modal, Card, Badge, Skeleton, EmptyState } from '@/components/ui';
 import useCRUD from '@/hooks/useCRUD';
 import useSearch from '@/hooks/useSearch';
 import useModal from '@/hooks/useModal';
-import { Plus, Edit, Trash2, Navigation, Search } from 'lucide-react';
+import { Plus, Edit, Trash2, Navigation, Search, Upload } from 'lucide-react';
 
 const initialFormData = {
   title: '',
@@ -23,6 +24,7 @@ const initialFormData = {
 
 export default function ProjectNearBy({ projectId }) {
   const { theme } = useTheme();
+  const [showImportModal, setShowImportModal] = useState(false);
 
   // Data fetching with useCRUD
   const nearbyPlaces = useCRUD({
@@ -110,9 +112,14 @@ export default function ProjectNearBy({ projectId }) {
           <h3 className="text-base font-semibold text-gray-900">Near By Places</h3>
           <p className="text-sm text-gray-500 mt-1">Add nearby places that show distance and time on hover</p>
         </div>
-        <Button icon={Plus} onClick={modal.openCreate}>
-          New Near By
-        </Button>
+        <div className="flex gap-2">
+          <Button icon={Upload} variant="secondary" onClick={() => setShowImportModal(true)}>
+            Import Excel
+          </Button>
+          <Button icon={Plus} onClick={modal.openCreate}>
+            New Near By
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -311,6 +318,18 @@ export default function ProjectNearBy({ projectId }) {
           <NearbyPreview formData={modal.formData} getCategoryName={getCategoryName} />
         </div>
       </Modal>
+
+      {/* Bulk Import Modal */}
+      <BulkImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        projectId={projectId}
+        onImportComplete={() => {
+          nearbyPlaces.fetchAll();
+          categories.fetchAll();
+          setShowImportModal(false);
+        }}
+      />
     </div>
   );
 }
