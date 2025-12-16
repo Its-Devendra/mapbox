@@ -715,6 +715,7 @@ export default function MapContainer({
 
     const place = nearbyPlaces.find(p => p.id === placeId);
 
+
     if (!place) {
       console.log('Hover debug: Place not found for ID:', placeId);
       return;
@@ -733,18 +734,18 @@ export default function MapContainer({
       const categoryColor = place.categoryColor || '#3b82f6'; // Default to blue if no color
 
       let popupContent = `
-        <div class="min-w-[220px] overflow-hidden rounded-lg shadow-sm">
-          <div class="h-1.5 w-full" style="background-color: ${categoryColor}"></div>
-          <div class="p-3 bg-white">
-            <div class="flex items-start justify-between gap-2 mb-1">
-              <h3 class="font-bold text-sm text-gray-900 leading-tight">${place.title}</h3>
-              <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 uppercase tracking-wider" style="color: ${categoryColor}; background-color: ${categoryColor}15">
-                ${place.categoryName || 'Place'}
-              </span>
-            </div>
-            
-            <div id="popup-distance-${placeId}" class="mt-2 text-xs text-gray-500 flex items-center gap-2">
-              <span class="w-3 h-3 border-2 border-gray-200 border-t-current rounded-full animate-spin" style="color: ${categoryColor}"></span>
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden" style="min-width: 200px; max-width: 280px;">
+          <div class="h-1.5" style="background-color: ${categoryColor}"></div>
+          <div class="p-4">
+            <h3 class="font-bold text-sm text-gray-900 leading-snug">${place.title}</h3>
+            <span class="inline-block text-[8px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide mt-1.5 mb-2.5" style="color: ${categoryColor}; background-color: ${categoryColor}10">
+              ${place.categoryName || 'Place'}
+            </span>
+            <div class="flex items-center gap-2 text-xs text-gray-400">
+              <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" opacity="0.3"/>
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="${categoryColor}" stroke-width="2" stroke-linecap="round"/>
+              </svg>
               <span>Calculating distance...</span>
             </div>
           </div>
@@ -780,29 +781,28 @@ export default function MapContainer({
         // Update popup content with distance/duration if still open and matching ID
         if (nearbyPlacePopupRef.current === popup && distance && duration) {
           const updatedContent = `
-            <div class="min-w-[220px] overflow-hidden rounded-lg shadow-sm">
-              <div class="h-1.5 w-full" style="background-color: ${categoryColor}"></div>
-              <div class="p-3 bg-white">
-                <div class="flex items-start justify-between gap-2 mb-2">
-                  <h3 class="font-bold text-sm text-gray-900 leading-tight">${place.title}</h3>
-                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider" style="color: ${categoryColor}; background-color: ${categoryColor}15">
-                    ${place.categoryName || 'Place'}
-                  </span>
-                </div>
-                
-                <div class="flex items-center gap-2 text-xs font-medium">
-                  <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-gray-50 text-gray-700 border border-gray-100">
-                    <svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <div class="bg-white rounded-lg shadow-lg overflow-hidden" style="min-width: 200px; max-width: 280px;">
+              <div class="h-1.5" style="background-color: ${categoryColor}"></div>
+              <div class="p-4">
+                <h3 class="font-bold text-sm text-gray-900 leading-snug">${place.title}</h3>
+                <span class="inline-block text-[8px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide mt-1.5 mb-2.5" style="color: ${categoryColor}; background-color: ${categoryColor}10">
+                  ${place.categoryName || 'Place'}
+                </span>
+                <div class="flex items-center gap-4 text-xs text-gray-600">
+                  <span class="flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                      <circle cx="12" cy="11" r="2" stroke-width="1.5"/>
                     </svg>
                     ${formatDistance(distance)}
-                  </div>
-                  <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-gray-50 text-gray-700 border border-gray-100">
-                    <svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </span>
+                  <span class="flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="9" stroke-width="1.5"/>
+                      <path d="M12 6v6l4 2" stroke-width="1.5" stroke-linecap="round"/>
                     </svg>
                     ${formatDuration(duration)}
-                  </div>
+                  </span>
                 </div>
               </div>
             </div>
@@ -814,16 +814,13 @@ export default function MapContainer({
         // Popup already shows "Calculating..." which is fine, or we could update to "Error"
         if (nearbyPlacePopupRef.current === popup) {
           const errorContent = `
-            <div class="min-w-[220px] overflow-hidden rounded-lg shadow-sm">
-              <div class="h-1.5 w-full" style="background-color: ${categoryColor}"></div>
-              <div class="p-3 bg-white">
-                <div class="flex items-start justify-between gap-2 mb-1">
-                  <h3 class="font-bold text-sm text-gray-900 leading-tight">${place.title}</h3>
-                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider" style="color: ${categoryColor}; background-color: ${categoryColor}15">
-                    ${place.categoryName || 'Place'}
-                  </span>
-                </div>
-                <p class="text-xs text-red-500 mt-2">Distance unavailable</p>
+            <div class="bg-white rounded-lg shadow-lg overflow-hidden" style="min-width: 200px; max-width: 280px;">
+              <div class="h-1.5" style="background-color: ${categoryColor}"></div>
+              <div class="p-4">
+                <h3 class="font-bold text-sm text-gray-900 leading-snug">${place.title}</h3>
+                <span class="inline-block text-[8px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide mt-1.5" style="color: ${categoryColor}; background-color: ${categoryColor}10">
+                  ${place.categoryName || 'Place'}
+                </span>
               </div>
             </div>
           `;
@@ -1324,7 +1321,7 @@ export default function MapContainer({
           filter: ['get', 'hasIcon']
         });
 
-        // Hover handlers for nearby places
+        // Hover handlers for nearby places (desktop)
         const nearbyEnterHandler = (e) => {
           mapRef.current.getCanvas().style.cursor = 'pointer';
           handleNearbyPlaceHoverRaw(e); // Trigger popup immediately on enter
@@ -1335,12 +1332,33 @@ export default function MapContainer({
           handleNearbyPlaceLeave(); // Hide popup on leave
         };
 
+        // Click/tap handler for nearby places (touch devices + desktop)
+        const nearbyClickHandler = (e) => {
+          // On touch devices, e.originalEvent will exist
+          // Toggle popup on tap - if popup is showing for this place, hide it, else show it
+          const feature = e.features?.[0];
+          if (!feature) return;
+
+          const placeId = feature.properties.id;
+
+          // If popup is already showing for this place, close it
+          if (nearbyPlacePopupRef.current && nearbyPlacePopupRef.current.placeId === placeId) {
+            handleNearbyPlaceLeave();
+            return;
+          }
+
+          // Otherwise, show the popup (same as hover behavior)
+          handleNearbyPlaceHoverRaw(e);
+        };
+
         mapRef.current.on('mouseenter', LAYER_IDS.NEARBY_PLACES, nearbyEnterHandler);
         mapRef.current.on('mouseleave', LAYER_IDS.NEARBY_PLACES, nearbyLeaveHandler);
+        mapRef.current.on('click', LAYER_IDS.NEARBY_PLACES, nearbyClickHandler);
 
         eventHandlersRef.current.push(
           { event: 'mouseenter', layer: LAYER_IDS.NEARBY_PLACES, handler: nearbyEnterHandler },
-          { event: 'mouseleave', layer: LAYER_IDS.NEARBY_PLACES, handler: nearbyLeaveHandler }
+          { event: 'mouseleave', layer: LAYER_IDS.NEARBY_PLACES, handler: nearbyLeaveHandler },
+          { event: 'click', layer: LAYER_IDS.NEARBY_PLACES, handler: nearbyClickHandler }
         );
 
         // Add HTML markers for nearby places without custom icons
@@ -1360,47 +1378,116 @@ export default function MapContainer({
               .setLngLat(place.coordinates)
               .addTo(mapRef.current);
 
-            // Add hover event to show popup
-            markerEl.addEventListener('mouseenter', async () => {
-              const { distance, duration } = await getDistanceAndDuration(
-                clientBuilding.coordinates,
-                place.coordinates
-              );
+            // Shared function to show popup for this place
+            const showPlacePopup = async () => {
+              const categoryColor = place.categoryColor || '#8b5cf6';
 
-              const popupContent = `
-                <div class="p-3">
-                  <h3 class="font-bold text-sm text-gray-900 mb-1">${place.title}</h3>
-                  <p class="text-xs text-gray-600 mb-2">${place.categoryName || 'Nearby Place'}</p>
-                  ${distance && duration ? `
-                    <div class="flex items-center gap-3 text-xs text-gray-700">
-                      <span>${formatDistance(distance)}</span>
-                      <span>${formatDuration(duration)}</span>
-                    </div>
-                  ` : ''}
-                </div>
-              `;
-
+              // Show loading popup immediately
               if (nearbyPlacePopupRef.current) {
                 nearbyPlacePopupRef.current.remove();
               }
 
+              let popupContent = `
+                <div class="bg-white rounded-lg shadow-lg overflow-hidden" style="min-width: 200px; max-width: 280px;">
+                  <div class="h-1.5" style="background-color: ${categoryColor}"></div>
+                  <div class="p-4">
+                    <h3 class="font-bold text-sm text-gray-900 leading-snug">${place.title}</h3>
+                    <span class="inline-block text-[8px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide mt-1.5 mb-2.5" style="color: ${categoryColor}; background-color: ${categoryColor}10">
+                      ${place.categoryName || 'Place'}
+                    </span>
+                    <div class="flex items-center gap-2 text-xs text-gray-400">
+                      <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" opacity="0.3"/>
+                        <path d="M12 2a10 10 0 0 1 10 10" stroke="${categoryColor}" stroke-width="2" stroke-linecap="round"/>
+                      </svg>
+                      <span>Calculating distance...</span>
+                    </div>
+                  </div>
+                </div>
+              `;
+
               const popup = new mapboxgl.Popup({
                 offset: MAPBOX_CONFIG.POPUP_OFFSET,
-                closeButton: false
+                closeButton: true,
+                closeOnClick: false,
+                className: 'nearby-popup-premium'
               })
                 .setLngLat(place.coordinates)
                 .setHTML(popupContent)
                 .addTo(mapRef.current);
 
+              popup.placeId = place.id;
               nearbyPlacePopupRef.current = popup;
               popupsRef.current.push(popup);
+
+              // Get distance asynchronously
+              try {
+                const result = await getDistanceAndDuration(
+                  clientBuilding.coordinates,
+                  place.coordinates
+                );
+
+                if (result?.distance && result?.duration && nearbyPlacePopupRef.current === popup) {
+                  const updatedContent = `
+                    <div class="bg-white rounded-lg shadow-lg overflow-hidden" style="min-width: 200px; max-width: 280px;">
+                      <div class="h-1.5" style="background-color: ${categoryColor}"></div>
+                      <div class="p-4">
+                        <h3 class="font-bold text-sm text-gray-900 leading-snug">${place.title}</h3>
+                        <span class="inline-block text-[8px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide mt-1.5 mb-2.5" style="color: ${categoryColor}; background-color: ${categoryColor}10">
+                          ${place.categoryName || 'Place'}
+                        </span>
+                        <div class="flex items-center gap-4 text-xs text-gray-600">
+                          <span class="flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                              <circle cx="12" cy="11" r="2" stroke-width="1.5"/>
+                            </svg>
+                            ${formatDistance(result.distance)}
+                          </span>
+                          <span class="flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <circle cx="12" cy="12" r="9" stroke-width="1.5"/>
+                              <path d="M12 6v6l4 2" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                            ${formatDuration(result.duration)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                  popup.setHTML(updatedContent);
+                }
+              } catch (err) {
+                console.error('Error getting distance:', err);
+              }
+            };
+
+            // Click/tap handler for touch devices
+            markerEl.addEventListener('click', (e) => {
+              e.stopPropagation();
+              // Toggle: if popup is showing for this place, hide it, else show it
+              if (nearbyPlacePopupRef.current && nearbyPlacePopupRef.current.placeId === place.id) {
+                nearbyPlacePopupRef.current.remove();
+                nearbyPlacePopupRef.current = null;
+              } else {
+                showPlacePopup();
+              }
+            });
+
+            // Add hover event to show popup (desktop)
+            markerEl.addEventListener('mouseenter', () => {
+              showPlacePopup();
             });
 
             markerEl.addEventListener('mouseleave', () => {
-              if (nearbyPlacePopupRef.current) {
-                nearbyPlacePopupRef.current.remove();
-                nearbyPlacePopupRef.current = null;
-              }
+              // Only hide on mouseleave if it's not a touch interaction
+              // We check if the popup was opened recently to avoid closing on touch
+              setTimeout(() => {
+                if (nearbyPlacePopupRef.current && nearbyPlacePopupRef.current.placeId === place.id) {
+                  nearbyPlacePopupRef.current.remove();
+                  nearbyPlacePopupRef.current = null;
+                }
+              }, 100);
             });
 
             markersRef.current.push(marker);

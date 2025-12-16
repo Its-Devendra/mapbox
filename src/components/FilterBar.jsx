@@ -1,6 +1,6 @@
 
 
-export default function FilterSidebar({ categories = [], onFilterChange, activeFilter = [], theme, className = "fixed bottom-6 left-1/2 transform -translate-x-1/2" }) {
+export default function FilterSidebar({ categories = [], onFilterChange, activeFilter = [], theme, className = "fixed bottom-3 left-3 right-3 sm:left-1/2 sm:right-auto sm:transform sm:-translate-x-1/2 sm:bottom-6" }) {
   // Use provided theme or fallback to default
   const filterTheme = theme || {
     primary: '#1e3a8a',
@@ -25,7 +25,7 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
     // Handle "All" case
     if (category === 'All') {
       return (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z" />
         </svg>
@@ -36,17 +36,17 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
     if (typeof category === 'object') {
       // Check if icon is SVG content
       if (isSvgContent(category.icon)) {
-        return <div dangerouslySetInnerHTML={{ __html: category.icon }} className="flex items-center justify-center [&>svg]:max-w-5 [&>svg]:max-h-5 [&>svg]:w-auto [&>svg]:h-auto" />;
+        return <div dangerouslySetInnerHTML={{ __html: category.icon }} className="flex items-center justify-center [&>svg]:max-w-4 [&>svg]:max-h-4 sm:[&>svg]:max-w-5 sm:[&>svg]:max-h-5 [&>svg]:w-auto [&>svg]:h-auto" />;
       }
 
       // If icon exists and is not SVG, treat as emoji
       if (category.icon && category.icon.length > 0) {
-        return <span className="text-base leading-none">{category.icon}</span>;
+        return <span className="text-sm sm:text-base leading-none">{category.icon}</span>;
       }
 
       // Fallback to default tag icon
       return (
-        <div className="w-5 h-5 text-current">
+        <div className="w-4 h-4 sm:w-5 sm:h-5 text-current">
           <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
             <path d="M7 7h.01" />
@@ -57,7 +57,7 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
 
     // Fallback for string categories (legacy support)
     return (
-      <div className="w-5 h-5 text-current">
+      <div className="w-4 h-4 sm:w-5 sm:h-5 text-current">
         <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
           <path d="M7 7h.01" />
@@ -95,9 +95,9 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
   const displayCategories = ['All', ...categories];
 
   return (
-    <div className={`${className} z-50`}>
+    <div className={`${className} z-50 filter-bar-container`}>
       <div
-        className="backdrop-blur-md rounded-full px-4 py-3 shadow-2xl"
+        className="backdrop-blur-md rounded-full px-2 py-2 sm:px-4 sm:py-3 shadow-2xl w-full sm:w-auto"
         style={{
           backgroundColor: filterTheme.primary,
           borderColor: filterTheme.tertiary,
@@ -122,7 +122,7 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
             background: rgba(255, 255, 255, 0.5);
           }
         `}</style>
-        <div className="filter-scroll flex items-center space-x-2 overflow-x-auto max-w-[90vw] pb-1">
+        <div className="filter-scroll flex items-center space-x-1 sm:space-x-2 overflow-x-auto max-w-full sm:max-w-[90vw] pb-1">
           {displayCategories.reduce((acc, category) => {
             const name = getCategoryName(category);
             // Deduplicate based on name
@@ -138,7 +138,7 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
               <button
                 key={typeof category === 'object' ? (category.id || category.name) : name}
                 onClick={() => handleFilterClick(name)}
-                className="flex items-center space-x-2 px-4 py-2 rounded-full transition-all duration-300 cursor-pointer whitespace-nowrap relative group"
+                className="flex items-center space-x-1 sm:space-x-2 px-2 py-1.5 sm:px-4 sm:py-2 rounded-full transition-all duration-300 cursor-pointer whitespace-nowrap relative group filter-button flex-shrink-0"
                 style={{
                   backgroundColor: isActive ? filterTheme.secondary : 'transparent',
                   color: isActive ? filterTheme.primary : filterTheme.secondary,
@@ -154,9 +154,9 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
                     }}
                   />
                 )}
-                <div className="relative z-10 flex items-center space-x-2">
+                <div className="relative z-10 flex items-center space-x-1 sm:space-x-2">
                   {renderIcon(category)}
-                  <span className="text-sm font-medium">{name}</span>
+                  <span className="text-xs sm:text-sm font-medium">{name}</span>
                 </div>
               </button>
             );

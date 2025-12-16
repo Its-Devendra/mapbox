@@ -27,17 +27,18 @@ export default function AspectRatioSizeInput({
     min = 10,
     max = 500,
     widthLabel = "Width (px)",
-    heightLabel = "Height (px)"
+    heightLabel = "Height (px)",
+    defaultLocked = true
 }) {
-    const [aspectRatioLocked, setAspectRatioLocked] = useState(false);
+    const [aspectRatioLocked, setAspectRatioLocked] = useState(defaultLocked);
     const [aspectRatio, setAspectRatio] = useState(null);
 
-    // Calculate and store aspect ratio when lock is enabled
+    // Calculate and store aspect ratio on initial render if locked by default
     useEffect(() => {
-        if (aspectRatioLocked && width && height) {
+        if (aspectRatioLocked && width && height && !aspectRatio) {
             setAspectRatio(width / height);
         }
-    }, [aspectRatioLocked]);
+    }, [aspectRatioLocked, width, height]);
 
     const handleWidthChange = (e) => {
         const newWidth = parseFloat(e.target.value);
