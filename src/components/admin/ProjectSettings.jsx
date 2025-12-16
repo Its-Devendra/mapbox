@@ -195,7 +195,7 @@ export default function ProjectSettings({ projectId }) {
       {settings.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {settings.map((setting) => (
-            <div key={setting.id} className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md hover:border-gray-200 transition-all">
+            <div key={setting.id} className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md hover:border-gray-200 transition-all">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">

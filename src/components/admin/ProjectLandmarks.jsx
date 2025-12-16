@@ -268,50 +268,39 @@ export default function ProjectLandmarks({ projectId }) {
       {/* Landmarks List */}
       {filteredLandmarks.length > 0 ? (
         <div className="space-y-3 stagger-children">
-          {filteredLandmarks.map((landmark, index) => (
+          {filteredLandmarks.map((landmark) => (
             <div
               key={landmark.id}
-              className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md hover:border-gray-200 transition-all group"
-              style={{ animationDelay: `${index * 50}ms` }}
+              className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md hover:border-gray-200 transition-all"
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4 flex-1">
-                  <div className="w-16 h-16 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform overflow-hidden">
+                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
                     {(() => {
-                      // Show image if available
-                      if (landmark.image) {
-                        return <img src={landmark.image} alt={landmark.title} className="w-full h-full object-cover" />;
-                      }
-
-                      // Get icon from landmark or category, only if it's a valid string
+                      // Get icon from landmark or category
                       const landmarkIcon = landmark.icon && typeof landmark.icon === 'string' && landmark.icon.length > 0 ? landmark.icon : null;
                       const iconToShow = landmarkIcon || getCategoryIcon(landmark.categoryId);
 
                       if (iconToShow && isSvgIcon(iconToShow)) {
                         return <div dangerouslySetInnerHTML={{ __html: iconToShow }} className="w-6 h-6 [&>svg]:w-full [&>svg]:h-full" />;
                       } else if (iconToShow && typeof iconToShow === 'string' && iconToShow.length > 0 && iconToShow.length < 10) {
-                        // Only show as emoji if it's a short string (likely an emoji)
-                        return <span className="text-lg">{iconToShow}</span>;
+                        return <span className="text-base">{iconToShow}</span>;
                       } else {
-                        return <MapPin className="w-5 h-5 text-gray-400" />;
+                        return <MapPin className="w-5 h-5 text-gray-700" strokeWidth={2} />;
                       }
                     })()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-semibold text-gray-900 text-sm mb-1">{landmark.title}</h4>
-                    <p className="text-sm text-gray-600 mb-2 line-clamp-2">{landmark.description}</p>
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
-                        <Navigation className="w-3 h-3" />
-                        {landmark.latitude.toFixed(4)}, {landmark.longitude.toFixed(4)}
-                      </span>
-                      <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-md text-xs font-medium">
+                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                      <span>{landmark.latitude.toFixed(6)}, {landmark.longitude.toFixed(6)}</span>
+                      <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs font-medium">
                         {getCategoryName(landmark.categoryId)}
                       </span>
                     </div>
                   </div>
                 </div>
-                <div className="flex gap-1 ml-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-1 ml-4">
                   <button
                     onClick={() => handleEdit(landmark)}
                     className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors cursor-pointer"

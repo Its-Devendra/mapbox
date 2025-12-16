@@ -105,7 +105,24 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
           borderStyle: 'solid'
         }}
       >
-        <div className="flex items-center space-x-2 overflow-x-auto max-w-[90vw] no-scrollbar">
+        {/* Custom scrollbar styles */}
+        <style jsx>{`
+          .filter-scroll::-webkit-scrollbar {
+            height: 4px;
+          }
+          .filter-scroll::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+          }
+          .filter-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+          }
+          .filter-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+          }
+        `}</style>
+        <div className="filter-scroll flex items-center space-x-2 overflow-x-auto max-w-[90vw] pb-1">
           {displayCategories.reduce((acc, category) => {
             const name = getCategoryName(category);
             // Deduplicate based on name

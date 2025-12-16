@@ -211,9 +211,8 @@ export default function MapSettingsManager() {
                 <p className="text-sm text-gray-600 mt-1">Project: {getProjectName(setting.projectId)}</p>
 
                 <div className="flex items-center mt-3">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    setting.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                  }`}>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${setting.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
                     {setting.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </div>

@@ -192,7 +192,7 @@ export default function ProjectThemes({ projectId }) {
       {themes.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {themes.map((theme) => (
-            <div key={theme.id} className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md hover:border-gray-200 transition-all">
+            <div key={theme.id} className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md hover:border-gray-200 transition-all">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="flex -space-x-2 flex-shrink-0">
