@@ -1,6 +1,18 @@
+'use client';
 
+import { useState, useRef, useEffect } from 'react';
 
-export default function FilterSidebar({ categories = [], onFilterChange, activeFilter = [], theme, className = "fixed bottom-3 left-3 right-3 sm:left-1/2 sm:right-auto sm:transform sm:-translate-x-1/2 sm:bottom-6" }) {
+export default function FilterBar({
+  categories = [],
+  onFilterChange,
+  activeFilter = [],
+  theme,
+  className = "fixed bottom-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:transform sm:-translate-x-1/2 sm:bottom-6"
+}) {
+  const scrollContainerRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
   // Use provided theme or fallback to default
   const filterTheme = theme || {
     primary: '#1e3a8a',
@@ -13,6 +25,27 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
   const activeFilters = Array.isArray(activeFilter) ? activeFilter : [activeFilter];
   const isAllActive = activeFilters.length === 0 || activeFilters.includes('All');
 
+  // Check scroll position for arrows
+  const checkScroll = () => {
+    if (!scrollContainerRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
+    setCanScrollLeft(scrollLeft > 5);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 5);
+  };
+
+  useEffect(() => {
+    checkScroll();
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.addEventListener('scroll', checkScroll);
+      window.addEventListener('resize', checkScroll);
+      return () => {
+        container.removeEventListener('scroll', checkScroll);
+        window.removeEventListener('resize', checkScroll);
+      };
+    }
+  }, [categories]);
+
   // Helper to check if content is SVG
   const isSvgContent = (content) => {
     if (!content || typeof content !== 'string') return false;
@@ -22,47 +55,43 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
 
   // Helper to get icon content
   const renderIcon = (category) => {
-    // Handle "All" case
+    const iconClass = "w-[18px] h-[18px] flex-shrink-0";
+
     if (category === 'All') {
       return (
-        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z" />
+        <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
         </svg>
       );
     }
 
-    // Handle category object
     if (typeof category === 'object') {
-      // Check if icon is SVG content
       if (isSvgContent(category.icon)) {
-        return <div dangerouslySetInnerHTML={{ __html: category.icon }} className="flex items-center justify-center [&>svg]:max-w-4 [&>svg]:max-h-4 sm:[&>svg]:max-w-5 sm:[&>svg]:max-h-5 [&>svg]:w-auto [&>svg]:h-auto" />;
+        return (
+          <div
+            dangerouslySetInnerHTML={{ __html: category.icon }}
+            className="flex items-center justify-center [&>svg]:w-[18px] [&>svg]:h-[18px] flex-shrink-0"
+          />
+        );
       }
 
-      // If icon exists and is not SVG, treat as emoji
       if (category.icon && category.icon.length > 0) {
-        return <span className="text-sm sm:text-base leading-none">{category.icon}</span>;
+        return <span className="text-sm leading-none flex-shrink-0">{category.icon}</span>;
       }
 
-      // Fallback to default tag icon
       return (
-        <div className="w-4 h-4 sm:w-5 sm:h-5 text-current">
-          <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
-            <path d="M7 7h.01" />
-          </svg>
-        </div>
+        <svg className={iconClass} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
+          <circle cx="7" cy="7" r="1" />
+        </svg>
       );
     }
 
-    // Fallback for string categories (legacy support)
     return (
-      <div className="w-4 h-4 sm:w-5 sm:h-5 text-current">
-        <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
-          <path d="M7 7h.01" />
-        </svg>
-      </div>
+      <svg className={iconClass} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
+        <circle cx="7" cy="7" r="1" />
+      </svg>
     );
   };
 
@@ -72,96 +101,159 @@ export default function FilterSidebar({ categories = [], onFilterChange, activeF
     return typeof category === 'object' ? category.name : category;
   };
 
-  // Handle filter toggle for multi-select
   const handleFilterClick = (name) => {
     if (name === 'All') {
-      // Clicking "All" resets to show all (empty array or ['All'])
       onFilterChange([]);
     } else {
-      // Toggle the category in/out of the active filters
       if (activeFilters.includes(name)) {
-        // Remove it from the list
         const newFilters = activeFilters.filter(f => f !== name && f !== 'All');
         onFilterChange(newFilters.length === 0 ? [] : newFilters);
       } else {
-        // Add it to the list, removing 'All' if present
         const newFilters = activeFilters.filter(f => f !== 'All');
         onFilterChange([...newFilters, name]);
       }
     }
   };
 
-  // Prepare list including "All"
+  const scrollTo = (direction) => {
+    if (!scrollContainerRef.current) return;
+    const scrollAmount = 200;
+    scrollContainerRef.current.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth'
+    });
+  };
+
   const displayCategories = ['All', ...categories];
 
-  return (
-    <div className={`${className} z-50 filter-bar-container`}>
-      <div
-        className="backdrop-blur-md rounded-full px-2 py-2 sm:px-4 sm:py-3 shadow-2xl w-full sm:w-auto"
-        style={{
-          backgroundColor: filterTheme.primary,
-          borderColor: filterTheme.tertiary,
-          borderWidth: '1px',
-          borderStyle: 'solid'
-        }}
-      >
-        {/* Custom scrollbar styles */}
-        <style jsx>{`
-          .filter-scroll::-webkit-scrollbar {
-            height: 4px;
-          }
-          .filter-scroll::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-          }
-          .filter-scroll::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 4px;
-          }
-          .filter-scroll::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.5);
-          }
-        `}</style>
-        <div className="filter-scroll flex items-center space-x-1 sm:space-x-2 overflow-x-auto max-w-full sm:max-w-[90vw] pb-1">
-          {displayCategories.reduce((acc, category) => {
-            const name = getCategoryName(category);
-            // Deduplicate based on name
-            if (!acc.find(item => getCategoryName(item) === name)) {
-              acc.push(category);
-            }
-            return acc;
-          }, []).map((category, index) => {
-            const name = getCategoryName(category);
-            const isActive = name === 'All' ? isAllActive : activeFilters.includes(name);
+  const uniqueCategories = displayCategories.reduce((acc, category) => {
+    const name = getCategoryName(category);
+    if (!acc.find(item => getCategoryName(item) === name)) {
+      acc.push(category);
+    }
+    return acc;
+  }, []);
 
-            return (
-              <button
-                key={typeof category === 'object' ? (category.id || category.name) : name}
-                onClick={() => handleFilterClick(name)}
-                className="flex items-center space-x-1 sm:space-x-2 px-2 py-1.5 sm:px-4 sm:py-2 rounded-full transition-all duration-300 cursor-pointer whitespace-nowrap relative group filter-button flex-shrink-0"
-                style={{
-                  backgroundColor: isActive ? filterTheme.secondary : 'transparent',
-                  color: isActive ? filterTheme.primary : filterTheme.secondary,
-                  boxShadow: isActive ? '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' : 'none'
-                }}
-              >
-                {/* Semi-transparent white overlay for hover effect - only shown when not active */}
-                {!isActive && (
-                  <div
-                    className="absolute inset-0 rounded-full transition-opacity duration-300 pointer-events-none opacity-0 group-hover:opacity-100"
-                    style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.2)'
-                    }}
-                  />
-                )}
-                <div className="relative z-10 flex items-center space-x-1 sm:space-x-2">
-                  {renderIcon(category)}
-                  <span className="text-xs sm:text-sm font-medium">{name}</span>
-                </div>
-              </button>
-            );
-          })}
+  const isSecondaryWhite = filterTheme.secondary.toLowerCase() === '#ffffff' || filterTheme.secondary.toLowerCase() === '#fff';
+  const activeTextColor = filterTheme.secondary;
+  const inactiveTextColor = isSecondaryWhite ? '#1a1a1a' : filterTheme.secondary;
+
+  // Helper to convert hex to rgba
+  const hexToRgba = (hex, alpha) => {
+    if (!hex) return `rgba(255, 255, 255, ${alpha})`;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
+  // Use tertiary color for glass base, defaulting to white if not provided
+  const glassBaseColor = filterTheme.tertiary || '#ffffff';
+
+  return (
+    <div className={`${className} z-50`}>
+      <style jsx>{`
+        div::-webkit-scrollbar {
+          display: none;
+        }
+        .ios-glass-effect {
+          -webkit-backdrop-filter: blur(50px) saturate(200%);
+          backdrop-filter: blur(50px) saturate(200%);
+        }
+        .ios-glass-btn-effect {
+          -webkit-backdrop-filter: blur(30px) saturate(180%);
+          backdrop-filter: blur(30px) saturate(180%);
+        }
+      `}</style>
+
+      <div className="relative flex items-center">
+        {/* Left scroll button */}
+        {canScrollLeft && (
+          <button
+            onClick={() => scrollTo('left')}
+            className="ios-glass-btn-effect absolute -left-3 z-20 w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 active:scale-95"
+            style={{
+              background: hexToRgba(glassBaseColor, 0.35),
+              border: `0.5px solid ${hexToRgba(glassBaseColor, 0.4)}`,
+              boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
+              color: '#1a1a1a',
+            }}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
+
+        {/* Main Container - iOS Glass */}
+        <div
+          className="ios-glass-effect relative overflow-hidden rounded-[22px]"
+          style={{
+            background: hexToRgba(glassBaseColor, 0.25),
+            border: `0.5px solid ${hexToRgba(glassBaseColor, 0.35)}`,
+            boxShadow: `0 4px 30px rgba(0, 0, 0, 0.1), inset 0 1px 0 ${hexToRgba(glassBaseColor, 0.4)}`,
+          }}
+        >
+          {/* Scrollable container */}
+          <div
+            ref={scrollContainerRef}
+            className="relative flex items-center gap-0.5 px-1 py-1 overflow-x-auto max-w-[calc(100vw-32px)] sm:max-w-[85vw]"
+            style={{
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+            }}
+          >
+            {uniqueCategories.map((category) => {
+              const name = getCategoryName(category);
+              const isActive = name === 'All' ? isAllActive : activeFilters.includes(name);
+
+              return (
+                <button
+                  key={typeof category === 'object' ? (category.id || category.name) : name}
+                  onClick={() => handleFilterClick(name)}
+                  className="relative flex items-center gap-2 px-4 py-2 rounded-[18px] transition-all duration-200 cursor-pointer whitespace-nowrap flex-shrink-0 active:scale-[0.98]"
+                  style={{
+                    background: isActive
+                      ? filterTheme.primary
+                      : hexToRgba(glassBaseColor, 0.5),
+                    color: isActive
+                      ? activeTextColor
+                      : inactiveTextColor,
+                    boxShadow: isActive
+                      ? '0 2px 10px rgba(0, 0, 0, 0.15)'
+                      : '0 1px 3px rgba(0, 0, 0, 0.05)',
+                    border: isActive
+                      ? 'none'
+                      : `0.5px solid ${hexToRgba(glassBaseColor, 0.5)}`,
+                  }}
+                >
+                  <span className="relative z-10 flex items-center gap-2">
+                    {renderIcon(category)}
+                    <span className="text-[13px] font-semibold">{name}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
+
+        {/* Right scroll button */}
+        {canScrollRight && (
+          <button
+            onClick={() => scrollTo('right')}
+            className="ios-glass-btn-effect absolute -right-3 z-20 w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 active:scale-95"
+            style={{
+              background: hexToRgba(glassBaseColor, 0.35),
+              border: `0.5px solid ${hexToRgba(glassBaseColor, 0.4)}`,
+              boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
+              color: '#1a1a1a',
+            }}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   );

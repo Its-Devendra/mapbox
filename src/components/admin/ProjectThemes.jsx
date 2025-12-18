@@ -23,8 +23,11 @@ export default function ProjectThemes({ projectId }) {
   const [formData, setFormData] = useState({
     primary: '#1e3a8a',
     secondary: '#ffffff',
-    tertiary: '#64748b',
+    tertiary: '#ffffff',
     quaternary: '#f1f5f9',
+    filterPrimary: '#1e3a8a',
+    filterSecondary: '#ffffff',
+    filterTertiary: '#ffffff',
     mapboxStyle: 'mapbox://styles/mapbox/streets-v12',
     customStyle: '',
     isActive: false
@@ -73,6 +76,12 @@ export default function ProjectThemes({ projectId }) {
         body: JSON.stringify({
           primary: formData.primary,
           secondary: formData.secondary,
+          tertiary: formData.tertiary,
+          quaternary: formData.quaternary,
+          filterPrimary: formData.filterPrimary || formData.primary,
+          filterSecondary: formData.filterSecondary || formData.secondary,
+          filterTertiary: formData.filterTertiary || formData.tertiary,
+          filterQuaternary: formData.quaternary,
           mapboxStyle: finalMapboxStyle,
           isActive: formData.isActive,
           projectId: projectId
@@ -101,8 +110,11 @@ export default function ProjectThemes({ projectId }) {
     setFormData({
       primary: theme.primary,
       secondary: theme.secondary,
-      tertiary: '#64748b',
-      quaternary: '#f1f5f9',
+      tertiary: theme.tertiary || '#ffffff',
+      quaternary: theme.quaternary || '#f1f5f9',
+      filterPrimary: theme.filterPrimary || theme.primary,
+      filterSecondary: theme.filterSecondary || theme.secondary,
+      filterTertiary: theme.filterTertiary || theme.tertiary || '#ffffff',
       mapboxStyle: isCustomStyle ? 'custom' : theme.mapboxStyle,
       customStyle: isCustomStyle ? theme.mapboxStyle : '',
       isActive: theme.isActive
@@ -131,8 +143,11 @@ export default function ProjectThemes({ projectId }) {
     setFormData({
       primary: '#1e3a8a',
       secondary: '#ffffff',
-      tertiary: '#64748b',
+      tertiary: '#ffffff',
       quaternary: '#f1f5f9',
+      filterPrimary: '#1e3a8a',
+      filterSecondary: '#ffffff',
+      filterTertiary: '#ffffff',
       mapboxStyle: 'mapbox://styles/mapbox/streets-v12',
       customStyle: '',
       isActive: false
@@ -489,59 +504,217 @@ function ThemeEditorModal({ formData, setFormData, handleInputChange, handleSubm
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Primary Color */}
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-1">Primary Color</label>
-              <p className="text-xs text-gray-500 mb-2">Used for active states, buttons, and card backgrounds.</p>
-              <div className="flex items-center gap-3">
-                <div className="relative flex-shrink-0">
+            {/* Landmark Card Colors Section */}
+            <div className="space-y-4 p-4 bg-gray-50 rounded-2xl">
+              <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                <MapPin className="w-4 h-4" /> Landmark Card Colors
+              </h4>
+
+              {/* Primary Color */}
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-1">Primary Background</label>
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-shrink-0">
+                    <input
+                      type="color"
+                      name="primary"
+                      value={formData.primary}
+                      onChange={handleInputChange}
+                      onFocus={handleColorFocus}
+                      className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                    />
+                    <div
+                      className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
+                      style={{ backgroundColor: formData.primary }}
+                    />
+                  </div>
                   <input
-                    type="color"
+                    type="text"
                     name="primary"
                     value={formData.primary}
                     onChange={handleInputChange}
                     onFocus={handleColorFocus}
-                    className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
-                  />
-                  <div
-                    className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
-                    style={{ backgroundColor: formData.primary }}
+                    className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"
                   />
                 </div>
-                <input
-                  type="text"
-                  name="primary"
-                  value={formData.primary}
-                  onChange={handleInputChange}
-                  onFocus={handleColorFocus}
-                  className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"
-                />
+              </div>
+
+              {/* Secondary Color */}
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-1">Text & Icons</label>
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-shrink-0">
+                    <input
+                      type="color"
+                      name="secondary"
+                      value={formData.secondary}
+                      onChange={handleInputChange}
+                      onFocus={handleColorFocus}
+                      className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                    />
+                    <div
+                      className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
+                      style={{ backgroundColor: formData.secondary }}
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    name="secondary"
+                    value={formData.secondary}
+                    onChange={handleInputChange}
+                    onFocus={handleColorFocus}
+                    className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Tertiary Color (Glass/Inactive) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-1">Border / Accent</label>
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-shrink-0">
+                    <input
+                      type="color"
+                      name="tertiary"
+                      value={formData.tertiary}
+                      onChange={handleInputChange}
+                      onFocus={handleColorFocus}
+                      className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                    />
+                    <div
+                      className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
+                      style={{ backgroundColor: formData.tertiary }}
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    name="tertiary"
+                    value={formData.tertiary}
+                    onChange={handleInputChange}
+                    onFocus={handleColorFocus}
+                    className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Secondary Color */}
+            {/* Filter Section Colors Section */}
+            <div className="space-y-4 p-4 bg-gray-50 rounded-2xl">
+              <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                <Folder className="w-4 h-4" /> Filter Section Colors
+              </h4>
+
+              {/* Filter Primary (Active Background) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-1">Active Background</label>
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-shrink-0">
+                    <input
+                      type="color"
+                      name="filterPrimary"
+                      value={formData.filterPrimary}
+                      onChange={handleInputChange}
+                      onFocus={handleColorFocus}
+                      className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                    />
+                    <div
+                      className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
+                      style={{ backgroundColor: formData.filterPrimary }}
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    name="filterPrimary"
+                    value={formData.filterPrimary}
+                    onChange={handleInputChange}
+                    onFocus={handleColorFocus}
+                    className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Filter Secondary (Active Text) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-1">Active Text</label>
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-shrink-0">
+                    <input
+                      type="color"
+                      name="filterSecondary"
+                      value={formData.filterSecondary}
+                      onChange={handleInputChange}
+                      onFocus={handleColorFocus}
+                      className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                    />
+                    <div
+                      className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
+                      style={{ backgroundColor: formData.filterSecondary }}
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    name="filterSecondary"
+                    value={formData.filterSecondary}
+                    onChange={handleInputChange}
+                    onFocus={handleColorFocus}
+                    className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Filter Tertiary (Glass/Inactive) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-1">Glass / Inactive Color</label>
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-shrink-0">
+                    <input
+                      type="color"
+                      name="filterTertiary"
+                      value={formData.filterTertiary}
+                      onChange={handleInputChange}
+                      onFocus={handleColorFocus}
+                      className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                    />
+                    <div
+                      className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
+                      style={{ backgroundColor: formData.filterTertiary }}
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    name="filterTertiary"
+                    value={formData.filterTertiary}
+                    onChange={handleInputChange}
+                    onFocus={handleColorFocus}
+                    className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Tertiary Color (Glass/Inactive) */}
             <div>
-              <label className="block text-sm font-medium text-gray-900 mb-1">Secondary Color</label>
-              <p className="text-xs text-gray-500 mb-2">Used for text, icons, and contrast elements.</p>
+              <label className="block text-sm font-medium text-gray-900 mb-1">Glass / Inactive Color</label>
+              <p className="text-xs text-gray-500 mb-2">Base color for glass effects and inactive states.</p>
               <div className="flex items-center gap-3">
                 <div className="relative flex-shrink-0">
                   <input
                     type="color"
-                    name="secondary"
-                    value={formData.secondary}
+                    name="tertiary"
+                    value={formData.tertiary}
                     onChange={handleInputChange}
                     onFocus={handleColorFocus}
                     className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
                   />
                   <div
                     className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
-                    style={{ backgroundColor: formData.secondary }}
+                    style={{ backgroundColor: formData.tertiary }}
                   />
                 </div>
                 <input
                   type="text"
-                  name="secondary"
-                  value={formData.secondary}
+                  name="tertiary"
+                  value={formData.tertiary}
                   onChange={handleInputChange}
                   onFocus={handleColorFocus}
                   className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"

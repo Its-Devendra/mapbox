@@ -57,6 +57,12 @@ model Theme {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   primary String
   secondary String
+  tertiary String @default("#ffffff")
+  quaternary String @default("#f1f5f9")
+  filterPrimary String?
+  filterSecondary String?
+  filterTertiary String?
+  filterQuaternary String?
   mapboxStyle String
   customStyleUrl String?
   isActive Boolean @default(false)

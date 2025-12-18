@@ -17,6 +17,7 @@ function MapPageContent() {
 
   const [project, setProject] = useState(null);
   const [projectTheme, setProjectTheme] = useState(null);
+  const [filterTheme, setFilterTheme] = useState(null);
   const [mapSettings, setMapSettings] = useState(null);
   const [landmarks, setLandmarks] = useState([]);
   const [nearbyPlaces, setNearbyPlaces] = useState([]);
@@ -70,6 +71,7 @@ function MapPageContent() {
         if (cached) {
           setProject(cached.project);
           setProjectTheme(cached.theme);
+          setFilterTheme(cached.filterTheme);
           setMapSettings(cached.settings);
           setLandmarks(cached.landmarks);
           setNearbyPlaces(cached.nearbyPlaces);
@@ -128,19 +130,31 @@ function MapPageContent() {
 
         // Handle themes (important but not critical)
         let activeTheme = null;
+        let activeFilterTheme = null;
         if (themesRes.status === 'fulfilled' && themesRes.value.ok) {
           const themesResponse = await themesRes.value.json();
           const themesData = Array.isArray(themesResponse) ? themesResponse : (themesResponse.items || themesResponse.themes || []);
           const theme = themesData.find(t => t.isActive && t.projectId === projectId);
           if (theme) {
+            // Landmark Theme (Standard fields)
             activeTheme = {
               primary: theme.primary,
               secondary: theme.secondary,
-              tertiary: '#64748b',
-              quaternary: '#f1f5f9',
+              tertiary: theme.tertiary || '#ffffff',
+              quaternary: theme.quaternary || '#f1f5f9',
               mapboxStyle: theme.mapboxStyle
             };
+
+            // Filter Theme (Filter specific fields with fallback to standard)
+            activeFilterTheme = {
+              primary: theme.filterPrimary || theme.primary,
+              secondary: theme.filterSecondary || theme.secondary,
+              tertiary: theme.filterTertiary || theme.tertiary || '#ffffff',
+              quaternary: theme.filterQuaternary || theme.quaternary || '#f1f5f9'
+            };
+
             setProjectTheme(activeTheme);
+            setFilterTheme(activeFilterTheme);
           }
         } else {
           console.warn('Failed to load themes, using defaults');
@@ -370,7 +384,7 @@ function MapPageContent() {
         categories={categories}
         onFilterChange={setActiveFilter}
         activeFilter={activeFilter}
-        theme={projectTheme}
+        theme={filterTheme || projectTheme} // Fallback to projectTheme if filterTheme not set
       />
     </div>
   );

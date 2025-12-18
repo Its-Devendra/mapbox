@@ -108,6 +108,10 @@ export default function MapContainer({
   const introPlayedRef = useRef(false); // Track if intro has played
   const initialZoomDoneRef = useRef(false); // Track if initial zoom is done
 
+  // View Mode State (`tilted` | `top`)
+  const [viewMode, setViewMode] = useState('tilted');
+  const isFlyingRef = useRef(false); // Track if a cinematic flight is in progress
+
   // Intro State
   const [showIntroButton, setShowIntroButton] = useState(false); // Show button if autoplay blocks
   const introAudioRef = useRef(introAudio); // Track introAudio prop for non-reactive access
@@ -147,7 +151,7 @@ export default function MapContainer({
       zoom: mapSettings?.defaultZoom ?? MAPBOX_CONFIG.DEFAULT_ZOOM,
       minZoom: mapSettings?.minZoom ?? 0, // Default to 0 (fully zoomed out) if not set
       maxZoom: mapSettings?.maxZoom ?? 22, // Default to 22 (fully zoomed in) if not set
-      pitch: mapSettings?.enablePitch ? 60 : 0,
+      pitch: mapSettings?.enablePitch ? 70 : 0, // Matched to 80 for Tilted Mode consistency
       bearing: 0,
       interactive: interactive,
       dragRotate: mapSettings?.enableRotation ?? true,
@@ -190,9 +194,9 @@ export default function MapContainer({
           mapRef.current.flyTo({
             center: clientBuilding.coordinates,
             zoom: 17.5,
-            pitch: 60,
+            pitch: 70,
             bearing: 45,
-            duration: 3000, // Reduced from 4000 for snappier feel
+            duration: 3000,
             essential: true
           });
         }
@@ -237,7 +241,7 @@ export default function MapContainer({
         mapRef.current.flyTo({
           center: clientBuilding.coordinates,
           zoom: 17.5,
-          pitch: 60,
+          pitch: 70,
           bearing: 45,
           duration: 4000,
           essential: true
@@ -371,9 +375,14 @@ export default function MapContainer({
     // Restore original viewport
     if (originalViewportRef.current && mapRef.current) {
       try {
+        const targetPitch = viewMode === 'tilted' ? 70 : originalViewportRef.current.pitch || 0;
+        const targetBearing = viewMode === 'tilted' ? -20 : originalViewportRef.current.bearing || 0;
+
         mapRef.current.flyTo({
           center: originalViewportRef.current.center,
           zoom: originalViewportRef.current.zoom,
+          pitch: targetPitch,
+          bearing: targetBearing,
           duration: MAPBOX_CONFIG.ROUTE_ANIMATION_DURATION
         });
       } catch (e) {
@@ -384,7 +393,7 @@ export default function MapContainer({
     // Deselect landmark
     setSelectedLandmark(null);
     setShowLandmarkCard(false);
-  }, []);
+  }, [viewMode]);
 
   /**
    * Load custom icons with error handling and caching
@@ -641,26 +650,32 @@ export default function MapContainer({
         });
         */
 
-        // Calculate bearing for cinematic approach
-        const bearingToLandmark = destination.coordinates && clientBuilding.coordinates
-          ? ((Math.atan2(destination.coordinates[0] - clientBuilding.coordinates[0], destination.coordinates[1] - clientBuilding.coordinates[1]) * 180 / Math.PI) * -1) + 90
-          : 0;
-
-        // Fly processing
-        smoothFlyTo(mapRef.current, {
-          center: destination.coordinates,
-          zoom: 17.5,
-          pitch: 55,
-          bearing: bearingToLandmark
-        }, 6000); // 6s duration for "cinematic" feel
-
         // Restore coordinates for animation usage
         const coordinates = data.geometry.coordinates;
+
+        // Calculate cinematic bearing based on arrival path (last segment)
+        // This ensures the camera looks "at" the building from the road we arrived on
+        let bearingToLandmark = 0;
+        if (coordinates && coordinates.length >= 2) {
+          const last = coordinates[coordinates.length - 1];
+          const prev = coordinates[coordinates.length - 2];
+          // Standard Mapbox bearing: 0 = North, 90 = East
+          // atan2(dx, dy) gives exactly this (angle from Y axis)
+          bearingToLandmark = Math.atan2(last[0] - prev[0], last[1] - prev[1]) * 180 / Math.PI;
+        } else if (destination.coordinates && clientBuilding.coordinates) {
+          // Fallback to straight line bearing
+          bearingToLandmark = Math.atan2(
+            destination.coordinates[0] - clientBuilding.coordinates[0],
+            destination.coordinates[1] - clientBuilding.coordinates[1]
+          ) * 180 / Math.PI;
+        }
+
+
 
         // Animate the route drawing - capture generation for animation closure
         const animationGeneration = currentGeneration;
         const animateRoute = () => {
-          const animationDuration = 2500; // 2.5 seconds for a smoother feel
+          const animationDuration = viewMode === 'top' ? 1000 : 5000; // Fast in top view, slow in cinematic
           const startTime = performance.now();
 
           const animate = (currentTime) => {
@@ -703,7 +718,59 @@ export default function MapContainer({
           animationFrameRef.current = requestAnimationFrame(animate);
         };
 
+        // Start route animation immediately
         animateRoute();
+
+        // LOGIC BRANCH BASED ON VIEW MODE
+        if (viewMode === 'top') {
+          // TOP VIEW: Instant fitBounds, NO animation
+          const bounds = new mapboxgl.LngLatBounds()
+            .extend(clientBuilding.coordinates)
+            .extend(destination.coordinates);
+
+          mapRef.current.fitBounds(bounds, {
+            padding: { top: 100, bottom: 100, left: 100, right: 100 },
+            pitch: 0,
+            bearing: 0,
+            duration: 0, // Instant, no animation
+            essential: true
+          });
+
+        } else {
+          // TILTED VIEW: Cinematic Flight Sequence
+          isFlyingRef.current = true; // Mark flight as active
+
+          // 1. Cinematic flight to landmark
+          await smoothFlyTo(mapRef.current, {
+            center: destination.coordinates,
+            zoom: 18,     // Closer look
+            pitch: 70,    // More dramatic angle
+            bearing: bearingToLandmark
+          }, 7000);
+
+          // 2. Pause to admire the landmark
+          if (mapRef.current && routeGenerationRef.current === currentGeneration && isFlyingRef.current) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+
+          // 3. Majestic zoom out to show context (Top View)
+          if (mapRef.current && routeGenerationRef.current === currentGeneration && clientBuilding?.coordinates && isFlyingRef.current) {
+            isFlyingRef.current = false; // Flight finished
+
+            const bounds = new mapboxgl.LngLatBounds()
+              .extend(clientBuilding.coordinates)
+              .extend(destination.coordinates);
+
+            mapRef.current.fitBounds(bounds, {
+              padding: { top: 150, bottom: 350, left: 150, right: 150 },
+              pitch: 0, // Switch to top view after arrival
+              bearing: 0,
+              duration: 4000,
+              essential: true
+            });
+          }
+          isFlyingRef.current = false; // Ensure cleared
+        }
       }
     } catch (error) {
       console.error('Error getting directions:', error);
@@ -980,21 +1047,16 @@ export default function MapContainer({
         return;
       }
 
-      // Start cinematic tour if we have landmarks
-      // Small delay to ensure markers are loaded
+      // Initial animation to target center
       setTimeout(() => {
-        if (landmarks && landmarks.length > 0 && clientBuilding) {
-          console.log('🎬 Starting cinematic tour with', landmarks.length, 'landmarks');
-          startTour(mapRef.current, clientBuilding, landmarks);
-        } else {
-          // Fallback to simple flyTo if no landmarks
-          mapRef.current.flyTo({
-            center: targetCenter,
-            zoom: config.zoom,
-            duration: duration,
-            essential: true
-          });
-        }
+        mapRef.current.flyTo({
+          center: targetCenter,
+          zoom: config.zoom,
+          pitch: 70,
+          bearing: -20,
+          duration: duration,
+          essential: true
+        });
       }, 500);
 
 
@@ -1015,6 +1077,31 @@ export default function MapContainer({
 
       // Only clear if clicking on empty map area (no features under click)
       if (features.length === 0) {
+        // SPECIAL LOGIC FOR TILTED MODE INTERRUPTION
+        if (viewMode === 'tilted' && isFlyingRef.current) {
+          console.log('Interrupted flight! Stopping and showing route.');
+          // 1. Stop current flight/animation
+          stopTour(mapRef.current);
+          isFlyingRef.current = false;
+
+          // 2. Immediately snap to Top View showing route
+          if (activeLandmarkRef.current && clientBuilding?.coordinates) {
+            const bounds = new mapboxgl.LngLatBounds()
+              .extend(clientBuilding.coordinates)
+              .extend(activeLandmarkRef.current.coordinates);
+
+            mapRef.current.fitBounds(bounds, {
+              padding: { top: 150, bottom: 350, left: 150, right: 150 },
+              pitch: 0,
+              bearing: 0,
+              duration: 1000,
+              essential: true
+            });
+          }
+          return; // Stop here, do not clear route yet
+        }
+
+        // Standard Clear Logic (if not flying or in Top mode)
         // Clear route if one exists OR is being created
         if (routeRef.current || isCreatingRouteRef.current) {
           clearRoute();
@@ -1054,6 +1141,31 @@ export default function MapContainer({
       });
     }
   }, [theme.mapboxStyle, themeLoading, add3DBuildings]);
+
+  /**
+   * Handle View Mode Switching
+   */
+  useEffect(() => {
+    if (!mapRef.current || !isMapLoaded) return;
+
+    if (viewMode === 'top') {
+      // Switch to Top View (2D)
+      mapRef.current.easeTo({
+        pitch: 0,
+        bearing: 0,
+        duration: 1000,
+        essential: true
+      });
+    } else {
+      // Switch to Tilted View (3D)
+      mapRef.current.easeTo({
+        pitch: 70, // Maximum dramatic tilt
+        bearing: -20, // Gentle angle
+        duration: 1000,
+        essential: true
+      });
+    }
+  }, [viewMode, isMapLoaded]);
 
   /**
    * Update markers when data changes
@@ -1540,6 +1652,9 @@ export default function MapContainer({
   /**
    * Reset camera to default view (centered on client building if available)
    */
+  /**
+   * Reset camera to default view (centered on client building if available)
+   */
   const resetCamera = useCallback(() => {
     if (!mapRef.current) return;
 
@@ -1548,15 +1663,21 @@ export default function MapContainer({
     // Use client building as center if available, otherwise fall back to config center
     const targetCenter = clientBuilding?.coordinates || config.center;
 
+    // Determine pitch/bearing based on viewMode
+    // If we're in 'tilted' mode, return to a nice 3D angle (60 pitch, -20 bearing)
+    // If 'top', use standard or 0
+    const targetPitch = viewMode === 'tilted' ? 70 : (config.pitch || 0);
+    const targetBearing = viewMode === 'tilted' ? -20 : (config.bearing || 0);
+
     mapRef.current.flyTo({
       center: targetCenter,
       zoom: config.zoom,
-      pitch: config.pitch,
-      bearing: config.bearing,
-      duration: 2000, // Reduced for snappier feel
+      pitch: targetPitch,
+      bearing: targetBearing,
+      duration: 2000,
       essential: true
     });
-  }, [getMapConfig, clientBuilding]);
+  }, [getMapConfig, clientBuilding, viewMode]);
 
   /**
    * Expose functionality via refs or context if needed in future
@@ -1594,6 +1715,34 @@ export default function MapContainer({
           </button>
         </div>
       )}
+
+      {/* View Mode Toggle */}
+      <div className="absolute top-6 right-6 z-40 flex bg-white/10 backdrop-blur-md rounded-lg p-1 border border-white/20 shadow-lg">
+        <button
+          onClick={() => setViewMode('tilted')}
+          className={`px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 ${viewMode === 'tilted'
+            ? 'bg-blue-600 text-white shadow-md'
+            : 'text-white/70 hover:bg-white/10 hover:text-white'
+            }`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+          3D Tilted
+        </button>
+        <button
+          onClick={() => setViewMode('top')}
+          className={`px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 ${viewMode === 'top'
+            ? 'bg-blue-600 text-white shadow-md'
+            : 'text-white/70 hover:bg-white/10 hover:text-white'
+            }`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+          </svg>
+          2D Top
+        </button>
+      </div>
 
       {/* Intro Button Overlay */}
       {showIntroButton && (
