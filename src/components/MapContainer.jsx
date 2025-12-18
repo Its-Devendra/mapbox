@@ -110,6 +110,7 @@ export default function MapContainer({
 
   // View Mode State (`tilted` | `top`)
   const [viewMode, setViewMode] = useState('tilted');
+  const viewModeRef = useRef('tilted'); // Ref to access viewMode without causing effect re-runs
   const isFlyingRef = useRef(false); // Track if a cinematic flight is in progress
 
   // Intro State
@@ -375,8 +376,8 @@ export default function MapContainer({
     // Restore original viewport
     if (originalViewportRef.current && mapRef.current) {
       try {
-        const targetPitch = viewMode === 'tilted' ? 70 : originalViewportRef.current.pitch || 0;
-        const targetBearing = viewMode === 'tilted' ? -20 : originalViewportRef.current.bearing || 0;
+        const targetPitch = viewModeRef.current === 'tilted' ? 70 : originalViewportRef.current.pitch || 0;
+        const targetBearing = viewModeRef.current === 'tilted' ? -20 : originalViewportRef.current.bearing || 0;
 
         mapRef.current.flyTo({
           center: originalViewportRef.current.center,
@@ -393,7 +394,7 @@ export default function MapContainer({
     // Deselect landmark
     setSelectedLandmark(null);
     setShowLandmarkCard(false);
-  }, [viewMode]);
+  }, []); // No viewMode dependency - uses ref instead
 
   /**
    * Load custom icons with error handling and caching
@@ -718,24 +719,34 @@ export default function MapContainer({
           animationFrameRef.current = requestAnimationFrame(animate);
         };
 
-        // Start route animation immediately
-        animateRoute();
+        // Start route animation immediately (only in tilted view)
+        if (viewModeRef.current === 'tilted') {
+          animateRoute();
+        } else {
+          // In top view, show full route instantly
+          if (mapRef.current && mapRef.current.getSource(SOURCE_IDS.ROUTE)) {
+            mapRef.current.getSource(SOURCE_IDS.ROUTE).setData({
+              type: 'Feature',
+              properties: {},
+              geometry: data.geometry
+            });
+          }
+        }
 
         // LOGIC BRANCH BASED ON VIEW MODE
-        if (viewMode === 'top') {
-          // TOP VIEW: Instant fitBounds, NO animation
+        if (viewModeRef.current === 'top') {
+          // TOP VIEW: Instant zoom to show both client building and landmark
           const bounds = new mapboxgl.LngLatBounds()
             .extend(clientBuilding.coordinates)
             .extend(destination.coordinates);
 
           mapRef.current.fitBounds(bounds, {
-            padding: { top: 100, bottom: 100, left: 100, right: 100 },
+            padding: { top: 100, bottom: 350, left: 100, right: 100 },
             pitch: 0,
             bearing: 0,
-            duration: 0, // Instant, no animation
+            duration: 1000, // Smooth but quick animation
             essential: true
           });
-
         } else {
           // TILTED VIEW: Cinematic Flight Sequence
           isFlyingRef.current = true; // Mark flight as active
@@ -1006,8 +1017,8 @@ export default function MapContainer({
       zoom: MAPBOX_CONFIG.GLOBE_ZOOM, // Start with globe view
       minZoom: config.minZoom,
       maxZoom: config.maxZoom,
-      pitch: config.pitch,
-      bearing: config.bearing,
+      pitch: 0, // Start flat, animate to tilted during transition
+      bearing: 0, // Start neutral, animate to final bearing during transition
       dragRotate: config.dragRotate,
       pitchWithRotate: config.pitchWithRotate,
       maxBounds: config.maxBounds // Apply bounds on initialization
@@ -1144,12 +1155,24 @@ export default function MapContainer({
 
   /**
    * Handle View Mode Switching
+   * NOTE: Skip on initial load - the initial flyTo handles the first animation
    */
+  const hasInitialAnimationRun = useRef(false);
+
   useEffect(() => {
+    // Keep ref in sync with state
+    viewModeRef.current = viewMode;
+
     if (!mapRef.current || !isMapLoaded) return;
 
+    // Skip the first run - let the initial flyTo handle the combined animation
+    if (!hasInitialAnimationRun.current) {
+      hasInitialAnimationRun.current = true;
+      return;
+    }
+
     if (viewMode === 'top') {
-      // Switch to Top View (2D)
+      // Switch to Top View (2D) - camera transitions from tilted to straight down
       mapRef.current.easeTo({
         pitch: 0,
         bearing: 0,
@@ -1157,10 +1180,10 @@ export default function MapContainer({
         essential: true
       });
     } else {
-      // Switch to Tilted View (3D)
+      // Switch to Tilted View (3D) - camera transitions to dramatic angle
       mapRef.current.easeTo({
-        pitch: 70, // Maximum dramatic tilt
-        bearing: -20, // Gentle angle
+        pitch: 70,
+        bearing: -20,
         duration: 1000,
         essential: true
       });
@@ -1666,8 +1689,8 @@ export default function MapContainer({
     // Determine pitch/bearing based on viewMode
     // If we're in 'tilted' mode, return to a nice 3D angle (60 pitch, -20 bearing)
     // If 'top', use standard or 0
-    const targetPitch = viewMode === 'tilted' ? 70 : (config.pitch || 0);
-    const targetBearing = viewMode === 'tilted' ? -20 : (config.bearing || 0);
+    const targetPitch = viewModeRef.current === 'tilted' ? 70 : (config.pitch || 0);
+    const targetBearing = viewModeRef.current === 'tilted' ? -20 : (config.bearing || 0);
 
     mapRef.current.flyTo({
       center: targetCenter,
@@ -1677,7 +1700,7 @@ export default function MapContainer({
       duration: 2000,
       essential: true
     });
-  }, [getMapConfig, clientBuilding, viewMode]);
+  }, [getMapConfig, clientBuilding]); // No viewMode dependency - uses ref instead
 
   /**
    * Expose functionality via refs or context if needed in future
