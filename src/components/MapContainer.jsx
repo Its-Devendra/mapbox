@@ -1740,13 +1740,23 @@ export default function MapContainer({
       )}
 
       {/* View Mode Toggle */}
-      <div className="absolute top-6 right-6 z-40 flex bg-white/10 backdrop-blur-md rounded-lg p-1 border border-white/20 shadow-lg">
+      <div
+        className="absolute top-6 right-6 z-40 flex rounded-lg p-1 border shadow-lg"
+        style={{
+          backgroundColor: `${theme.filterTertiary || theme.tertiary || '#ffffff'}25`,
+          borderColor: `${theme.filterTertiary || theme.tertiary || '#ffffff'}35`,
+          backdropFilter: 'blur(50px) saturate(200%)',
+          WebkitBackdropFilter: 'blur(50px) saturate(200%)',
+        }}
+      >
         <button
           onClick={() => setViewMode('tilted')}
-          className={`px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 ${viewMode === 'tilted'
-            ? 'bg-blue-600 text-white shadow-md'
-            : 'text-white/70 hover:bg-white/10 hover:text-white'
-            }`}
+          className="px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 cursor-pointer"
+          style={{
+            backgroundColor: viewMode === 'tilted' ? (theme.filterPrimary || theme.primary) : 'transparent',
+            color: viewMode === 'tilted' ? (theme.filterSecondary || theme.secondary) : 'rgba(255,255,255,0.7)',
+            boxShadow: viewMode === 'tilted' ? '0 2px 10px rgba(0, 0, 0, 0.15)' : 'none',
+          }}
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -1755,10 +1765,12 @@ export default function MapContainer({
         </button>
         <button
           onClick={() => setViewMode('top')}
-          className={`px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 ${viewMode === 'top'
-            ? 'bg-blue-600 text-white shadow-md'
-            : 'text-white/70 hover:bg-white/10 hover:text-white'
-            }`}
+          className="px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 cursor-pointer"
+          style={{
+            backgroundColor: viewMode === 'top' ? (theme.filterPrimary || theme.primary) : 'transparent',
+            color: viewMode === 'top' ? (theme.filterSecondary || theme.secondary) : 'rgba(255,255,255,0.7)',
+            boxShadow: viewMode === 'top' ? '0 2px 10px rgba(0, 0, 0, 0.15)' : 'none',
+          }}
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
