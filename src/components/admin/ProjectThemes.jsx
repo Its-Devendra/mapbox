@@ -30,7 +30,25 @@ export default function ProjectThemes({ projectId }) {
     filterTertiary: '#ffffff',
     mapboxStyle: 'mapbox://styles/mapbox/streets-v12',
     customStyle: '',
-    isActive: false
+    isActive: false,
+    // Filter Section Glass Controls
+    filterGlassEnabled: true,
+    filterGlassBlur: 50,
+    filterGlassSaturation: 200,
+    filterGlassOpacity: 25,
+    filterBorderOpacity: 35,
+    filterPrimaryOpacity: 100,
+    filterSecondaryOpacity: 100,
+    filterTertiaryOpacity: 100,
+    // Landmark Card Glass Controls
+    landmarkGlassEnabled: true,
+    landmarkGlassBlur: 50,
+    landmarkGlassSaturation: 200,
+    landmarkGlassOpacity: 25,
+    landmarkBorderOpacity: 35,
+    primaryOpacity: 100,
+    secondaryOpacity: 100,
+    tertiaryOpacity: 100,
   });
 
   useEffect(() => {
@@ -84,7 +102,25 @@ export default function ProjectThemes({ projectId }) {
           filterQuaternary: formData.quaternary,
           mapboxStyle: finalMapboxStyle,
           isActive: formData.isActive,
-          projectId: projectId
+          projectId: projectId,
+          // Filter Section Glass Controls
+          filterGlassEnabled: formData.filterGlassEnabled,
+          filterGlassBlur: parseInt(formData.filterGlassBlur) || 50,
+          filterGlassSaturation: parseInt(formData.filterGlassSaturation) || 200,
+          filterGlassOpacity: parseInt(formData.filterGlassOpacity) || 25,
+          filterBorderOpacity: parseInt(formData.filterBorderOpacity) || 35,
+          filterPrimaryOpacity: parseInt(formData.filterPrimaryOpacity) || 100,
+          filterSecondaryOpacity: parseInt(formData.filterSecondaryOpacity) || 100,
+          filterTertiaryOpacity: parseInt(formData.filterTertiaryOpacity) || 100,
+          // Landmark Card Glass Controls
+          landmarkGlassEnabled: formData.landmarkGlassEnabled,
+          landmarkGlassBlur: parseInt(formData.landmarkGlassBlur) || 50,
+          landmarkGlassSaturation: parseInt(formData.landmarkGlassSaturation) || 200,
+          landmarkGlassOpacity: parseInt(formData.landmarkGlassOpacity) || 25,
+          landmarkBorderOpacity: parseInt(formData.landmarkBorderOpacity) || 35,
+          primaryOpacity: parseInt(formData.primaryOpacity) || 100,
+          secondaryOpacity: parseInt(formData.secondaryOpacity) || 100,
+          tertiaryOpacity: parseInt(formData.tertiaryOpacity) || 100,
         }),
       });
 
@@ -117,7 +153,25 @@ export default function ProjectThemes({ projectId }) {
       filterTertiary: theme.filterTertiary || theme.tertiary || '#ffffff',
       mapboxStyle: isCustomStyle ? 'custom' : theme.mapboxStyle,
       customStyle: isCustomStyle ? theme.mapboxStyle : '',
-      isActive: theme.isActive
+      isActive: theme.isActive,
+      // Filter Section Glass Controls
+      filterGlassEnabled: theme.filterGlassEnabled ?? true,
+      filterGlassBlur: theme.filterGlassBlur ?? 50,
+      filterGlassSaturation: theme.filterGlassSaturation ?? 200,
+      filterGlassOpacity: theme.filterGlassOpacity ?? 25,
+      filterBorderOpacity: theme.filterBorderOpacity ?? 35,
+      filterPrimaryOpacity: theme.filterPrimaryOpacity ?? 100,
+      filterSecondaryOpacity: theme.filterSecondaryOpacity ?? 100,
+      filterTertiaryOpacity: theme.filterTertiaryOpacity ?? 100,
+      // Landmark Card Glass Controls
+      landmarkGlassEnabled: theme.landmarkGlassEnabled ?? true,
+      landmarkGlassBlur: theme.landmarkGlassBlur ?? 50,
+      landmarkGlassSaturation: theme.landmarkGlassSaturation ?? 200,
+      landmarkGlassOpacity: theme.landmarkGlassOpacity ?? 25,
+      landmarkBorderOpacity: theme.landmarkBorderOpacity ?? 35,
+      primaryOpacity: theme.primaryOpacity ?? 100,
+      secondaryOpacity: theme.secondaryOpacity ?? 100,
+      tertiaryOpacity: theme.tertiaryOpacity ?? 100,
     });
     setShowModal(true);
   };
@@ -150,7 +204,25 @@ export default function ProjectThemes({ projectId }) {
       filterTertiary: '#ffffff',
       mapboxStyle: 'mapbox://styles/mapbox/streets-v12',
       customStyle: '',
-      isActive: false
+      isActive: false,
+      // Filter Section Glass Controls
+      filterGlassEnabled: true,
+      filterGlassBlur: 50,
+      filterGlassSaturation: 200,
+      filterGlassOpacity: 25,
+      filterBorderOpacity: 35,
+      filterPrimaryOpacity: 100,
+      filterSecondaryOpacity: 100,
+      filterTertiaryOpacity: 100,
+      // Landmark Card Glass Controls
+      landmarkGlassEnabled: true,
+      landmarkGlassBlur: 50,
+      landmarkGlassSaturation: 200,
+      landmarkGlassOpacity: 25,
+      landmarkBorderOpacity: 35,
+      primaryOpacity: 100,
+      secondaryOpacity: 100,
+      tertiaryOpacity: 100,
     });
   };
 
@@ -692,6 +764,254 @@ function ThemeEditorModal({ formData, setFormData, handleInputChange, handleSubm
               </div>
             </div>
 
+            {/* Filter Glass Effects Section */}
+            <div className="space-y-4 p-4 bg-blue-50 rounded-2xl">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                  🌫️ Filter Glass Effects
+                </h4>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="filterGlassEnabled"
+                    checked={formData.filterGlassEnabled}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span className="text-sm text-gray-600">Enable Blur</span>
+                </label>
+              </div>
+
+              {formData.filterGlassEnabled && (
+                <div className="space-y-3">
+                  {/* Blur Amount */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">Blur Amount ({formData.filterGlassBlur}px)</label>
+                    <input
+                      type="range"
+                      name="filterGlassBlur"
+                      min="0"
+                      max="100"
+                      value={formData.filterGlassBlur}
+                      onChange={handleInputChange}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Saturation */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">Saturation ({formData.filterGlassSaturation}%)</label>
+                    <input
+                      type="range"
+                      name="filterGlassSaturation"
+                      min="100"
+                      max="300"
+                      value={formData.filterGlassSaturation}
+                      onChange={handleInputChange}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Glass Opacity */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">Background Opacity ({formData.filterGlassOpacity}%)</label>
+                    <input
+                      type="range"
+                      name="filterGlassOpacity"
+                      min="0"
+                      max="100"
+                      value={formData.filterGlassOpacity}
+                      onChange={handleInputChange}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Border Opacity */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">Border Opacity ({formData.filterBorderOpacity}%)</label>
+                    <input
+                      type="range"
+                      name="filterBorderOpacity"
+                      min="0"
+                      max="100"
+                      value={formData.filterBorderOpacity}
+                      onChange={handleInputChange}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {!formData.filterGlassEnabled && (
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-500">Blur disabled. Adjust color opacities below:</p>
+                  {/* Primary Opacity */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">Active BG Opacity ({formData.filterPrimaryOpacity}%)</label>
+                    <input
+                      type="range"
+                      name="filterPrimaryOpacity"
+                      min="0"
+                      max="100"
+                      value={formData.filterPrimaryOpacity}
+                      onChange={handleInputChange}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                  {/* Secondary Opacity */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">Text Opacity ({formData.filterSecondaryOpacity}%)</label>
+                    <input
+                      type="range"
+                      name="filterSecondaryOpacity"
+                      min="0"
+                      max="100"
+                      value={formData.filterSecondaryOpacity}
+                      onChange={handleInputChange}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                  {/* Tertiary Opacity */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">Glass Color Opacity ({formData.filterTertiaryOpacity}%)</label>
+                    <input
+                      type="range"
+                      name="filterTertiaryOpacity"
+                      min="0"
+                      max="100"
+                      value={formData.filterTertiaryOpacity}
+                      onChange={handleInputChange}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Landmark Glass Effects Section */}
+            <div className="space-y-4 p-4 bg-purple-50 rounded-2xl">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                  📍 Landmark Glass Effects
+                </h4>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="landmarkGlassEnabled"
+                    checked={formData.landmarkGlassEnabled}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                  />
+                  <span className="text-sm text-gray-600">Enable Blur</span>
+                </label>
+              </div>
+
+              {formData.landmarkGlassEnabled && (
+                <div className="space-y-3">
+                  {/* Blur Amount */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">Blur Amount ({formData.landmarkGlassBlur}px)</label>
+                    <input
+                      type="range"
+                      name="landmarkGlassBlur"
+                      min="0"
+                      max="100"
+                      value={formData.landmarkGlassBlur}
+                      onChange={handleInputChange}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Saturation */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">Saturation ({formData.landmarkGlassSaturation}%)</label>
+                    <input
+                      type="range"
+                      name="landmarkGlassSaturation"
+                      min="100"
+                      max="300"
+                      value={formData.landmarkGlassSaturation}
+                      onChange={handleInputChange}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Glass Opacity */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">Background Opacity ({formData.landmarkGlassOpacity}%)</label>
+                    <input
+                      type="range"
+                      name="landmarkGlassOpacity"
+                      min="0"
+                      max="100"
+                      value={formData.landmarkGlassOpacity}
+                      onChange={handleInputChange}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Border Opacity */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">Border Opacity ({formData.landmarkBorderOpacity}%)</label>
+                    <input
+                      type="range"
+                      name="landmarkBorderOpacity"
+                      min="0"
+                      max="100"
+                      value={formData.landmarkBorderOpacity}
+                      onChange={handleInputChange}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {!formData.landmarkGlassEnabled && (
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-500">Blur disabled. Adjust color opacities below:</p>
+                  {/* Primary Opacity */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">Primary Color Opacity ({formData.primaryOpacity}%)</label>
+                    <input
+                      type="range"
+                      name="primaryOpacity"
+                      min="0"
+                      max="100"
+                      value={formData.primaryOpacity}
+                      onChange={handleInputChange}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                  {/* Secondary Opacity */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">Text Opacity ({formData.secondaryOpacity}%)</label>
+                    <input
+                      type="range"
+                      name="secondaryOpacity"
+                      min="0"
+                      max="100"
+                      value={formData.secondaryOpacity}
+                      onChange={handleInputChange}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                  {/* Tertiary Opacity */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">Border/Accent Opacity ({formData.tertiaryOpacity}%)</label>
+                    <input
+                      type="range"
+                      name="tertiaryOpacity"
+                      min="0"
+                      max="100"
+                      value={formData.tertiaryOpacity}
+                      onChange={handleInputChange}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Tertiary Color (Glass/Inactive) */}
             <div>
               <label className="block text-sm font-medium text-gray-900 mb-1">Glass / Inactive Color</label>
@@ -943,8 +1263,8 @@ function ThemeEditorModal({ formData, setFormData, handleInputChange, handleSubm
             <ChevronRight className="w-4 h-4 text-gray-700" />
           </button>
         </div>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 }
 

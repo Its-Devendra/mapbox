@@ -137,15 +137,15 @@ body {
     right: 8px !important;
   }
   .project-logo-container img {
-    max-width: 60px !important;
-    max-height: 24px !important;
+    max-width: 90px !important;
+    max-height: 36px !important;
   }
 
   /* Landmark Card - full width on mobile, bottom position */
   .landmark-card-container {
     left: 12px !important;
     right: 12px !important;
-    bottom: 80px !important;
+    bottom: 70px !important;
     max-width: calc(100% - 24px) !important;
     width: auto !important;
   }
@@ -248,7 +248,7 @@ body {
   /* Landmark Card - positioned right side */
   .landmark-card-container {
     right: 16px !important;
-    bottom: 90px !important;
+    bottom: 70px !important;
     max-width: 320px !important;
   }
 
@@ -280,8 +280,8 @@ body {
   /* Landmark Card - full size */
   .landmark-card-container {
     right: 24px !important;
-    bottom: 104px !important;
-    max-width: 384px !important;
+    bottom: 70px !important;
+    max-width: 360px !important;
   }
 
   /* Filter Bar */

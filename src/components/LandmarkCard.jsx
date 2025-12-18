@@ -2,7 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 
-export default function LandmarkCard({ landmark, clientBuilding, onClose, isVisible, theme, className = "fixed bottom-32 left-3 right-3 sm:left-auto sm:right-6 sm:bottom-28 lg:bottom-32 xl:bottom-36 sm:max-w-sm" }) {
+export default function LandmarkCard({
+  landmark,
+  clientBuilding,
+  onClose,
+  isVisible,
+  theme,
+  className = "fixed bottom-20 left-3 right-3 sm:left-auto sm:right-6 sm:bottom-24 sm:max-w-sm"
+}) {
   // Use provided theme or fallback to default
   const cardTheme = theme || {
     primary: '#1e3a8a',
@@ -10,10 +17,22 @@ export default function LandmarkCard({ landmark, clientBuilding, onClose, isVisi
     tertiary: '#64748b',
     quaternary: '#f1f5f9'
   };
+
   const [distance, setDistance] = useState(null);
   const [duration, setDuration] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [imageError, setImageError] = useState(false); // Track if image failed to load
+  const [imageError, setImageError] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  // Animate in when becoming visible
+  useEffect(() => {
+    if (isVisible) {
+      const timer = setTimeout(() => setIsAnimating(true), 50);
+      return () => clearTimeout(timer);
+    } else {
+      setIsAnimating(false);
+    }
+  }, [isVisible]);
 
   // Calculate distance and duration when landmark changes
   useEffect(() => {
@@ -56,165 +75,166 @@ export default function LandmarkCard({ landmark, clientBuilding, onClose, isVisi
     }
   };
 
+  // Helper to convert hex to rgba
+  const hexToRgba = (hex, alpha) => {
+    if (!hex) return `rgba(255, 255, 255, ${alpha})`;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
   if (!isVisible || !landmark) return null;
 
-  // Extract category name - use pre-extracted categoryName if available
+  // Extract category name
   const categoryName = landmark.categoryName ||
     (typeof landmark.category === 'object' && landmark.category !== null
       ? (landmark.category?.name || 'Uncategorized')
       : (landmark.category || 'Uncategorized'));
 
   const formatDuration = (minutes) => {
-    if (minutes < 60) {
-      return `${minutes}m`;
-    }
+    if (!minutes) return '--';
+    if (minutes < 60) return `${minutes} min`;
     const hours = Math.floor(minutes / 60);
     const remainingMinutes = minutes % 60;
     return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
   };
 
-  // Placeholder gradient background (no external image needed)
-  const renderPlaceholder = () => (
-    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700">
-      <svg className="w-16 h-16 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    </div>
-  );
+  const hasImage = landmark.image && !imageError;
+
+  // Glass base color
+  const glassBaseColor = cardTheme.tertiary || '#ffffff';
 
   return (
-    <div className={`${className} z-20 w-full landmark-card-container`}>
+    <div
+      className={`${className} z-20 w-full landmark-card-container`}
+      style={{
+        transform: isAnimating ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.97)',
+        opacity: isAnimating ? 1 : 0,
+        transition: 'transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease-out',
+      }}
+    >
+      <style jsx>{`
+        .ios-glass-card {
+          -webkit-backdrop-filter: blur(${(theme?.landmarkGlassEnabled !== false) ? (theme?.landmarkGlassBlur ?? 50) : 0}px) saturate(${(theme?.landmarkGlassEnabled !== false) ? (theme?.landmarkGlassSaturation ?? 180) : 100}%);
+          backdrop-filter: blur(${(theme?.landmarkGlassEnabled !== false) ? (theme?.landmarkGlassBlur ?? 50) : 0}px) saturate(${(theme?.landmarkGlassEnabled !== false) ? (theme?.landmarkGlassSaturation ?? 180) : 100}%);
+        }
+      `}</style>
+
       <div
-        className="backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden transform transition-all duration-500 ease-out"
+        className="ios-glass-card rounded-lg overflow-hidden relative"
         style={{
-          backgroundColor: cardTheme.primary,
-          borderColor: cardTheme.tertiary,
-          borderWidth: '1px',
-          borderStyle: 'solid'
+          backgroundColor: theme?.landmarkGlassEnabled !== false
+            ? hexToRgba(glassBaseColor, (theme?.landmarkGlassOpacity ?? 25) / 100)
+            : hexToRgba(glassBaseColor, (theme?.tertiaryOpacity ?? 100) / 100),
+          border: `1px solid ${hexToRgba(glassBaseColor, (theme?.landmarkBorderOpacity ?? 35) / 100)}`,
+          boxShadow: '0 4px 24px rgba(0, 0, 0, 0.15)',
         }}
       >
-        {/* Mobile: Horizontal layout | Desktop: Vertical layout */}
-        <div className="flex flex-row sm:flex-col">
-          {/* Hero Image Section */}
-          <div className="relative w-28 h-28 sm:w-full sm:h-40 overflow-hidden flex-shrink-0 hero-image">
-            {/* Show image only if we have one and it hasn't errored */}
-            {landmark.image && !imageError ? (
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-2 right-2 z-20 w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer"
+          style={{
+            backgroundColor: 'rgba(0, 0, 0, 0.4)',
+            color: '#ffffff'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
+          }}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        {/* Horizontal Layout: Image Left, Content Right */}
+        <div className="flex flex-row">
+          {/* Left: Image */}
+          {hasImage && (
+            <div className="w-28 flex-shrink-0 overflow-hidden">
               <img
                 src={landmark.image}
                 alt={landmark.title}
                 className="w-full h-full object-cover"
+                style={{ minHeight: '120px' }}
                 onError={() => setImageError(true)}
               />
-            ) : (
-              renderPlaceholder()
-            )}
-            {/* Close button - visible on desktop only in image area */}
-            <div className="absolute top-2 right-2 hidden sm:block">
-              <button
-                onClick={onClose}
-                className="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer close-button"
-                style={{
-                  backgroundColor: `${cardTheme.secondary}20`,
-                  color: cardTheme.secondary
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = `${cardTheme.secondary}30`;
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = `${cardTheme.secondary}20`;
-                }}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
             </div>
-          </div>
+          )}
 
-          {/* Content */}
-          <div className="p-3 sm:p-6 flex-1 min-w-0 card-content">
-            {/* Mobile close button - inline with title */}
-            <div className="flex items-start justify-between gap-2 sm:block">
-              <div className="flex-1 min-w-0">
-                {/* Title */}
-                <h2
-                  className="text-base sm:text-2xl font-bold mb-1 sm:mb-2 truncate sm:whitespace-normal card-title"
-                  style={{ color: cardTheme.secondary }}
-                >
-                  {landmark.title}
-                </h2>
+          {/* Right: Content */}
+          <div className="flex-1 p-3 pr-10 min-w-0 flex flex-col justify-center">
+            {/* Category Badge */}
+            <span
+              className="inline-flex items-center self-start px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider mb-2"
+              style={{
+                backgroundColor: cardTheme.primary,
+                color: cardTheme.secondary,
+              }}
+            >
+              {categoryName}
+            </span>
 
-                {/* Category and Stats - Inline on mobile */}
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2 sm:mb-6">
-                  <span
-                    className="inline-flex items-center px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-medium"
-                    style={{
-                      backgroundColor: `${cardTheme.secondary}20`,
-                      color: cardTheme.secondary
-                    }}
-                  >
-                    {categoryName}
-                  </span>
+            {/* Title - WHITE text */}
+            <h2 className="text-sm font-bold mb-1 leading-tight text-white">
+              {landmark.title}
+            </h2>
 
-                  {/* Distance and Time */}
-                  <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm">
-                    <div className="flex items-center gap-1">
-                      <svg
-                        className="w-3 h-3 sm:w-4 sm:h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        style={{ color: cardTheme.secondary }}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      </svg>
-                      <span style={{ color: cardTheme.secondary }}>
-                        {loading ? '...' : `${distance} km`}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <svg
-                        className="w-3 h-3 sm:w-4 sm:h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        style={{ color: cardTheme.secondary }}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span style={{ color: cardTheme.secondary }}>
-                        {loading ? '...' : formatDuration(duration)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Mobile close button */}
-              <button
-                onClick={onClose}
-                className="sm:hidden w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 close-button"
-                style={{
-                  backgroundColor: `${cardTheme.secondary}20`,
-                  color: cardTheme.secondary
-                }}
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Description - truncated on mobile */}
+            {/* Description - Light white text */}
             {landmark.description && (
-              <p
-                className="text-xs sm:text-sm leading-relaxed line-clamp-2 sm:line-clamp-none card-description"
-                style={{ color: `${cardTheme.secondary}80` }}
-              >
+              <p className="text-[11px] leading-snug mb-2.5 line-clamp-2 text-white/70">
                 {landmark.description}
               </p>
             )}
+
+            {/* Stats Row */}
+            <div className="flex items-center gap-2">
+              {/* Distance */}
+              <div
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md"
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                  border: '0.5px solid rgba(255, 255, 255, 0.2)',
+                }}
+              >
+                <svg
+                  className="w-3 h-3 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+                <span className="text-[11px] font-semibold text-white">
+                  {loading ? '...' : `${distance || '--'} km`}
+                </span>
+              </div>
+
+              {/* Duration */}
+              <div
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md"
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                  border: '0.5px solid rgba(255, 255, 255, 0.2)',
+                }}
+              >
+                <svg
+                  className="w-3 h-3 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-[11px] font-semibold text-white">
+                  {loading ? '...' : formatDuration(duration)}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -136,21 +136,39 @@ function MapPageContent() {
           const themesData = Array.isArray(themesResponse) ? themesResponse : (themesResponse.items || themesResponse.themes || []);
           const theme = themesData.find(t => t.isActive && t.projectId === projectId);
           if (theme) {
-            // Landmark Theme (Standard fields)
+            // Landmark Theme (Standard fields + glass controls)
             activeTheme = {
               primary: theme.primary,
               secondary: theme.secondary,
               tertiary: theme.tertiary || '#ffffff',
               quaternary: theme.quaternary || '#f1f5f9',
-              mapboxStyle: theme.mapboxStyle
+              mapboxStyle: theme.mapboxStyle,
+              // Landmark Glass Controls
+              landmarkGlassEnabled: theme.landmarkGlassEnabled ?? true,
+              landmarkGlassBlur: theme.landmarkGlassBlur ?? 50,
+              landmarkGlassSaturation: theme.landmarkGlassSaturation ?? 200,
+              landmarkGlassOpacity: theme.landmarkGlassOpacity ?? 25,
+              landmarkBorderOpacity: theme.landmarkBorderOpacity ?? 35,
+              primaryOpacity: theme.primaryOpacity ?? 100,
+              secondaryOpacity: theme.secondaryOpacity ?? 100,
+              tertiaryOpacity: theme.tertiaryOpacity ?? 100,
             };
 
-            // Filter Theme (Filter specific fields with fallback to standard)
+            // Filter Theme (Filter specific fields + glass controls)
             activeFilterTheme = {
               primary: theme.filterPrimary || theme.primary,
               secondary: theme.filterSecondary || theme.secondary,
               tertiary: theme.filterTertiary || theme.tertiary || '#ffffff',
-              quaternary: theme.filterQuaternary || theme.quaternary || '#f1f5f9'
+              quaternary: theme.filterQuaternary || theme.quaternary || '#f1f5f9',
+              // Filter Glass Controls
+              filterGlassEnabled: theme.filterGlassEnabled ?? true,
+              filterGlassBlur: theme.filterGlassBlur ?? 50,
+              filterGlassSaturation: theme.filterGlassSaturation ?? 200,
+              filterGlassOpacity: theme.filterGlassOpacity ?? 25,
+              filterBorderOpacity: theme.filterBorderOpacity ?? 35,
+              filterPrimaryOpacity: theme.filterPrimaryOpacity ?? 100,
+              filterSecondaryOpacity: theme.filterSecondaryOpacity ?? 100,
+              filterTertiaryOpacity: theme.filterTertiaryOpacity ?? 100,
             };
 
             setProjectTheme(activeTheme);
@@ -237,6 +255,7 @@ function MapPageContent() {
         apiResponseCache.set(cacheKey, {
           project: projectData,
           theme: activeTheme,
+          filterTheme: activeFilterTheme,
           settings,
           landmarks: transformedLandmarks,
           nearbyPlaces: transformedNearbyPlaces,

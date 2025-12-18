@@ -66,6 +66,27 @@ model Theme {
   mapboxStyle String
   customStyleUrl String?
   isActive Boolean @default(false)
+  
+  // Filter Section Glass Controls
+  filterGlassEnabled Boolean @default(true)
+  filterGlassBlur Int @default(50)
+  filterGlassSaturation Int @default(200)
+  filterGlassOpacity Int @default(25)
+  filterBorderOpacity Int @default(35)
+  filterPrimaryOpacity Int @default(100)
+  filterSecondaryOpacity Int @default(100)
+  filterTertiaryOpacity Int @default(100)
+  
+  // Landmark Card Glass Controls
+  landmarkGlassEnabled Boolean @default(true)
+  landmarkGlassBlur Int @default(50)
+  landmarkGlassSaturation Int @default(200)
+  landmarkGlassOpacity Int @default(25)
+  landmarkBorderOpacity Int @default(35)
+  primaryOpacity Int @default(100)
+  secondaryOpacity Int @default(100)
+  tertiaryOpacity Int @default(100)
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

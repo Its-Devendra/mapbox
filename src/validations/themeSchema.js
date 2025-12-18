@@ -14,4 +14,23 @@ export const themeSchema = z.object({
     projectId: z.string(),
     isActive: z.boolean().optional(),
 
+    // Filter Section Glass Controls
+    filterGlassEnabled: z.boolean().optional(),
+    filterGlassBlur: z.number().min(0).max(100).optional(),
+    filterGlassSaturation: z.number().min(100).max(300).optional(),
+    filterGlassOpacity: z.number().min(0).max(100).optional(),
+    filterBorderOpacity: z.number().min(0).max(100).optional(),
+    filterPrimaryOpacity: z.number().min(0).max(100).optional(),
+    filterSecondaryOpacity: z.number().min(0).max(100).optional(),
+    filterTertiaryOpacity: z.number().min(0).max(100).optional(),
+
+    // Landmark Card Glass Controls
+    landmarkGlassEnabled: z.boolean().optional(),
+    landmarkGlassBlur: z.number().min(0).max(100).optional(),
+    landmarkGlassSaturation: z.number().min(100).max(300).optional(),
+    landmarkGlassOpacity: z.number().min(0).max(100).optional(),
+    landmarkBorderOpacity: z.number().min(0).max(100).optional(),
+    primaryOpacity: z.number().min(0).max(100).optional(),
+    secondaryOpacity: z.number().min(0).max(100).optional(),
+    tertiaryOpacity: z.number().min(0).max(100).optional(),
 })

@@ -1739,14 +1739,18 @@ export default function MapContainer({
         </div>
       )}
 
-      {/* View Mode Toggle */}
+      {/* View Mode Toggle - Uses filter glass theme controls */}
       <div
-        className="absolute top-6 right-6 z-40 flex rounded-lg p-1 border shadow-lg"
+        className="absolute top-2 right-2 sm:top-4 sm:right-4 z-40 flex rounded-lg p-1 border shadow-lg"
         style={{
-          backgroundColor: `${theme.filterTertiary || theme.tertiary || '#ffffff'}25`,
-          borderColor: `${theme.filterTertiary || theme.tertiary || '#ffffff'}35`,
-          backdropFilter: 'blur(50px) saturate(200%)',
-          WebkitBackdropFilter: 'blur(50px) saturate(200%)',
+          backgroundColor: theme.filterGlassEnabled !== false
+            ? `${theme.filterTertiary || theme.tertiary || '#ffffff'}${Math.round((theme.filterGlassOpacity ?? 25) * 2.55).toString(16).padStart(2, '0')}`
+            : `${theme.filterTertiary || theme.tertiary || '#ffffff'}${Math.round((theme.filterTertiaryOpacity ?? 100) * 2.55).toString(16).padStart(2, '0')}`,
+          borderColor: `${theme.filterTertiary || theme.tertiary || '#ffffff'}${Math.round((theme.filterBorderOpacity ?? 35) * 2.55).toString(16).padStart(2, '0')}`,
+          ...(theme.filterGlassEnabled !== false && {
+            backdropFilter: `blur(${theme.filterGlassBlur ?? 50}px) saturate(${theme.filterGlassSaturation ?? 200}%)`,
+            WebkitBackdropFilter: `blur(${theme.filterGlassBlur ?? 50}px) saturate(${theme.filterGlassSaturation ?? 200}%)`,
+          }),
         }}
       >
         <button

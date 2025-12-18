@@ -185,19 +185,24 @@ export default function FilterBar({
           </button>
         )}
 
-        {/* Main Container - iOS Glass */}
+        {/* Main Container - Uses theme glass controls */}
         <div
-          className="ios-glass-effect relative overflow-hidden rounded-[22px]"
+          className="relative overflow-hidden rounded-lg p-1 border shadow-lg"
           style={{
-            background: hexToRgba(glassBaseColor, 0.25),
-            border: `0.5px solid ${hexToRgba(glassBaseColor, 0.35)}`,
-            boxShadow: `0 4px 30px rgba(0, 0, 0, 0.1), inset 0 1px 0 ${hexToRgba(glassBaseColor, 0.4)}`,
+            backgroundColor: filterTheme.filterGlassEnabled !== false
+              ? `${filterTheme.filterTertiary || filterTheme.tertiary || '#ffffff'}${Math.round((filterTheme.filterGlassOpacity ?? 25) * 2.55).toString(16).padStart(2, '0')}`
+              : `${filterTheme.filterTertiary || filterTheme.tertiary || '#ffffff'}${Math.round((filterTheme.filterTertiaryOpacity ?? 100) * 2.55).toString(16).padStart(2, '0')}`,
+            borderColor: `${filterTheme.filterTertiary || filterTheme.tertiary || '#ffffff'}${Math.round((filterTheme.filterBorderOpacity ?? 35) * 2.55).toString(16).padStart(2, '0')}`,
+            ...(filterTheme.filterGlassEnabled !== false && {
+              backdropFilter: `blur(${filterTheme.filterGlassBlur ?? 50}px) saturate(${filterTheme.filterGlassSaturation ?? 200}%)`,
+              WebkitBackdropFilter: `blur(${filterTheme.filterGlassBlur ?? 50}px) saturate(${filterTheme.filterGlassSaturation ?? 200}%)`,
+            }),
           }}
         >
-          {/* Scrollable container */}
+          {/* Scrollable container - no extra padding, toggle doesn't have it */}
           <div
             ref={scrollContainerRef}
-            className="relative flex items-center gap-0.5 px-1 py-1 overflow-x-auto max-w-[calc(100vw-32px)] sm:max-w-[85vw]"
+            className="relative flex items-center overflow-x-auto max-w-[calc(100vw-32px)] sm:max-w-[85vw]"
             style={{
               scrollbarWidth: 'none',
               msOverflowStyle: 'none',
@@ -211,26 +216,21 @@ export default function FilterBar({
                 <button
                   key={typeof category === 'object' ? (category.id || category.name) : name}
                   onClick={() => handleFilterClick(name)}
-                  className="relative flex items-center gap-2 px-4 py-2 rounded-[18px] transition-all duration-200 cursor-pointer whitespace-nowrap flex-shrink-0 active:scale-[0.98]"
+                  className="px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 cursor-pointer"
                   style={{
-                    background: isActive
-                      ? filterTheme.primary
-                      : hexToRgba(glassBaseColor, 0.5),
+                    backgroundColor: isActive
+                      ? (filterTheme.filterPrimary || filterTheme.primary)
+                      : 'transparent',
                     color: isActive
-                      ? activeTextColor
-                      : inactiveTextColor,
+                      ? (filterTheme.filterSecondary || filterTheme.secondary)
+                      : 'rgba(255,255,255,0.7)',
                     boxShadow: isActive
                       ? '0 2px 10px rgba(0, 0, 0, 0.15)'
-                      : '0 1px 3px rgba(0, 0, 0, 0.05)',
-                    border: isActive
-                      ? 'none'
-                      : `0.5px solid ${hexToRgba(glassBaseColor, 0.5)}`,
+                      : 'none',
                   }}
                 >
-                  <span className="relative z-10 flex items-center gap-2">
-                    {renderIcon(category)}
-                    <span className="text-[13px] font-semibold">{name}</span>
-                  </span>
+                  {renderIcon(category)}
+                  {name}
                 </button>
               );
             })}
