@@ -14,6 +14,7 @@ import {
 } from "@/utils/mapUtils";
 import { useMapboxDirections } from "@/hooks/useMapboxDirections";
 import { MAPBOX_CONFIG, LAYER_IDS, SOURCE_IDS } from "@/constants/mapConfig";
+import useCinematicTour from "@/hooks/useCinematicTour";
 
 // Mapbox access token
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
@@ -124,6 +125,9 @@ export default function MapContainer({
   // Custom hook for directions
   const { getDistanceAndDuration } = useMapboxDirections();
 
+  // Cinematic Tour Hook
+  const { startTour, stopTour, smoothFlyTo, isTourActive, currentStep, totalSteps } = useCinematicTour();
+
   /**
    * Get map settings with fallbacks
    */
@@ -193,9 +197,13 @@ export default function MapContainer({
           });
         }
 
-        // On audio end, zoom back out
+        // On audio end, start tour or zoom back out
         audio.onended = () => {
-          resetCamera();
+          if (landmarks && landmarks.length > 0 && clientBuilding) {
+            startTour(mapRef.current, clientBuilding, landmarks);
+          } else {
+            resetCamera();
+          }
         };
 
       } catch (err) {
@@ -624,17 +632,30 @@ export default function MapContainer({
         routeRef.current = LAYER_IDS.ROUTE;
         activeLandmarkRef.current = destination;
 
-        // Fit map to show the entire route
-        const coordinates = data.geometry.coordinates;
-        const bounds = coordinates.reduce((bounds, coord) => {
-          return bounds.extend(coord);
-        }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
-
+        // Cinematic flight to landmark instead of static fitBounds
+        /*
         mapRef.current.fitBounds(bounds, {
           padding: MAPBOX_CONFIG.ROUTE_PADDING,
-          duration: 2000, // Match route animation duration
-          essential: true // Force animation
+          duration: 2000, 
+          essential: true 
         });
+        */
+
+        // Calculate bearing for cinematic approach
+        const bearingToLandmark = destination.coordinates && clientBuilding.coordinates
+          ? ((Math.atan2(destination.coordinates[0] - clientBuilding.coordinates[0], destination.coordinates[1] - clientBuilding.coordinates[1]) * 180 / Math.PI) * -1) + 90
+          : 0;
+
+        // Fly processing
+        smoothFlyTo(mapRef.current, {
+          center: destination.coordinates,
+          zoom: 17.5,
+          pitch: 55,
+          bearing: bearingToLandmark
+        }, 6000); // 6s duration for "cinematic" feel
+
+        // Restore coordinates for animation usage
+        const coordinates = data.geometry.coordinates;
 
         // Animate the route drawing - capture generation for animation closure
         const animationGeneration = currentGeneration;
@@ -959,13 +980,21 @@ export default function MapContainer({
         return;
       }
 
+      // Start cinematic tour if we have landmarks
+      // Small delay to ensure markers are loaded
       setTimeout(() => {
-        mapRef.current.flyTo({
-          center: targetCenter,
-          zoom: config.zoom,
-          duration: duration,
-          essential: true
-        });
+        if (landmarks && landmarks.length > 0 && clientBuilding) {
+          console.log('🎬 Starting cinematic tour with', landmarks.length, 'landmarks');
+          startTour(mapRef.current, clientBuilding, landmarks);
+        } else {
+          // Fallback to simple flyTo if no landmarks
+          mapRef.current.flyTo({
+            center: targetCenter,
+            zoom: config.zoom,
+            duration: duration,
+            essential: true
+          });
+        }
       }, 500);
 
 
@@ -1539,6 +1568,32 @@ export default function MapContainer({
         ref={mapContainerRef}
         className="w-full h-full relative"
       />
+
+      {/* Cinematic Tour Controls */}
+      {isTourActive && (
+        <div className="absolute top-24 right-6 z-40 flex flex-col items-end gap-2 animate-fade-in">
+          <div className="bg-black/60 backdrop-blur-md text-white px-5 py-3 rounded-xl border border-white/10 shadow-2xl">
+            <div className="text-[10px] text-gray-300 uppercase tracking-[0.2em] mb-1 font-medium">Cinematic Tour</div>
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+              </span>
+              <span className="font-mono text-xl font-bold tracking-wider">{currentStep} <span className="text-white/40 text-sm">/</span> {totalSteps}</span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => stopTour(mapRef.current)}
+            className="group flex items-center gap-2 bg-black/40 hover:bg-red-500/80 backdrop-blur-md text-white px-4 py-2 rounded-lg border border-white/10 hover:border-red-500/50 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5"
+          >
+            <span className="text-xs font-semibold uppercase tracking-wider">Skip Tour</span>
+            <svg className="w-3 h-3 text-white/70 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Intro Button Overlay */}
       {showIntroButton && (
