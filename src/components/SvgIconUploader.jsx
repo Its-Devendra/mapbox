@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 
-export default function SvgIconUploader({ label, currentIcon, onUpload, onDimensionsExtracted, theme }) {
+export default function SvgIconUploader({ label, currentIcon, onUpload, onDimensionsExtracted, theme, maxSize }) {
   const [preview, setPreview] = useState(currentIcon || null);
   const [error, setError] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -59,9 +59,10 @@ export default function SvgIconUploader({ label, currentIcon, onUpload, onDimens
       return;
     }
 
-    // Check file size (max 500KB for SVG)
-    if (file.size > 500000) {
-      setError('SVG file is too large (max 500KB)');
+    // Check file size (max 5MB for SVG by default)
+    const limit = maxSize || 5000000;
+    if (file.size > limit) {
+      setError(`SVG file is too large (max ${limit / 1000000}MB)`);
       return;
     }
 
@@ -153,8 +154,8 @@ export default function SvgIconUploader({ label, currentIcon, onUpload, onDimens
         onDragLeave={handleDragLeave}
         onClick={() => fileInputRef.current?.click()}
         className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${isDragging
-            ? 'border-gray-400 bg-gray-50'
-            : 'border-gray-200 bg-gray-50/50 hover:border-gray-300 hover:bg-gray-50'
+          ? 'border-gray-400 bg-gray-50'
+          : 'border-gray-200 bg-gray-50/50 hover:border-gray-300 hover:bg-gray-50'
           }`}
       >
         <input

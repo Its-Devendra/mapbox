@@ -110,7 +110,7 @@ export default function ProjectClientBuilding({ projectId }) {
 
     const fetchProject = async () => {
         try {
-            const response = await fetch(`/api/projects/${projectId}`);
+            const response = await fetch(`/api/projects/${projectId}`, { cache: 'no-store' });
             if (response.ok) {
                 const data = await response.json();
                 setProject(data);
