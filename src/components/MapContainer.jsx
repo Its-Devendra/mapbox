@@ -8,12 +8,12 @@ import {
   createSVGImage,
   debounce,
   formatDistance,
-  formatDuration,
-  easeInOutCubic,
-  getIconSize
+  getIconSize,
+  easeInOutCubic
 } from "@/utils/mapUtils";
+import { bustCache } from '@/utils/cacheUtils';
 import { useMapboxDirections } from "@/hooks/useMapboxDirections";
-import { MAPBOX_CONFIG, LAYER_IDS, SOURCE_IDS } from "@/constants/mapConfig";
+import { MAPBOX_CONFIG, SOURCE_IDS, LAYER_IDS } from "@/constants/mapConfig";
 import useCinematicTour from "@/hooks/useCinematicTour";
 
 // Mapbox access token
@@ -144,6 +144,32 @@ export default function MapContainer({
       mapSettings?.northEastLat != null &&
       mapSettings?.northEastLng != null;
 
+    // Add padding to bounds to prevent restrictive freeze (10% buffer)
+    let maxBounds = undefined;
+    if (hasBounds) {
+      const lngDiff = mapSettings.northEastLng - mapSettings.southWestLng;
+      const latDiff = mapSettings.northEastLat - mapSettings.southWestLat;
+
+      // Only apply bounds if they're reasonable (minimum 0.01 degrees)
+      if (Math.abs(lngDiff) > 0.01 && Math.abs(latDiff) > 0.01) {
+        const lngPadding = lngDiff * 0.1; // 10% padding
+        const latPadding = latDiff * 0.1; // 10% padding
+
+        maxBounds = [
+          [
+            mapSettings.southWestLng - lngPadding,
+            mapSettings.southWestLat - latPadding
+          ],
+          [
+            mapSettings.northEastLng + lngPadding,
+            mapSettings.northEastLat + latPadding
+          ]
+        ];
+      } else {
+        console.warn('Bounds too restrictive, ignoring maxBounds');
+      }
+    }
+
     const config = {
       center: [
         mapSettings?.defaultCenterLng ?? MAPBOX_CONFIG.DEFAULT_CENTER.lng,
@@ -157,12 +183,7 @@ export default function MapContainer({
       interactive: interactive,
       dragRotate: mapSettings?.enableRotation ?? true,
       pitchWithRotate: mapSettings?.enablePitch ?? true,
-      maxBounds: hasBounds
-        ? [
-          [mapSettings.southWestLng, mapSettings.southWestLat], // Southwest coordinates
-          [mapSettings.northEastLng, mapSettings.northEastLat]  // Northeast coordinates
-        ]
-        : undefined // Default to no bounds
+      maxBounds: maxBounds
     };
     return config;
   }, [mapSettings, interactive]);
@@ -408,7 +429,7 @@ export default function MapContainer({
     if (project?.clientBuildingIcon && !loadedIconsRef.current.has('client-building-icon')) {
       iconsToLoad.push({
         id: 'client-building-icon',
-        svg: project.clientBuildingIcon,
+        svg: bustCache(project.clientBuildingIcon),
         width: project.clientBuildingIconWidth || MAPBOX_CONFIG.DEFAULT_ICON_WIDTH,
         height: project.clientBuildingIconHeight || MAPBOX_CONFIG.DEFAULT_ICON_HEIGHT
       });
@@ -421,7 +442,7 @@ export default function MapContainer({
         const { width, height } = getIconSize(landmark, landmark.category);
         iconsToLoad.push({
           id: iconId,
-          svg: landmark.icon,
+          svg: bustCache(landmark.icon),
           width,
           height
         });
@@ -436,7 +457,7 @@ export default function MapContainer({
         const { width, height } = getIconSize(place, place.category);
         iconsToLoad.push({
           id: iconId,
-          svg: iconToUse,
+          svg: bustCache(iconToUse),
           width,
           height
         });
@@ -832,20 +853,84 @@ export default function MapContainer({
       // Show initial popup without distance/duration
       const categoryColor = place.categoryColor || '#3b82f6'; // Default to blue if no color
 
+      // Theme Styles
+      const isGlass = theme.nearbyGlassEnabled !== false; // Default true
+      const bgOpacity = isGlass ? (theme.nearbyGlassOpacity ?? 25) : (theme.nearbyPrimaryOpacity ?? 100);
+      const blur = theme.nearbyGlassBlur ?? 50;
+      const saturation = theme.nearbyGlassSaturation ?? 200;
+      const borderOpacity = isGlass ? (theme.nearbyBorderOpacity ?? 35) : (theme.nearbyTertiaryOpacity ?? 100);
+
+      const bgColor = theme.nearbyPrimary || '#ffffff';
+      const textColor = theme.nearbySecondary || '#1e3a8a';
+      const accentColor = theme.nearbyTertiary || categoryColor;
+
+      // Helper for RGBA
+      const toRgba = (hex, alpha) => {
+        if (!hex) return 'rgba(255,255,255,0.9)';
+        let c;
+        if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
+          c = hex.substring(1).split('');
+          if (c.length === 3) {
+            c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+          }
+          c = '0x' + c.join('');
+          return 'rgba(' + [(c >> 16) & 255, (c >> 8) & 255, c & 255].join(',') + ',' + (alpha / 100) + ')';
+        }
+        return hex;
+      };
+
+      const popupStyle = `
+        background-color: ${toRgba(bgColor, bgOpacity)} !important;
+        backdrop-filter: ${isGlass ? `blur(${blur}px) saturate(${saturation}%)` : 'none'} !important;
+        -webkit-backdrop-filter: ${isGlass ? `blur(${blur}px) saturate(${saturation}%)` : 'none'} !important;
+        border: 1px solid ${toRgba(accentColor, borderOpacity)} !important;
+        color: ${textColor} !important;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+      `;
+
+      // Create unique class for this popup instance to avoid conflicts if needed, though mostly uniform
+      const popupClass = 'nearby-popup-theme';
+
+      // CSS to override Mapbox defaults - cleaner than inline styling on elements
+      const overrideStyles = `
+        <style>
+          .nearby-popup-theme .mapboxgl-popup-content {
+            background: transparent !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+          }
+          .nearby-popup-theme .mapboxgl-popup-tip {
+            border-top-color: ${toRgba(accentColor, borderOpacity)} !important;
+            opacity: ${isGlass ? (bgOpacity / 100) : 1} !important;
+             /* Optional: Hide tip completely for pure glass look if prefered by user, but keeping it styled for now */
+          }
+           .nearby-popup-theme {
+             z-index: 50 !important;
+          }
+        </style>
+      `;
+
       let popupContent = `
-        <div class="bg-white rounded-lg shadow-lg overflow-hidden" style="min-width: 200px; max-width: 280px;">
-          <div class="h-1.5" style="background-color: ${categoryColor}"></div>
-          <div class="p-4">
-            <h3 class="font-bold text-sm text-gray-900 leading-snug">${place.title}</h3>
-            <span class="inline-block text-[8px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide mt-1.5 mb-2.5" style="color: ${categoryColor}; background-color: ${categoryColor}10">
-              ${place.categoryName || 'Place'}
-            </span>
-            <div class="flex items-center gap-2 text-xs text-gray-400">
-              <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+        ${overrideStyles}
+        <div class="nearby-popup-content" style="${popupStyle.replace(/\n/g, '')}">
+          <div class="h-1.5" style="background-color: ${accentColor}"></div>
+          <div class="p-4 pt-3">
+             <div class="flex items-start justify-between gap-2 mb-1">
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider leading-none" 
+                      style="color: ${accentColor}; background-color: ${toRgba(accentColor, 12)}; border: 1px solid ${toRgba(accentColor, 20)}">
+                  ${place.categoryName || 'Place'}
+                </span>
+             </div>
+            <h3 class="font-bold text-sm leading-tight mb-2" style="color: ${textColor}">${place.title}</h3>
+            
+            <div class="flex items-center gap-2 text-xs opacity-75" style="color: ${textColor}">
+              <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" opacity="0.3"/>
-                <path d="M12 2a10 10 0 0 1 10 10" stroke="${categoryColor}" stroke-width="2" stroke-linecap="round"/>
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="${accentColor}" stroke-width="2" stroke-linecap="round"/>
               </svg>
-              <span>Calculating distance...</span>
+              <span class="font-medium">Calculating...</span>
             </div>
           </div>
         </div>
@@ -855,8 +940,8 @@ export default function MapContainer({
       const popup = new mapboxgl.Popup({
         offset: MAPBOX_CONFIG.POPUP_OFFSET,
         closeButton: false,
-        maxWidth: MAPBOX_CONFIG.POPUP_MAX_WIDTH,
-        className: 'nearby-popup-premium'
+        maxWidth: "300px",
+        className: popupClass
       })
         .setLngLat(place.coordinates)
         .setHTML(popupContent)
@@ -880,33 +965,43 @@ export default function MapContainer({
         // Update popup content with distance/duration if still open and matching ID
         if (nearbyPlacePopupRef.current === popup && distance && duration) {
           const updatedContent = `
-            <div class="bg-white rounded-lg shadow-lg overflow-hidden" style="min-width: 200px; max-width: 280px;">
-              <div class="h-1.5" style="background-color: ${categoryColor}"></div>
-              <div class="p-4">
-                <h3 class="font-bold text-sm text-gray-900 leading-snug">${place.title}</h3>
-                <span class="inline-block text-[8px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide mt-1.5 mb-2.5" style="color: ${categoryColor}; background-color: ${categoryColor}10">
-                  ${place.categoryName || 'Place'}
-                </span>
-                <div class="flex items-center gap-4 text-xs text-gray-600">
-                  <span class="flex items-center gap-1.5">
-                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            ${overrideStyles}
+            <div class="nearby-popup-content" style="${popupStyle.replace(/\n/g, '')}">
+              <div class="h-1.5" style="background-color: ${accentColor}"></div>
+              <div class="p-4 pt-3">
+                <div class="flex items-start justify-between gap-2 mb-1">
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider leading-none" 
+                          style="color: ${accentColor}; background-color: ${toRgba(accentColor, 12)}; border: 1px solid ${toRgba(accentColor, 20)}">
+                      ${place.categoryName || 'Place'}
+                    </span>
+                 </div>
+                <h3 class="font-bold text-sm leading-tight mb-2.5" style="color: ${textColor}">${place.title}</h3>
+                
+                <div class="flex items-center gap-3 text-xs" style="color: ${textColor}; opacity: 0.9;">
+                  <span class="flex items-center gap-1.5 bg-black/5 px-2 py-1 rounded-md">
+                    <svg class="w-3.5 h-3.5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
                       <circle cx="12" cy="11" r="2" stroke-width="1.5"/>
                     </svg>
-                    ${formatDistance(distance)}
+                    <span class="font-semibold">${formatDistance(distance)}</span>
                   </span>
-                  <span class="flex items-center gap-1.5">
-                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <span class="flex items-center gap-1.5 bg-black/5 px-2 py-1 rounded-md">
+                    <svg class="w-3.5 h-3.5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <circle cx="12" cy="12" r="9" stroke-width="1.5"/>
-                      <path d="M12 6v6l4 2" stroke-width="1.5" stroke-linecap="round"/>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6l4 2"/>
                     </svg>
-                    ${formatDuration(duration)}
+                    <span class="font-semibold">${formatDuration(duration)}</span>
                   </span>
                 </div>
               </div>
             </div>
           `;
+
           popup.setHTML(updatedContent);
+
+          // Re-apply transparency fix as setHTML might reset content wrapper content? 
+          // Actually setHTML updates innerHTML of content wrapper, wrapper itself stays.
+          // But just in case.
         }
       } catch (distanceError) {
         console.error('Error calculating distance:', distanceError);
@@ -949,10 +1044,37 @@ export default function MapContainer({
   const add3DBuildings = useCallback(() => {
     if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
 
+    // Check if 3D buildings are enabled in settings (default to true)
+    const enable3D = mapSettings?.enable3DBuildings ?? true;
+
+    // If disabled, remove layer if it exists and return
+    if (!enable3D) {
+      if (mapRef.current.getLayer(LAYER_IDS.BUILDINGS_3D)) {
+        mapRef.current.removeLayer(LAYER_IDS.BUILDINGS_3D);
+      }
+      return;
+    }
+
+    // Get min zoom from settings (default to 15)
+    // Mapbox data usually starts at 13-14, but we allow user to set it
+    const minZoom = mapSettings?.buildings3DMinZoom ?? 15;
+
     try {
       // Check if composite source exists (available in most Mapbox styles)
       if (mapRef.current.getSource('composite')) {
-        // Only add if layer doesn't already exist
+
+        // If layer exists but with different zoom, remove it to re-add with new settings
+        if (mapRef.current.getLayer(LAYER_IDS.BUILDINGS_3D)) {
+          const currentLayer = mapRef.current.getLayer(LAYER_IDS.BUILDINGS_3D);
+          if (currentLayer.minzoom !== minZoom) {
+            mapRef.current.removeLayer(LAYER_IDS.BUILDINGS_3D);
+          } else {
+            // Layer exists and settings match, nothing to do
+            return;
+          }
+        }
+
+        // Only add if layer doesn't already exist (or was just removed)
         if (!mapRef.current.getLayer(LAYER_IDS.BUILDINGS_3D)) {
           // Find a label layer to insert the 3D buildings layer before it
           const layers = mapRef.current.getStyle().layers;
@@ -968,25 +1090,25 @@ export default function MapContainer({
             'source-layer': 'building',
             filter: ['==', 'extrude', 'true'],
             type: 'fill-extrusion',
-            minzoom: 15,
+            minzoom: minZoom,
             paint: {
               'fill-extrusion-color': '#aaa',
               'fill-extrusion-height': [
                 'interpolate',
                 ['linear'],
                 ['zoom'],
-                15,
+                minZoom,
                 0,
-                15.05,
+                minZoom + 0.05,
                 ['get', 'height']
               ],
               'fill-extrusion-base': [
                 'interpolate',
                 ['linear'],
                 ['zoom'],
-                15,
+                minZoom,
                 0,
-                15.05,
+                minZoom + 0.05,
                 ['get', 'min_height']
               ],
               'fill-extrusion-opacity': 0.6
@@ -997,7 +1119,7 @@ export default function MapContainer({
     } catch (error) {
       console.warn('Could not add 3D buildings layer:', error);
     }
-  }, []);
+  }, [mapSettings]);
 
   /**
    * Initialize map
@@ -1020,16 +1142,19 @@ export default function MapContainer({
       pitch: 0, // Start flat, animate to tilted during transition
       bearing: 0, // Start neutral, animate to final bearing during transition
       dragRotate: config.dragRotate,
-      pitchWithRotate: config.pitchWithRotate,
-      maxBounds: config.maxBounds // Apply bounds on initialization
+      pitchWithRotate: config.pitchWithRotate
+      // DO NOT apply maxBounds here - apply AFTER animation completes to prevent freeze
     });
 
-    // Update bounds dynamically if they change later
-    if (mapRef.current && config.maxBounds) {
-      mapRef.current.setMaxBounds(config.maxBounds);
-    } else if (mapRef.current) {
-      mapRef.current.setMaxBounds(null); // Clear bounds if not set
-    }
+    // Debug log map settings
+    console.log('🗺️ Map Settings:', {
+      center: config.center,
+      zoom: config.zoom,
+      minZoom: config.minZoom,
+      maxZoom: config.maxZoom,
+      maxBounds: config.maxBounds,
+      useDefaultCamera: mapSettings?.useDefaultCameraAfterLoad
+    });
 
     // Animate to location after load
     mapRef.current.on('load', () => {
@@ -1048,28 +1173,67 @@ export default function MapContainer({
       // Store original viewport using client building location if available
       originalViewportRef.current = {
         center: targetCenter,
-        zoom: config.zoom
+        zoom: config.zoom,
+        pitch: config.pitch || 70,
+        bearing: config.bearing || -20
       };
 
-      // CRITICAL: If intro audio exists, skip the standard initial animation.
-      // The intro sequence will handle the camera movement (Zoom from space -> Building)
-      if (introAudioRef.current) {
-        console.log('🎵 Intro audio detected, skipping default initial animation to allow intro sequence');
-        return;
+      // Check if we should use default camera or standard animation
+      const useDefaultCamera = mapSettings?.useDefaultCameraAfterLoad;
+
+      // Debug: Log animation decision
+      console.log('🚀 Animation Decision:', {
+        useDefaultCamera,
+        targetCenter,
+        configZoom: config.zoom,
+        duration: duration,
+        hasMapSettings: !!mapSettings
+      });
+
+      // Helper function to apply bounds after animation
+      const applyBoundsAfterAnimation = () => {
+        if (config.maxBounds) {
+          console.log('🔒 Applying map bounds after animation:', config.maxBounds);
+          mapRef.current.setMaxBounds(config.maxBounds);
+        }
+      };
+
+      // Convert duration to milliseconds if it's in seconds (less than 100 = seconds)
+      const durationMs = duration < 100 ? duration * 1000 : duration;
+
+      // If useDefaultCamera is enabled, fly to the configured default camera position
+      if (useDefaultCamera && mapSettings) {
+        console.log('🎥 Using default camera position from map settings');
+        setTimeout(() => {
+          if (!mapRef.current) return;
+          mapRef.current.flyTo({
+            center: [mapSettings.defaultCenterLng, mapSettings.defaultCenterLat],
+            zoom: mapSettings.defaultZoom,
+            pitch: mapSettings.defaultPitch || 70,
+            bearing: mapSettings.defaultBearing || -20,
+            duration: durationMs,
+            essential: true
+          });
+          // Apply bounds after animation duration
+          setTimeout(applyBoundsAfterAnimation, durationMs + 500);
+        }, 500);
+      } else {
+        // ALWAYS play globe → client building animation (regardless of intro audio)
+        console.log('📍 ANIMATING: Globe → Client Building', { center: targetCenter, zoom: config.zoom, durationMs });
+        setTimeout(() => {
+          if (!mapRef.current) return;
+          mapRef.current.flyTo({
+            center: targetCenter,
+            zoom: config.zoom,
+            pitch: 70,
+            bearing: -20,
+            duration: durationMs,
+            essential: true
+          });
+          // Apply bounds after animation duration
+          setTimeout(applyBoundsAfterAnimation, durationMs + 500);
+        }, 500);
       }
-
-      // Initial animation to target center
-      setTimeout(() => {
-        mapRef.current.flyTo({
-          center: targetCenter,
-          zoom: config.zoom,
-          pitch: 70,
-          bearing: -20,
-          duration: duration,
-          essential: true
-        });
-      }, 500);
-
 
     });
 

@@ -1,9 +1,13 @@
 "use client";
 
-import React from 'react';
+import React, { useMemo } from 'react';
+import { bustCache } from '@/utils/cacheUtils';
 
 export default function ProjectLogo({ logo, width = 120, height = 40, position = 'left' }) {
     if (!logo) return null;
+
+    // Bust cache for instant updates
+    const logoSrc = useMemo(() => bustCache(logo), [logo]);
 
     const positionClass = position === 'right'
         ? 'right-2 sm:right-4'
@@ -21,7 +25,7 @@ export default function ProjectLogo({ logo, width = 120, height = 40, position =
             <div className="bg-white/90 backdrop-blur-md rounded-lg sm:rounded-xl shadow-lg p-1.5 sm:p-2.5 border border-white/50">
                 {/* Mobile logo - hidden on sm and up */}
                 <img
-                    src={logo}
+                    src={logoSrc}
                     alt="Project Logo"
                     className="object-contain sm:hidden"
                     style={{
@@ -33,7 +37,7 @@ export default function ProjectLogo({ logo, width = 120, height = 40, position =
                 />
                 {/* Desktop logo - hidden on mobile */}
                 <img
-                    src={logo}
+                    src={logoSrc}
                     alt="Project Logo"
                     className="object-contain hidden sm:block"
                     style={{

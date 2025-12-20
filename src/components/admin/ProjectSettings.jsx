@@ -3,12 +3,22 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { Plus, Edit, Trash2, Settings, CheckCircle2, XCircle } from 'lucide-react';
+import InteractiveMapPreview from './InteractiveMapPreview';
 
 export default function ProjectSettings({ projectId }) {
   const [settings, setSettings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingSetting, setEditingSetting] = useState(null);
+  const [showCameraPreview, setShowCameraPreview] = useState(false);
+  const [showBoundsPreview, setShowBoundsPreview] = useState(false);
+
+  // Project data for preview
+  const [projectData, setProjectData] = useState({
+    landmarks: [],
+    nearbyPlaces: [],
+    clientBuilding: null
+  });
 
   const [formData, setFormData] = useState({
     defaultCenterLat: 28.49,
@@ -18,10 +28,15 @@ export default function ProjectSettings({ projectId }) {
     maxZoom: 18,
     enableRotation: true,
     enablePitch: true,
+    enable3DBuildings: true,
+    buildings3DMinZoom: 15,
     routeLineColor: '#3b82f6',
     routeLineWidth: 4,
     initialAnimationDuration: 3.0,
     routeAnimationDuration: 1.0,
+    useDefaultCameraAfterLoad: false,
+    defaultPitch: 70,
+    defaultBearing: -20,
     southWestLat: '',
     southWestLng: '',
     northEastLat: '',
@@ -31,6 +46,7 @@ export default function ProjectSettings({ projectId }) {
 
   useEffect(() => {
     fetchSettings();
+    fetchProjectData();
   }, [projectId]);
 
   const fetchSettings = async () => {
@@ -45,6 +61,25 @@ export default function ProjectSettings({ projectId }) {
       console.error('Error fetching map settings:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchProjectData = async () => {
+    try {
+      const response = await fetch(`/api/projects/${projectId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setProjectData({
+          landmarks: data.landmarks || [],
+          nearbyPlaces: data.nearByPlaces || [],
+          clientBuilding: data.clientBuildingLat && data.clientBuildingLng ? {
+            name: data.clientBuildingName,
+            coordinates: [data.clientBuildingLng, data.clientBuildingLat]
+          } : null
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching project data:', error);
     }
   };
 
@@ -95,10 +130,15 @@ export default function ProjectSettings({ projectId }) {
       maxZoom: setting.maxZoom,
       enableRotation: setting.enableRotation,
       enablePitch: setting.enablePitch,
+      enable3DBuildings: setting.enable3DBuildings ?? true,
+      buildings3DMinZoom: setting.buildings3DMinZoom ?? 15,
       routeLineColor: setting.routeLineColor,
       routeLineWidth: setting.routeLineWidth,
       initialAnimationDuration: setting.initialAnimationDuration,
       routeAnimationDuration: setting.routeAnimationDuration,
+      useDefaultCameraAfterLoad: setting.useDefaultCameraAfterLoad || false,
+      defaultPitch: setting.defaultPitch || 70,
+      defaultBearing: setting.defaultBearing || -20,
       southWestLat: setting.southWestLat || '',
       southWestLng: setting.southWestLng || '',
       northEastLat: setting.northEastLat || '',
@@ -136,6 +176,8 @@ export default function ProjectSettings({ projectId }) {
       maxZoom: 18,
       enableRotation: true,
       enablePitch: true,
+      enable3DBuildings: true,
+      buildings3DMinZoom: 15,
       routeLineColor: '#3b82f6',
       routeLineWidth: 4,
       initialAnimationDuration: 3.0,
@@ -489,9 +531,155 @@ export default function ProjectSettings({ projectId }) {
                   />
                   <label className="ml-2 text-sm text-gray-700 cursor-pointer">Enable map pitch/tilt</label>
                 </div>
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="enable3DBuildings"
+                    checked={formData.enable3DBuildings}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 text-gray-900 focus:ring-gray-900 border-gray-300 rounded cursor-pointer"
+                  />
+                  <label className="ml-2 text-sm text-gray-700 cursor-pointer">Enable 3D buildings</label>
+                </div>
+                {formData.enable3DBuildings && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">3D Building Min Zoom</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="22"
+                      name="buildings3DMinZoom"
+                      value={formData.buildings3DMinZoom}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm"
+                    />
+                  </div>
+                )}
               </div>
 
-              <div className="flex items-center">
+              {/* Interactive Camera Preview Section */}
+              <div className="border-t pt-4 mt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold text-gray-900">Default Camera Position</h4>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="useDefaultCameraAfterLoad"
+                      checked={formData.useDefaultCameraAfterLoad}
+                      onChange={handleInputChange}
+                      className="h-4 w-4 text-gray-900 focus:ring-gray-900 border-gray-300 rounded mr-2"
+                    />
+                    <span className="text-sm text-gray-700">Use default camera after load</span>
+                  </label>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                  <p className="text-xs text-gray-700">
+                    <strong>When disabled (default):</strong> Intro transition (globe → building) plays if configured.<br />
+                    <strong>When enabled:</strong> Map flies directly to this camera position on load.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowCameraPreview(!showCameraPreview)}
+                  className="mb-3 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 font-medium transition-colors flex items-center space-x-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <span>{showCameraPreview ? 'Hide' : 'Open'} Camera Preview</span>
+                </button>
+
+                {showCameraPreview && (
+                  <div className="mb-4">
+                    <InteractiveMapPreview
+                      mode="camera"
+                      value={{
+                        lat: formData.defaultCenterLat,
+                        lng: formData.defaultCenterLng,
+                        zoom: formData.defaultZoom,
+                        pitch: formData.defaultPitch,
+                        bearing: formData.defaultBearing
+                      }}
+                      onChange={(camera) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          defaultCenterLat: camera.lat,
+                          defaultCenterLng: camera.lng,
+                          defaultZoom: camera.zoom,
+                          defaultPitch: camera.pitch,
+                          defaultBearing: camera.bearing
+                        }));
+                      }}
+                      mapStyle="mapbox://styles/mapbox/dark-v11"
+                      landmarks={projectData.landmarks}
+                      nearbyPlaces={projectData.nearbyPlaces}
+                      clientBuilding={projectData.clientBuilding}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Interactive Bounds Preview Section */}
+              <div className="border-t pt-4 mt-4">
+                <h4 className="font-semibold text-gray-900 mb-3">Map Bounds (Optional)</h4>
+                <p className="text-xs text-gray-600 mb-3">
+                  Restrict where users can navigate. Leave empty for no restrictions.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setShowBoundsPreview(!showBoundsPreview)}
+                  className="mb-3 px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 font-medium transition-colors flex items-center space-x-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                  <span>{showBoundsPreview ? 'Hide' : 'Open'} Bounds Editor</span>
+                </button>
+
+                {showBoundsPreview && (
+                  <div className="mb-4">
+                    <InteractiveMapPreview
+                      mode="bounds"
+                      value={{
+                        southWest: formData.southWestLat && formData.southWestLng
+                          ? [parseFloat(formData.southWestLng), parseFloat(formData.southWestLat)]
+                          : null,
+                        northEast: formData.northEastLat && formData.northEastLng
+                          ? [parseFloat(formData.northEastLng), parseFloat(formData.northEastLat)]
+                          : null
+                      }}
+                      onChange={(bounds) => {
+                        if (bounds && bounds.southWest && bounds.northEast) {
+                          setFormData(prev => ({
+                            ...prev,
+                            southWestLat: bounds.southWest[1],
+                            southWestLng: bounds.southWest[0],
+                            northEastLat: bounds.northEast[1],
+                            northEastLng: bounds.northEast[0]
+                          }));
+                        } else {
+                          setFormData(prev => ({
+                            ...prev,
+                            southWestLat: '',
+                            southWestLng: '',
+                            northEastLat: '',
+                            northEastLng: ''
+                          }));
+                        }
+                      }}
+                      mapStyle="mapbox://styles/mapbox/dark-v11"
+                      landmarks={projectData.landmarks}
+                      nearbyPlaces={projectData.nearbyPlaces}
+                      clientBuilding={projectData.clientBuilding}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center border-t pt-4 mt-4">
                 <input
                   type="checkbox"
                   name="isActive"

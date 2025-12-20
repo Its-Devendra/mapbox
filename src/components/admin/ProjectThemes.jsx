@@ -7,6 +7,25 @@ import { Plus, Edit, Trash2, Palette, CheckCircle2, XCircle, Eye, MapPin, X, Che
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import StyleBuilderAgent from './StyleBuilderAgent';
+import LandmarkCard from '../LandmarkCard';
+import FilterBar from '../FilterBar';
+
+// Mock Data for Preview
+const MOCK_LANDMARK = {
+  id: 'preview-1',
+  title: 'Example Landmark',
+  description: 'This preview demonstrates the glassmorphism effects. Adjust blur, saturation, and opacity to see changes in real-time.',
+  image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80',
+  category: { name: 'Office' },
+  coordinates: [0, 0] // Dummy coordinates
+};
+
+const MOCK_CATEGORIES = [
+  { name: 'Offices', icon: '🏢' },
+  { name: 'Dining', icon: '🍽️' },
+  { name: 'Parking', icon: '🚗' },
+  { name: 'Gym', icon: '💪' }
+];
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
   process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ||
@@ -49,6 +68,18 @@ export default function ProjectThemes({ projectId }) {
     primaryOpacity: 100,
     secondaryOpacity: 100,
     tertiaryOpacity: 100,
+    // Nearby Tooltip Glass Controls
+    nearbyGlassEnabled: true,
+    nearbyGlassBlur: 50,
+    nearbyGlassSaturation: 200,
+    nearbyGlassOpacity: 25,
+    nearbyBorderOpacity: 35,
+    nearbyPrimaryOpacity: 100,
+    nearbySecondaryOpacity: 100,
+    nearbyTertiaryOpacity: 100,
+    nearbyPrimary: '#ffffff',
+    nearbySecondary: '#1e3a8a',
+    nearbyTertiary: '#3b82f6',
   });
 
   useEffect(() => {
@@ -119,8 +150,21 @@ export default function ProjectThemes({ projectId }) {
           landmarkGlassOpacity: parseInt(formData.landmarkGlassOpacity) || 25,
           landmarkBorderOpacity: parseInt(formData.landmarkBorderOpacity) || 35,
           primaryOpacity: parseInt(formData.primaryOpacity) || 100,
+          primaryOpacity: parseInt(formData.primaryOpacity) || 100,
           secondaryOpacity: parseInt(formData.secondaryOpacity) || 100,
           tertiaryOpacity: parseInt(formData.tertiaryOpacity) || 100,
+          // Nearby Tooltip Glass Controls
+          nearbyGlassEnabled: formData.nearbyGlassEnabled,
+          nearbyGlassBlur: parseInt(formData.nearbyGlassBlur) || 50,
+          nearbyGlassSaturation: parseInt(formData.nearbyGlassSaturation) || 200,
+          nearbyGlassOpacity: parseInt(formData.nearbyGlassOpacity) || 25,
+          nearbyBorderOpacity: parseInt(formData.nearbyBorderOpacity) || 35,
+          nearbyPrimaryOpacity: parseInt(formData.nearbyPrimaryOpacity) || 100,
+          nearbySecondaryOpacity: parseInt(formData.nearbySecondaryOpacity) || 100,
+          nearbyTertiaryOpacity: parseInt(formData.nearbyTertiaryOpacity) || 100,
+          nearbyPrimary: formData.nearbyPrimary,
+          nearbySecondary: formData.nearbySecondary,
+          nearbyTertiary: formData.nearbyTertiary,
         }),
       });
 
@@ -423,114 +467,123 @@ function convertToMapboxStyleUrl(input) {
  * - Live preview updates
  */
 function ThemeEditorModal({ formData, setFormData, handleInputChange, handleSubmit, editingTheme, onClose }) {
-  const [activePreview, setActivePreview] = useState(0); // 0 = Landmark preview, 1 = Map preview
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const [mapError, setMapError] = useState(false);
-  const [currentZoom, setCurrentZoom] = useState(2);
+  const [activePreview, setActivePreview] = useState(0); // 0 = Landmark, 1 = Filter, 2 = Nearby, 3 = Map
+
+  // Refs for map preview
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapError, setMapError] = useState(false);
   const zoomIntervalRef = useRef(null);
 
   // Initialize map when switching to map preview
   useEffect(() => {
-    if (activePreview === 1 && mapContainerRef.current && !mapRef.current) {
+    if (activePreview === 3 && mapContainerRef.current && !mapRef.current) {
       const rawStyleUrl = formData.mapboxStyle === 'custom' ? formData.customStyle : formData.mapboxStyle;
       // Convert to proper mapbox:// format
       const styleUrl = convertToMapboxStyleUrl(rawStyleUrl) || rawStyleUrl;
-      const token = mapboxgl.accessToken;
 
-      if (!token) {
-        console.error('Mapbox token not found');
-        setMapError(true);
-        return;
-      }
+      try {
+        const map = new mapboxgl.Map({
+          container: mapContainerRef.current,
+          style: styleUrl,
+          center: [-74.006, 40.7128], // Default to NYC
+          zoom: 12,
+          attributionControl: false,
+          interactive: false // Static preview
+        });
 
-      if (styleUrl && styleUrl.startsWith('mapbox://')) {
-        try {
-          mapRef.current = new mapboxgl.Map({
-            container: mapContainerRef.current,
-            style: styleUrl,
-            center: [77.08, 28.49], // New Delhi area
-            zoom: 1, // Start from globe view
-            interactive: true,
-            projection: 'globe' // Enable globe projection for nice zoom effect
-          });
+        mapRef.current = map;
 
-          mapRef.current.on('load', () => {
-            setMapLoaded(true);
+        map.on('load', () => {
+          setMapLoaded(true);
+          setMapError(false);
 
-            // Animate zoom from globe to street level
-            setTimeout(() => {
-              if (mapRef.current) {
-                mapRef.current.flyTo({
-                  center: [77.08, 28.49],
-                  zoom: 14, // Street level
-                  duration: 3000,
-                  essential: true
-                });
-                setCurrentZoom(14);
+          // Add 3D buildings layer
+          if (!map.getLayer('3d-buildings')) {
+            map.addLayer({
+              'id': '3d-buildings',
+              'source': 'composite',
+              'source-layer': 'building',
+              'filter': ['==', 'extrude', 'true'],
+              'type': 'fill-extrusion',
+              'minzoom': 15,
+              'paint': {
+                'fill-extrusion-color': '#aaa',
+                'fill-extrusion-height': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  15,
+                  0,
+                  15.05,
+                  ['get', 'height']
+                ],
+                'fill-extrusion-base': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  15,
+                  0,
+                  15.05,
+                  ['get', 'min_height']
+                ],
+                'fill-extrusion-opacity': 0.6
               }
-            }, 500);
+            });
+          }
 
-            // Set up zoom cycling animation
-            zoomIntervalRef.current = setInterval(() => {
-              if (mapRef.current) {
-                const zoom = mapRef.current.getZoom();
-                // Cycle between zoom levels: 14 -> 4 -> 14
-                const newZoom = zoom > 10 ? 4 : 14;
-                mapRef.current.flyTo({
-                  zoom: newZoom,
-                  duration: 2500,
-                  essential: true
-                });
-                setCurrentZoom(newZoom);
-              }
-            }, 6000); // Every 6 seconds
-          });
+          // Simulate continuous slow zoom/pan for "alive" feel
+          let direction = 1;
+          let currentZoom = 12;
 
-          mapRef.current.on('error', (e) => {
-            console.error('Map error:', e);
-            setMapError(true);
-          });
+          zoomIntervalRef.current = setInterval(() => {
+            // Simple gentle rotate
+            const currentBearing = map.getBearing();
+            map.easeTo({
+              bearing: currentBearing + 0.1,
+              duration: 100,
+              easing: (t) => t
+            });
+          }, 100);
 
-          // Track zoom changes
-          mapRef.current.on('zoom', () => {
-            if (mapRef.current) {
-              setCurrentZoom(Math.round(mapRef.current.getZoom()));
-            }
-          });
-        } catch (e) {
-          console.error('Failed to initialize map:', e);
+        });
+
+        map.on('error', (e) => {
+          console.error('Mapbox Preview Error:', e);
           setMapError(true);
-        }
+        });
+
+      } catch (err) {
+        console.error('Map Init Error:', err);
+        setMapError(true);
       }
     }
 
     // Cleanup zoom interval when leaving map preview
-    if (activePreview !== 1 && zoomIntervalRef.current) {
+    if (activePreview !== 3 && zoomIntervalRef.current) {
       clearInterval(zoomIntervalRef.current);
       zoomIntervalRef.current = null;
     }
 
     return () => {
-      // Cleanup handled in style change effect
+      // Only destroy map if component unmounts, or ideally keep it alive but we want to save resources
+      // For now, we'll let it stay mounted in ref but pause animations
     };
   }, [activePreview]);
 
-  // Update map style when changed
+  // Update map style when form changes
   useEffect(() => {
-    if (mapRef.current) {
+    if (mapRef.current && activePreview === 3) {
       const rawStyleUrl = formData.mapboxStyle === 'custom' ? formData.customStyle : formData.mapboxStyle;
       const styleUrl = convertToMapboxStyleUrl(rawStyleUrl) || rawStyleUrl;
-      if (styleUrl && styleUrl.startsWith('mapbox://')) {
-        try {
-          mapRef.current.setStyle(styleUrl);
-        } catch (e) {
-          console.error('Invalid map style:', e);
-        }
+
+      if (styleUrl && styleUrl.includes('mapbox://')) {
+        mapRef.current.setStyle(styleUrl);
       }
     }
-  }, [formData.mapboxStyle, formData.customStyle]);
+  }, [formData.mapboxStyle, formData.customStyle, activePreview]);
+
 
   // Cleanup map on unmount
   useEffect(() => {
@@ -551,15 +604,25 @@ function ThemeEditorModal({ formData, setFormData, handleInputChange, handleSubm
     setActivePreview(0);
   };
 
+  // Handle filter input focus - switch to filter preview
+  const handleFilterFocus = () => {
+    setActivePreview(1);
+  };
+
+  // Handle nearby input focus - switch to nearby preview
+  const handleNearbyFocus = () => {
+    setActivePreview(2);
+  };
+
   // Handle map style focus - switch to map preview
   const handleMapStyleFocus = () => {
-    setActivePreview(1);
+    setActivePreview(3);
   };
 
   // Handle map style change
   const handleMapStyleChange = (e) => {
     handleInputChange(e);
-    setActivePreview(1);
+    setActivePreview(3);
   };
 
   return (
@@ -576,323 +639,11 @@ function ThemeEditorModal({ formData, setFormData, handleInputChange, handleSubm
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Landmark Card Colors Section */}
-            <div className="space-y-4 p-4 bg-gray-50 rounded-2xl">
-              <h4 className="font-semibold text-gray-900 flex items-center gap-2">
-                <MapPin className="w-4 h-4" /> Landmark Card Colors
-              </h4>
-
-              {/* Primary Color */}
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-1">Primary Background</label>
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-shrink-0">
-                    <input
-                      type="color"
-                      name="primary"
-                      value={formData.primary}
-                      onChange={handleInputChange}
-                      onFocus={handleColorFocus}
-                      className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
-                    />
-                    <div
-                      className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
-                      style={{ backgroundColor: formData.primary }}
-                    />
-                  </div>
-                  <input
-                    type="text"
-                    name="primary"
-                    value={formData.primary}
-                    onChange={handleInputChange}
-                    onFocus={handleColorFocus}
-                    className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Secondary Color */}
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-1">Text & Icons</label>
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-shrink-0">
-                    <input
-                      type="color"
-                      name="secondary"
-                      value={formData.secondary}
-                      onChange={handleInputChange}
-                      onFocus={handleColorFocus}
-                      className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
-                    />
-                    <div
-                      className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
-                      style={{ backgroundColor: formData.secondary }}
-                    />
-                  </div>
-                  <input
-                    type="text"
-                    name="secondary"
-                    value={formData.secondary}
-                    onChange={handleInputChange}
-                    onFocus={handleColorFocus}
-                    className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Tertiary Color (Glass/Inactive) */}
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-1">Border / Accent</label>
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-shrink-0">
-                    <input
-                      type="color"
-                      name="tertiary"
-                      value={formData.tertiary}
-                      onChange={handleInputChange}
-                      onFocus={handleColorFocus}
-                      className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
-                    />
-                    <div
-                      className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
-                      style={{ backgroundColor: formData.tertiary }}
-                    />
-                  </div>
-                  <input
-                    type="text"
-                    name="tertiary"
-                    value={formData.tertiary}
-                    onChange={handleInputChange}
-                    onFocus={handleColorFocus}
-                    className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Filter Section Colors Section */}
-            <div className="space-y-4 p-4 bg-gray-50 rounded-2xl">
-              <h4 className="font-semibold text-gray-900 flex items-center gap-2">
-                <Folder className="w-4 h-4" /> Filter Section Colors
-              </h4>
-
-              {/* Filter Primary (Active Background) */}
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-1">Active Background</label>
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-shrink-0">
-                    <input
-                      type="color"
-                      name="filterPrimary"
-                      value={formData.filterPrimary}
-                      onChange={handleInputChange}
-                      onFocus={handleColorFocus}
-                      className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
-                    />
-                    <div
-                      className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
-                      style={{ backgroundColor: formData.filterPrimary }}
-                    />
-                  </div>
-                  <input
-                    type="text"
-                    name="filterPrimary"
-                    value={formData.filterPrimary}
-                    onChange={handleInputChange}
-                    onFocus={handleColorFocus}
-                    className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Filter Secondary (Active Text) */}
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-1">Active Text</label>
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-shrink-0">
-                    <input
-                      type="color"
-                      name="filterSecondary"
-                      value={formData.filterSecondary}
-                      onChange={handleInputChange}
-                      onFocus={handleColorFocus}
-                      className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
-                    />
-                    <div
-                      className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
-                      style={{ backgroundColor: formData.filterSecondary }}
-                    />
-                  </div>
-                  <input
-                    type="text"
-                    name="filterSecondary"
-                    value={formData.filterSecondary}
-                    onChange={handleInputChange}
-                    onFocus={handleColorFocus}
-                    className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Filter Tertiary (Glass/Inactive) */}
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-1">Glass / Inactive Color</label>
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-shrink-0">
-                    <input
-                      type="color"
-                      name="filterTertiary"
-                      value={formData.filterTertiary}
-                      onChange={handleInputChange}
-                      onFocus={handleColorFocus}
-                      className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
-                    />
-                    <div
-                      className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
-                      style={{ backgroundColor: formData.filterTertiary }}
-                    />
-                  </div>
-                  <input
-                    type="text"
-                    name="filterTertiary"
-                    value={formData.filterTertiary}
-                    onChange={handleInputChange}
-                    onFocus={handleColorFocus}
-                    className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Filter Glass Effects Section */}
-            <div className="space-y-4 p-4 bg-blue-50 rounded-2xl">
-              <div className="flex items-center justify-between">
+            {/* Landmark Section */}
+            <div className="space-y-6 p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                 <h4 className="font-semibold text-gray-900 flex items-center gap-2">
-                  🌫️ Filter Glass Effects
-                </h4>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="filterGlassEnabled"
-                    checked={formData.filterGlassEnabled}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <span className="text-sm text-gray-600">Enable Blur</span>
-                </label>
-              </div>
-
-              {formData.filterGlassEnabled && (
-                <div className="space-y-3">
-                  {/* Blur Amount */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-1">Blur Amount ({formData.filterGlassBlur}px)</label>
-                    <input
-                      type="range"
-                      name="filterGlassBlur"
-                      min="0"
-                      max="100"
-                      value={formData.filterGlassBlur}
-                      onChange={handleInputChange}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Saturation */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-1">Saturation ({formData.filterGlassSaturation}%)</label>
-                    <input
-                      type="range"
-                      name="filterGlassSaturation"
-                      min="100"
-                      max="300"
-                      value={formData.filterGlassSaturation}
-                      onChange={handleInputChange}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Glass Opacity */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-1">Background Opacity ({formData.filterGlassOpacity}%)</label>
-                    <input
-                      type="range"
-                      name="filterGlassOpacity"
-                      min="0"
-                      max="100"
-                      value={formData.filterGlassOpacity}
-                      onChange={handleInputChange}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Border Opacity */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-1">Border Opacity ({formData.filterBorderOpacity}%)</label>
-                    <input
-                      type="range"
-                      name="filterBorderOpacity"
-                      min="0"
-                      max="100"
-                      value={formData.filterBorderOpacity}
-                      onChange={handleInputChange}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {!formData.filterGlassEnabled && (
-                <div className="space-y-3">
-                  <p className="text-sm text-gray-500">Blur disabled. Adjust color opacities below:</p>
-                  {/* Primary Opacity */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-1">Active BG Opacity ({formData.filterPrimaryOpacity}%)</label>
-                    <input
-                      type="range"
-                      name="filterPrimaryOpacity"
-                      min="0"
-                      max="100"
-                      value={formData.filterPrimaryOpacity}
-                      onChange={handleInputChange}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-                  {/* Secondary Opacity */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-1">Text Opacity ({formData.filterSecondaryOpacity}%)</label>
-                    <input
-                      type="range"
-                      name="filterSecondaryOpacity"
-                      min="0"
-                      max="100"
-                      value={formData.filterSecondaryOpacity}
-                      onChange={handleInputChange}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-                  {/* Tertiary Opacity */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-1">Glass Color Opacity ({formData.filterTertiaryOpacity}%)</label>
-                    <input
-                      type="range"
-                      name="filterTertiaryOpacity"
-                      min="0"
-                      max="100"
-                      value={formData.filterTertiaryOpacity}
-                      onChange={handleInputChange}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Landmark Glass Effects Section */}
-            <div className="space-y-4 p-4 bg-purple-50 rounded-2xl">
-              <div className="flex items-center justify-between">
-                <h4 className="font-semibold text-gray-900 flex items-center gap-2">
-                  📍 Landmark Glass Effects
+                  <MapPin className="w-4 h-4 text-purple-600" /> Landmark Card
                 </h4>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -902,143 +653,548 @@ function ThemeEditorModal({ formData, setFormData, handleInputChange, handleSubm
                     onChange={handleInputChange}
                     className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                   />
-                  <span className="text-sm text-gray-600">Enable Blur</span>
+                  <span className="text-xs font-medium text-gray-600">Glass Effect</span>
                 </label>
               </div>
 
-              {formData.landmarkGlassEnabled && (
-                <div className="space-y-3">
-                  {/* Blur Amount */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-1">Blur Amount ({formData.landmarkGlassBlur}px)</label>
+              {/* Colors */}
+              <div className="space-y-4">
+                {/* Primary Color */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Primary Background</label>
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex-shrink-0">
+                      <input
+                        type="color"
+                        name="primary"
+                        value={formData.primary}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(0)}
+                        className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                      />
+                      <div
+                        className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
+                        style={{ backgroundColor: formData.primary }}
+                      />
+                    </div>
                     <input
-                      type="range"
-                      name="landmarkGlassBlur"
-                      min="0"
-                      max="100"
-                      value={formData.landmarkGlassBlur}
+                      type="text"
+                      name="primary"
+                      value={formData.primary}
                       onChange={handleInputChange}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Saturation */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-1">Saturation ({formData.landmarkGlassSaturation}%)</label>
-                    <input
-                      type="range"
-                      name="landmarkGlassSaturation"
-                      min="100"
-                      max="300"
-                      value={formData.landmarkGlassSaturation}
-                      onChange={handleInputChange}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Glass Opacity */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-1">Background Opacity ({formData.landmarkGlassOpacity}%)</label>
-                    <input
-                      type="range"
-                      name="landmarkGlassOpacity"
-                      min="0"
-                      max="100"
-                      value={formData.landmarkGlassOpacity}
-                      onChange={handleInputChange}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Border Opacity */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-1">Border Opacity ({formData.landmarkBorderOpacity}%)</label>
-                    <input
-                      type="range"
-                      name="landmarkBorderOpacity"
-                      min="0"
-                      max="100"
-                      value={formData.landmarkBorderOpacity}
-                      onChange={handleInputChange}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      onFocus={() => setActivePreview(0)}
+                      className="flex-1 px-3 py-2 bg-gray-50 border-transparent rounded-lg focus:bg-white focus:border-purple-500 focus:ring-0 text-sm font-mono transition-all"
                     />
                   </div>
                 </div>
-              )}
 
-              {!formData.landmarkGlassEnabled && (
-                <div className="space-y-3">
-                  <p className="text-sm text-gray-500">Blur disabled. Adjust color opacities below:</p>
-                  {/* Primary Opacity */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-1">Primary Color Opacity ({formData.primaryOpacity}%)</label>
+                {/* Secondary Color */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Text & Icons</label>
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex-shrink-0">
+                      <input
+                        type="color"
+                        name="secondary"
+                        value={formData.secondary}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(0)}
+                        className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                      />
+                      <div
+                        className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
+                        style={{ backgroundColor: formData.secondary }}
+                      />
+                    </div>
                     <input
-                      type="range"
-                      name="primaryOpacity"
-                      min="0"
-                      max="100"
-                      value={formData.primaryOpacity}
+                      type="text"
+                      name="secondary"
+                      value={formData.secondary}
                       onChange={handleInputChange}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      onFocus={() => setActivePreview(0)}
+                      className="flex-1 px-3 py-2 bg-gray-50 border-transparent rounded-lg focus:bg-white focus:border-purple-500 focus:ring-0 text-sm font-mono transition-all"
                     />
                   </div>
-                  {/* Secondary Opacity */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-1">Text Opacity ({formData.secondaryOpacity}%)</label>
+                </div>
+
+                {/* Tertiary Color (Border/Accent) */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Border / Accent</label>
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex-shrink-0">
+                      <input
+                        type="color"
+                        name="tertiary"
+                        value={formData.tertiary}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(0)}
+                        className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                      />
+                      <div
+                        className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
+                        style={{ backgroundColor: formData.tertiary }}
+                      />
+                    </div>
                     <input
-                      type="range"
-                      name="secondaryOpacity"
-                      min="0"
-                      max="100"
-                      value={formData.secondaryOpacity}
+                      type="text"
+                      name="tertiary"
+                      value={formData.tertiary}
                       onChange={handleInputChange}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      onFocus={() => setActivePreview(0)}
+                      className="flex-1 px-3 py-2 bg-gray-50 border-transparent rounded-lg focus:bg-white focus:border-purple-500 focus:ring-0 text-sm font-mono transition-all"
                     />
                   </div>
-                  {/* Tertiary Opacity */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-1">Border/Accent Opacity ({formData.tertiaryOpacity}%)</label>
-                    <input
-                      type="range"
-                      name="tertiaryOpacity"
-                      min="0"
-                      max="100"
-                      value={formData.tertiaryOpacity}
-                      onChange={handleInputChange}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
+                </div>
+              </div>
+
+              {/* Glass Settings */}
+              {formData.landmarkGlassEnabled && (
+                <div className="pt-4 border-t border-gray-100 space-y-4 animate-fadeIn">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Blur ({formData.landmarkGlassBlur}px)</label>
+                      <input
+                        type="range"
+                        name="landmarkGlassBlur"
+                        min="0"
+                        max="100"
+                        value={formData.landmarkGlassBlur}
+                        onChange={handleInputChange}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Saturation ({formData.landmarkGlassSaturation}%)</label>
+                      <input
+                        type="range"
+                        name="landmarkGlassSaturation"
+                        min="100"
+                        max="300"
+                        value={formData.landmarkGlassSaturation}
+                        onChange={handleInputChange}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">BG Opacity ({formData.landmarkGlassOpacity}%)</label>
+                      <input
+                        type="range"
+                        name="landmarkGlassOpacity"
+                        min="0"
+                        max="100"
+                        value={formData.landmarkGlassOpacity}
+                        onChange={handleInputChange}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Border Opacity ({formData.landmarkBorderOpacity}%)</label>
+                      <input
+                        type="range"
+                        name="landmarkBorderOpacity"
+                        min="0"
+                        max="100"
+                        value={formData.landmarkBorderOpacity}
+                        onChange={handleInputChange}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Tertiary Color (Glass/Inactive) */}
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-1">Glass / Inactive Color</label>
-              <p className="text-xs text-gray-500 mb-2">Base color for glass effects and inactive states.</p>
-              <div className="flex items-center gap-3">
-                <div className="relative flex-shrink-0">
+            {/* Filter Section */}
+            <div className="space-y-6 p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <Folder className="w-4 h-4 text-blue-600" /> Filter Bar
+                </h4>
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
-                    type="color"
-                    name="tertiary"
-                    value={formData.tertiary}
+                    type="checkbox"
+                    name="filterGlassEnabled"
+                    checked={formData.filterGlassEnabled}
                     onChange={handleInputChange}
-                    onFocus={handleColorFocus}
-                    className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
-                  <div
-                    className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
-                    style={{ backgroundColor: formData.tertiary }}
-                  />
+                  <span className="text-xs font-medium text-gray-600">Glass Effect</span>
+                </label>
+              </div>
+
+              {/* Colors */}
+              <div className="space-y-4">
+                {/* Active Background */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Active Background</label>
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex-shrink-0">
+                      <input
+                        type="color"
+                        name="filterPrimary"
+                        value={formData.filterPrimary}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(1)}
+                        className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                      />
+                      <div
+                        className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
+                        style={{ backgroundColor: formData.filterPrimary }}
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      name="filterPrimary"
+                      value={formData.filterPrimary}
+                      onChange={handleInputChange}
+                      onFocus={() => setActivePreview(1)}
+                      className="flex-1 px-3 py-2 bg-gray-50 border-transparent rounded-lg focus:bg-white focus:border-blue-500 focus:ring-0 text-sm font-mono transition-all"
+                    />
+                  </div>
                 </div>
-                <input
-                  type="text"
-                  name="tertiary"
-                  value={formData.tertiary}
-                  onChange={handleInputChange}
-                  onFocus={handleColorFocus}
-                  className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-sm font-mono transition-all"
-                />
+
+                {/* Active Text */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Active Text</label>
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex-shrink-0">
+                      <input
+                        type="color"
+                        name="filterSecondary"
+                        value={formData.filterSecondary}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(1)}
+                        className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                      />
+                      <div
+                        className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
+                        style={{ backgroundColor: formData.filterSecondary }}
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      name="filterSecondary"
+                      value={formData.filterSecondary}
+                      onChange={handleInputChange}
+                      onFocus={() => setActivePreview(1)}
+                      className="flex-1 px-3 py-2 bg-gray-50 border-transparent rounded-lg focus:bg-white focus:border-blue-500 focus:ring-0 text-sm font-mono transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Inactive/Glass Color */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Glass / Inactive Base</label>
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex-shrink-0">
+                      <input
+                        type="color"
+                        name="filterTertiary"
+                        value={formData.filterTertiary}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(1)}
+                        className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                      />
+                      <div
+                        className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
+                        style={{ backgroundColor: formData.filterTertiary }}
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      name="filterTertiary"
+                      value={formData.filterTertiary}
+                      onChange={handleInputChange}
+                      onFocus={() => setActivePreview(1)}
+                      className="flex-1 px-3 py-2 bg-gray-50 border-transparent rounded-lg focus:bg-white focus:border-blue-500 focus:ring-0 text-sm font-mono transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Glass Settings */}
+              {formData.filterGlassEnabled && (
+                <div className="pt-4 border-t border-gray-100 space-y-4 animate-fadeIn">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Blur ({formData.filterGlassBlur}px)</label>
+                      <input
+                        type="range"
+                        name="filterGlassBlur"
+                        min="0"
+                        max="100"
+                        value={formData.filterGlassBlur}
+                        onChange={handleInputChange}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Saturation ({formData.filterGlassSaturation}%)</label>
+                      <input
+                        type="range"
+                        name="filterGlassSaturation"
+                        min="100"
+                        max="300"
+                        value={formData.filterGlassSaturation}
+                        onChange={handleInputChange}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">BG Opacity ({formData.filterGlassOpacity}%)</label>
+                      <input
+                        type="range"
+                        name="filterGlassOpacity"
+                        min="0"
+                        max="100"
+                        value={formData.filterGlassOpacity}
+                        onChange={handleInputChange}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Border Opacity ({formData.filterBorderOpacity}%)</label>
+                      <input
+                        type="range"
+                        name="filterBorderOpacity"
+                        min="0"
+                        max="100"
+                        value={formData.filterBorderOpacity}
+                        onChange={handleInputChange}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Nearby Tooltip Section */}
+            <div className="space-y-6 p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-blue-600" /> Nearby Tooltip
+                </h4>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="nearbyGlassEnabled"
+                    checked={formData.nearbyGlassEnabled}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span className="text-xs font-medium text-gray-600">Glass Effect</span>
+                </label>
+              </div>
+
+              {/* Colors */}
+              <div className="space-y-4">
+                {/* Tooltip Background */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Background</label>
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex-shrink-0">
+                      <input
+                        type="color"
+                        name="nearbyPrimary"
+                        value={formData.nearbyPrimary}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(2)}
+                        className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                      />
+                      <div
+                        className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
+                        style={{ backgroundColor: formData.nearbyPrimary }}
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      name="nearbyPrimary"
+                      value={formData.nearbyPrimary}
+                      onChange={handleInputChange}
+                      onFocus={() => setActivePreview(2)}
+                      className="flex-1 px-3 py-2 bg-gray-50 border-transparent rounded-lg focus:bg-white focus:border-blue-500 focus:ring-0 text-sm font-mono transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Tooltip Text */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Text</label>
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex-shrink-0">
+                      <input
+                        type="color"
+                        name="nearbySecondary"
+                        value={formData.nearbySecondary}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(2)}
+                        className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                      />
+                      <div
+                        className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
+                        style={{ backgroundColor: formData.nearbySecondary }}
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      name="nearbySecondary"
+                      value={formData.nearbySecondary}
+                      onChange={handleInputChange}
+                      onFocus={() => setActivePreview(2)}
+                      className="flex-1 px-3 py-2 bg-gray-50 border-transparent rounded-lg focus:bg-white focus:border-blue-500 focus:ring-0 text-sm font-mono transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Tooltip Border/Accent */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Border / Accent</label>
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex-shrink-0">
+                      <input
+                        type="color"
+                        name="nearbyTertiary"
+                        value={formData.nearbyTertiary}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(2)}
+                        className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                      />
+                      <div
+                        className="h-10 w-10 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm"
+                        style={{ backgroundColor: formData.nearbyTertiary }}
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      name="nearbyTertiary"
+                      value={formData.nearbyTertiary}
+                      onChange={handleInputChange}
+                      onFocus={() => setActivePreview(2)}
+                      className="flex-1 px-3 py-2 bg-gray-50 border-transparent rounded-lg focus:bg-white focus:border-blue-500 focus:ring-0 text-sm font-mono transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Glass / Opacity Controls */}
+              <div className="space-y-4 pt-2 border-t border-gray-50">
+                {formData.nearbyGlassEnabled ? (
+                  <>
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <label className="text-xs font-medium text-gray-500">Blur Amount ({formData.nearbyGlassBlur}px)</label>
+                      </div>
+                      <input
+                        type="range"
+                        name="nearbyGlassBlur"
+                        min="0"
+                        max="100"
+                        value={formData.nearbyGlassBlur}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(2)}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <label className="text-xs font-medium text-gray-500">Saturation ({formData.nearbyGlassSaturation}%)</label>
+                      </div>
+                      <input
+                        type="range"
+                        name="nearbyGlassSaturation"
+                        min="100"
+                        max="300"
+                        value={formData.nearbyGlassSaturation}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(2)}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <label className="text-xs font-medium text-gray-500">BG Opacity ({formData.nearbyGlassOpacity}%)</label>
+                      </div>
+                      <input
+                        type="range"
+                        name="nearbyGlassOpacity"
+                        min="0"
+                        max="100"
+                        value={formData.nearbyGlassOpacity}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(2)}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <label className="text-xs font-medium text-gray-500">Border Opacity ({formData.nearbyBorderOpacity}%)</label>
+                      </div>
+                      <input
+                        type="range"
+                        name="nearbyBorderOpacity"
+                        min="0"
+                        max="100"
+                        value={formData.nearbyBorderOpacity}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(2)}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <label className="text-xs font-medium text-gray-500">Background Opacity ({formData.nearbyPrimaryOpacity}%)</label>
+                      </div>
+                      <input
+                        type="range"
+                        name="nearbyPrimaryOpacity"
+                        min="0"
+                        max="100"
+                        value={formData.nearbyPrimaryOpacity}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(2)}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <label className="text-xs font-medium text-gray-500">Text Opacity ({formData.nearbySecondaryOpacity}%)</label>
+                      </div>
+                      <input
+                        type="range"
+                        name="nearbySecondaryOpacity"
+                        min="0"
+                        max="100"
+                        value={formData.nearbySecondaryOpacity}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(2)}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <label className="text-xs font-medium text-gray-500">Border Opacity ({formData.nearbyTertiaryOpacity}%)</label>
+                      </div>
+                      <input
+                        type="range"
+                        name="nearbyTertiaryOpacity"
+                        min="0"
+                        max="100"
+                        value={formData.nearbyTertiaryOpacity}
+                        onChange={handleInputChange}
+                        onFocus={() => setActivePreview(2)}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
@@ -1127,76 +1283,129 @@ function ThemeEditorModal({ formData, setFormData, handleInputChange, handleSubm
               onClick={() => setActivePreview(1)}
               className={`w-2 h-2 rounded-full transition-all cursor-pointer ${activePreview === 1 ? 'bg-gray-900 w-4' : 'bg-gray-400'}`}
             />
+            <button
+              onClick={() => setActivePreview(2)}
+              className={`w-2 h-2 rounded-full transition-all cursor-pointer ${activePreview === 2 ? 'bg-gray-900 w-4' : 'bg-gray-400'}`}
+            />
+            <button
+              onClick={() => setActivePreview(3)}
+              className={`w-2 h-2 rounded-full transition-all cursor-pointer ${activePreview === 3 ? 'bg-gray-900 w-4' : 'bg-gray-400'}`}
+            />
           </div>
 
           {/* Preview Cards Container */}
-          <div
-            className="flex transition-transform duration-500 ease-out h-full"
-            style={{ transform: `translateX(-${activePreview * 100}%)` }}
-          >
-            {/* Card 1: Landmark & Filter Preview */}
-            <div className="min-w-full h-full flex items-center justify-center p-6">
-              <div className="w-full max-w-sm relative"
-                style={{
-                  backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)',
-                  backgroundSize: '20px 20px'
-                }}
-              >
-                {/* Landmark Card Preview */}
-                <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
-                  {/* Gradient Header */}
-                  <div
-                    className="h-32 relative"
-                    style={{
-                      background: `linear-gradient(135deg, ${formData.primary} 0%, ${adjustColor(formData.primary, 40)} 100%)`
-                    }}
-                  >
-                    <button className="absolute top-3 right-3 w-7 h-7 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-                      <X className="w-4 h-4 text-white" />
-                    </button>
-                  </div>
+          <div className="h-full w-full relative">
 
-                  {/* Content */}
-                  <div className="p-4" style={{ backgroundColor: formData.primary }}>
-                    <h3 className="text-lg font-bold mb-2" style={{ color: formData.secondary }}>
-                      Example Landmark
-                    </h3>
-                    <div className="flex items-center gap-3 text-sm" style={{ color: formData.secondary }}>
-                      <span
-                        className="px-2 py-0.5 rounded text-xs font-medium"
-                        style={{ backgroundColor: `${formData.secondary}20`, color: formData.secondary }}
-                      >
-                        Office
-                      </span>
-                      <span className="flex items-center gap-1 opacity-80">
-                        <MapPin className="w-3 h-3" /> null km
-                      </span>
-                      <span className="opacity-80">⏱ nullm</span>
-                    </div>
-                    <p className="text-sm mt-3 opacity-70" style={{ color: formData.secondary }}>
-                      This is how your landmark cards will look with the selected colors.
-                    </p>
-                  </div>
-
-                  {/* Filter Bar Preview */}
-                  <div className="p-3 bg-white border-t border-gray-100">
-                    <div
-                      className="flex items-center gap-2 p-1 rounded-full"
-                      style={{ backgroundColor: formData.primary }}
-                    >
-                      <FilterChip icon={Folder} label="All" active style={{ primary: formData.primary, secondary: formData.secondary }} />
-                      <FilterChip icon={Building} label="Office" style={{ primary: formData.primary, secondary: formData.secondary }} />
-                      <FilterChip icon={Utensils} label="Food" style={{ primary: formData.primary, secondary: formData.secondary }} />
-                      <FilterChip icon={Car} label="Parking" style={{ primary: formData.primary, secondary: formData.secondary }} />
-                    </div>
-                  </div>
-                </div>
+            {/* Card 0: Landmark Preview */}
+            <div
+              className={`absolute inset-0 transition-opacity duration-300 flex items-center justify-center p-6 ${activePreview === 0 ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+              style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}
+            >
+              {/* Landmark Card Preview */}
+              <div className="w-full max-w-sm relative flex items-center justify-center">
+                <LandmarkCard
+                  landmark={MOCK_LANDMARK}
+                  isVisible={true}
+                  onClose={() => { }}
+                  theme={formData}
+                  className="!static !w-full !max-w-none !transform-none !transition-none" // Override fixed positioning
+                  clientBuilding={null} // Disable distance calc
+                />
               </div>
             </div>
 
-            {/* Card 2: Map Preview */}
-            <div className="min-w-full h-full flex items-center justify-center p-6">
-              <div className="w-full h-full bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200 relative">
+            {/* Card 1: Filter Preview */}
+            <div
+              className={`absolute inset-0 transition-opacity duration-300 flex items-center justify-center p-6 ${activePreview === 1 ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+              style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}
+            >
+              {/* Filter Bar Preview */}
+              <div className="w-full max-w-md flex flex-col items-center justify-center">
+                <div className="relative w-full">
+                  <FilterBar
+                    categories={MOCK_CATEGORIES}
+                    activeFilter={['All']}
+                    onFilterChange={() => { }}
+                    theme={formData}
+                    className="!static !w-full !max-w-none !transform-none !translate-x-0" // Override fixed positioning
+                  />
+                </div>
+                <p className="text-center mt-12 text-gray-500 text-sm bg-white/50 backdrop-blur-sm px-3 py-1 rounded-full">
+                  Editing <strong>Filter Section</strong> appearance
+                </p>
+              </div>
+            </div>
+
+            {/* Card 2: Nearby Tooltip Preview */}
+            <div
+              className={`absolute inset-0 transition-opacity duration-300 flex items-center justify-center p-6 ${activePreview === 2 ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+              style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}
+            >
+              {/* Nearby Tooltip Preview */}
+              <div className="w-full max-w-sm flex flex-col items-center justify-center">
+                <div className="relative">
+                  {/* Tooltip Content */}
+                  <div
+                    className="rounded-lg shadow-lg overflow-hidden min-w-[200px]"
+                    style={{
+                      backgroundColor: formData.nearbyGlassEnabled
+                        ? hexToRgba(formData.nearbyPrimary || '#ffffff', formData.nearbyGlassOpacity)
+                        : hexToRgba(formData.nearbyPrimary || '#ffffff', formData.nearbyPrimaryOpacity),
+                      backdropFilter: formData.nearbyGlassEnabled
+                        ? `blur(${formData.nearbyGlassBlur}px) saturate(${formData.nearbyGlassSaturation}%)`
+                        : 'none',
+                      border: `1px solid ${hexToRgba(formData.nearbyTertiary || '#3b82f6', formData.nearbyGlassEnabled ? formData.nearbyBorderOpacity : formData.nearbyTertiaryOpacity)}`,
+                    }}
+                  >
+                    {/* Top Bar - Accent Color */}
+                    <div className="h-1.5" style={{ backgroundColor: formData.nearbyTertiary || '#3b82f6' }}></div>
+
+                    <div className="p-4">
+                      <h3 className="font-bold text-sm leading-snug" style={{ color: formData.nearbySecondary || '#1e3a8a' }}>Example Place</h3>
+
+                      <span
+                        className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide mt-1.5 mb-2.5"
+                        style={{
+                          color: formData.nearbyTertiary || '#3b82f6',
+                          backgroundColor: hexToRgba(formData.nearbyTertiary || '#3b82f6', 15)
+                        }}
+                      >
+                        Restaurant
+                      </span>
+
+                      <div className="flex items-center gap-4 text-xs" style={{ color: formData.nearbySecondary ? hexToRgba(formData.nearbySecondary, 70) : '#6b7280' }}>
+                        <span className="flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5" /> 1.2 km
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <div className="w-3.5 h-3.5 rounded-full border border-current opacity-60"></div> 5 min
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Tip Arrow (simulated) */}
+                  <div
+                    className="w-3 h-3 rotate-45 absolute -bottom-1.5 left-1/2 -translate-x-1/2 border-r border-b"
+                    style={{
+                      backgroundColor: formData.nearbyGlassEnabled
+                        ? (formData.nearbyPrimary || '#ffffff') // Glass arrow is tricky in CSS alone with exact opacity match, simplified here
+                        : (formData.nearbyPrimary || '#ffffff'),
+                      borderColor: hexToRgba(formData.nearbyTertiary || '#3b82f6', formData.nearbyGlassEnabled ? formData.nearbyBorderOpacity : formData.nearbyTertiaryOpacity),
+                      // Opacity for glass arrow needs to match mostly but typically solid or same alpha
+                      opacity: formData.nearbyGlassEnabled ? (formData.nearbyGlassOpacity / 100) : (formData.nearbyPrimaryOpacity / 100)
+                    }}
+                  ></div>
+                </div>
+
+                <p className="text-center mt-12 text-gray-500 text-sm bg-white/50 backdrop-blur-sm px-3 py-1 rounded-full">
+                  Editing <strong>Nearby Tooltip</strong> appearance
+                </p>
+              </div>
+            </div>
+
+            {/* Card 3: Map Preview */}
+            <div className={`absolute inset-0 transition-opacity duration-300 ${activePreview === 3 ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
+              <div className="w-full h-full bg-white relative">
                 {/* Map Container */}
                 <div
                   ref={mapContainerRef}
@@ -1205,7 +1414,7 @@ function ThemeEditorModal({ formData, setFormData, handleInputChange, handleSubm
                 />
 
                 {/* Loading/Error State */}
-                {activePreview === 1 && !mapLoaded && !mapError && (
+                {activePreview === 3 && !mapLoaded && !mapError && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
                     <div className="text-center">
                       <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin mx-auto mb-3" />
@@ -1225,43 +1434,9 @@ function ThemeEditorModal({ formData, setFormData, handleInputChange, handleSubm
                     </div>
                   </div>
                 )}
-
-                {/* Zoom Level Indicator */}
-                {mapLoaded && (
-                  <div className="absolute top-4 right-4 bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-full z-10">
-                    <span className="text-xs font-medium text-white">
-                      Zoom: {currentZoom}
-                    </span>
-                  </div>
-                )}
-
-                {/* Map Preview Label */}
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm border border-gray-200/50 z-10 flex items-center gap-2">
-                  <span className="text-xs font-medium text-gray-600">Map Style Preview</span>
-                  {mapLoaded && (
-                    <span className="flex items-center gap-1 text-xs text-gray-400">
-                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                      Auto-zooming
-                    </span>
-                  )}
-                </div>
               </div>
             </div>
           </div>
-
-          {/* Navigation Arrows */}
-          <button
-            onClick={() => setActivePreview(0)}
-            className={`absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 rounded-full shadow-md flex items-center justify-center transition-opacity cursor-pointer ${activePreview === 0 ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-          >
-            <ChevronLeft className="w-4 h-4 text-gray-700" />
-          </button>
-          <button
-            onClick={() => setActivePreview(1)}
-            className={`absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 rounded-full shadow-md flex items-center justify-center transition-opacity cursor-pointer ${activePreview === 1 ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-          >
-            <ChevronRight className="w-4 h-4 text-gray-700" />
-          </button>
         </div>
       </div >
     </div >
@@ -1274,31 +1449,34 @@ function ThemeEditorModal({ formData, setFormData, handleInputChange, handleSubm
 function FilterChip({ icon: Icon, label, active, style }) {
   return (
     <div
-      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${active ? 'bg-white shadow-sm' : 'hover:bg-white/20'
+      className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all cursor-pointer whitespace-nowrap select-none ${active
+        ? 'shadow-md scale-105'
+        : 'hover:bg-white/10 hover:scale-105'
         }`}
       style={{
-        color: active ? style.primary : style.secondary,
+        backgroundColor: active ? style.primary : 'transparent',
+        color: active ? style.secondary : '#374151', // Fallback color for inactive text if not specified
       }}
     >
-      <Icon className="w-3.5 h-3.5" />
+      <Icon className="w-4 h-4" />
       <span>{label}</span>
     </div>
   );
 }
 
 /**
- * Adjust color brightness
+ * Helper: Convert Hex to RGBA
  */
-function adjustColor(hex, percent) {
-  const num = parseInt(hex.replace('#', ''), 16);
-  const amt = Math.round(2.55 * percent);
-  const R = (num >> 16) + amt;
-  const G = (num >> 8 & 0x00FF) + amt;
-  const B = (num & 0x0000FF) + amt;
-  return '#' + (
-    0x1000000 +
-    (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
-    (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
-    (B < 255 ? (B < 1 ? 0 : B) : 255)
-  ).toString(16).slice(1);
+function hexToRgba(hex, opacity = 100) {
+  if (!hex) return 'transparent';
+  let c;
+  if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
+    c = hex.substring(1).split('');
+    if (c.length === 3) {
+      c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+    }
+    c = '0x' + c.join('');
+    return 'rgba(' + [(c >> 16) & 255, (c >> 8) & 255, c & 255].join(',') + ',' + (opacity / 100) + ')';
+  }
+  return hex;
 }

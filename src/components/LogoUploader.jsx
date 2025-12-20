@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from 'react';
+import { bustCache } from '@/utils/cacheUtils';
 
 export default function LogoUploader({ label, currentLogo, onUpload, onDimensionsExtracted, theme }) {
     const [preview, setPreview] = useState(currentLogo || null);

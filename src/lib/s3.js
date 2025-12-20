@@ -65,15 +65,22 @@ export async function uploadToS3(fileBuffer, fileName, contentType, folder = 'la
         Key: key,
         Body: fileBuffer,
         ContentType: contentType,
+        CacheControl: 'no-cache, must-revalidate, max-age=0',
         // ACL: 'public-read', // Uncomment if bucket allows public ACLs
+        Metadata: {
+            uploadedAt: timestamp.toString()
+        }
     });
 
     await client.send(command);
 
     // Return CloudFront URL if available, otherwise S3 URL
-    const url = CLOUDFRONT_URL
+    // Add cache-busting timestamp to ensure instant updates
+    const baseUrl = CLOUDFRONT_URL
         ? `${CLOUDFRONT_URL.replace(/\/$/, '')}/${key}`
         : `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+
+    const url = `${baseUrl}?t=${timestamp}`;
 
     return { url, key };
 }

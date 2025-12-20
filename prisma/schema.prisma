@@ -86,6 +86,19 @@ model Theme {
   primaryOpacity Int @default(100)
   secondaryOpacity Int @default(100)
   tertiaryOpacity Int @default(100)
+
+  // Nearby Tooltip Glass Controls
+  nearbyGlassEnabled Boolean @default(true)
+  nearbyGlassBlur Int @default(50)
+  nearbyGlassSaturation Int @default(200)
+  nearbyGlassOpacity Int @default(25)
+  nearbyBorderOpacity Int @default(35)
+  nearbyPrimaryOpacity Int @default(100)
+  nearbySecondaryOpacity Int @default(100)
+  nearbyTertiaryOpacity Int @default(100)
+  nearbyPrimary String? // Custom Background Color for Tooltip
+  nearbySecondary String? // Custom Text Color for Tooltip
+  nearbyTertiary String? // Custom Accent/Border Color for Tooltip
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -130,10 +143,19 @@ model MapSetting {
   maxZoom                 Int     @default(18)
   enableRotation          Boolean @default(true)
   enablePitch             Boolean @default(true)
+  enable3DBuildings       Boolean @default(true)
+  buildings3DMinZoom      Int     @default(15)
   routeLineColor          String  @default("#3b82f6")
   routeLineWidth          Int     @default(4)
   initialAnimationDuration Float  @default(3.0)
   routeAnimationDuration   Float  @default(1.0)
+  
+  // Camera control - toggle between intro transition and default camera
+  useDefaultCameraAfterLoad Boolean @default(false)  // false = intro transition (default), true = use default camera
+  defaultPitch             Float  @default(70)      // Camera tilt angle (0-85 degrees)
+  defaultBearing           Float  @default(-20)     // Camera rotation (-180 to 180 degrees)
+  
+  // Map bounds - restrict navigation area
   southWestLat            Float?
   southWestLng            Float?
   northEastLat            Float?
@@ -151,7 +173,7 @@ model MapSetting {
 model Category {
   id String @id @default(cuid())
   name String
-  icon String? 
+  icon String? @db.Text 
   isActive Boolean @default(true)
   defaultIconWidth Int? @default(32)
   defaultIconHeight Int? @default(32)

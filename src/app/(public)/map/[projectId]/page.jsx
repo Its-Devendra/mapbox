@@ -64,21 +64,17 @@ function MapPageContent() {
       setError(null);
 
       try {
-        // Check cache first
+        // Check cache first (but always refresh settings for latest values)
         const cacheKey = `project-data-${projectId}`;
         const cached = apiResponseCache.get(cacheKey);
 
+        // Clear cache for fresh settings data (settings change frequently)
         if (cached) {
-          setProject(cached.project);
-          setProjectTheme(cached.theme);
-          setFilterTheme(cached.filterTheme);
-          setMapSettings(cached.settings);
-          setLandmarks(cached.landmarks);
-          setNearbyPlaces(cached.nearbyPlaces);
-          setCategories(cached.categories);
-          setLoading(false);
-          return;
+          console.log('🔄 Cache found, but refreshing for latest settings...');
+          apiResponseCache.delete(cacheKey);
         }
+
+        // Always fetch fresh data (removed early return from cache)
 
         // Parallel fetch with Promise.allSettled for graceful degradation
         const [
@@ -183,10 +179,22 @@ function MapPageContent() {
         if (settingsRes.status === 'fulfilled' && settingsRes.value.ok) {
           const settingsResponse = await settingsRes.value.json();
           const settingsData = Array.isArray(settingsResponse) ? settingsResponse : (settingsResponse.items || settingsResponse.settings || []);
+          console.log('📋 All Map Settings:', settingsData);
           const activeSetting = settingsData.find(s => s.isActive && s.projectId === projectId);
           if (activeSetting) {
+            console.log('✅ Active Map Setting Found:', {
+              id: activeSetting.id,
+              zoom: activeSetting.defaultZoom,
+              center: [activeSetting.defaultCenterLng, activeSetting.defaultCenterLat],
+              useDefaultCamera: activeSetting.useDefaultCameraAfterLoad,
+              pitch: activeSetting.defaultPitch,
+              bearing: activeSetting.defaultBearing,
+              bounds: activeSetting.southWestLat ? 'Set' : 'None'
+            });
             settings = activeSetting;
             setMapSettings(activeSetting);
+          } else {
+            console.warn('⚠️ No active map setting found for project:', projectId);
           }
         } else {
           console.warn('Failed to load settings, using defaults');

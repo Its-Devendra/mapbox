@@ -33,4 +33,17 @@ export const themeSchema = z.object({
     primaryOpacity: z.number().min(0).max(100).optional(),
     secondaryOpacity: z.number().min(0).max(100).optional(),
     tertiaryOpacity: z.number().min(0).max(100).optional(),
+
+    // Nearby Tooltip Glass Controls
+    nearbyGlassEnabled: z.boolean().optional(),
+    nearbyGlassBlur: z.number().min(0).max(100).optional(),
+    nearbyGlassSaturation: z.number().min(100).max(300).optional(),
+    nearbyGlassOpacity: z.number().min(0).max(100).optional(),
+    nearbyBorderOpacity: z.number().min(0).max(100).optional(),
+    nearbyPrimaryOpacity: z.number().min(0).max(100).optional(),
+    nearbySecondaryOpacity: z.number().min(0).max(100).optional(),
+    nearbyTertiaryOpacity: z.number().min(0).max(100).optional(),
+    nearbyPrimary: z.string().optional().nullable(),
+    nearbySecondary: z.string().optional().nullable(),
+    nearbyTertiary: z.string().optional().nullable(),
 })

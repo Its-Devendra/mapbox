@@ -26,7 +26,7 @@ const MAX_SIZE = 10 * 1024 * 1024;
 export async function POST(request) {
     try {
         console.log('📤 Upload API: Received upload request');
-        
+
         const formData = await request.formData();
         const file = formData.get('file');
         const folder = formData.get('folder') || 'landmarks';
@@ -87,6 +87,12 @@ export async function POST(request) {
             fileName: file.name,
             fileType: file.type,
             fileSize: file.size
+        }, {
+            headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
         });
 
     } catch (error) {
