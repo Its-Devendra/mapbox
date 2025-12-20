@@ -21,30 +21,28 @@ export default function ProjectLogo({ logo, width = 120, height = 40, position =
         <div
             className={`absolute top-2 sm:top-4 ${positionClass} z-10 pointer-events-none project-logo-container ${position}`}
         >
-            {/* Background container with frosted glass effect */}
-            <div className="bg-white/90 backdrop-blur-md rounded-lg sm:rounded-xl shadow-lg p-1.5 sm:p-2.5 border border-white/50">
+            {/* Clean container - no extra padding or background */}
+            <div className="overflow-hidden rounded-lg sm:rounded-xl shadow-lg">
                 {/* Mobile logo - hidden on sm and up */}
                 <img
                     src={logoSrc}
                     alt="Project Logo"
-                    className="object-contain sm:hidden"
+                    className="sm:hidden block"
                     style={{
-                        maxWidth: `${mobileWidth}px`,
-                        maxHeight: `${mobileHeight}px`,
-                        width: 'auto',
-                        height: 'auto'
+                        width: `${mobileWidth}px`,
+                        height: `${mobileHeight}px`,
+                        objectFit: 'cover'
                     }}
                 />
                 {/* Desktop logo - hidden on mobile */}
                 <img
                     src={logoSrc}
                     alt="Project Logo"
-                    className="object-contain hidden sm:block"
+                    className="hidden sm:block"
                     style={{
-                        maxWidth: `${width}px`,
-                        maxHeight: `${height}px`,
-                        width: 'auto',
-                        height: 'auto'
+                        width: `${width}px`,
+                        height: `${height}px`,
+                        objectFit: 'cover'
                     }}
                 />
             </div>

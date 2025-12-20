@@ -15,6 +15,7 @@ import { bustCache } from '@/utils/cacheUtils';
 import { useMapboxDirections } from "@/hooks/useMapboxDirections";
 import { MAPBOX_CONFIG, SOURCE_IDS, LAYER_IDS } from "@/constants/mapConfig";
 import useCinematicTour from "@/hooks/useCinematicTour";
+import CinematicHUD from "./CinematicHUD";
 
 // Mapbox access token
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
@@ -127,11 +128,32 @@ export default function MapContainer({
   const [showLandmarkCard, setShowLandmarkCard] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
 
+  // Cinematic HUD State
+  const [hudState, setHudState] = useState({
+    isVisible: false,
+    landmark: null,
+    distance: 0,
+    duration: 0,
+    progress: 0,
+    bearing: 0,
+    isArrived: false
+  });
+
   // Custom hook for directions
   const { getDistanceAndDuration } = useMapboxDirections();
 
-  // Cinematic Tour Hook
-  const { startTour, stopTour, smoothFlyTo, isTourActive, currentStep, totalSteps } = useCinematicTour();
+  // Cinematic Tour Hook - Premium Camera System
+  const {
+    startTour,
+    stopTour,
+    smoothFlyTo,
+    landmarkHighlight,
+    startBreathing,
+    stopBreathing,
+    isTourActive,
+    currentStep,
+    totalSteps
+  } = useCinematicTour();
 
   /**
    * Get map settings with fallbacks
@@ -769,39 +791,72 @@ export default function MapContainer({
             essential: true
           });
         } else {
-          // TILTED VIEW: Cinematic Flight Sequence
-          isFlyingRef.current = true; // Mark flight as active
+          // TILTED VIEW: Cinematic Flight Sequence with HUD
+          isFlyingRef.current = true;
 
-          // 1. Cinematic flight to landmark
-          await smoothFlyTo(mapRef.current, {
-            center: destination.coordinates,
-            zoom: 18,     // Closer look
-            pitch: 70,    // More dramatic angle
-            bearing: bearingToLandmark
-          }, 7000);
+          // Calculate estimated travel time (approx 3.5s approach + 5s orbit)
+          const estimatedDuration = 8.5;
 
-          // 2. Pause to admire the landmark
-          if (mapRef.current && routeGenerationRef.current === currentGeneration && isFlyingRef.current) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
+          // Show HUD with destination info
+          setHudState({
+            isVisible: true,
+            landmark: destination,
+            distance: data.distance || 0,
+            duration: data.duration || estimatedDuration,
+            progress: 0,
+            bearing: bearingToLandmark,
+            isArrived: false
+          });
 
-          // 3. Majestic zoom out to show context (Top View)
+          // ═══════════════════════════════════════════════════════════════════
+          // CINEMATIC FLIGHT: Professional drone-style camera movement
+          // with Iron Man-style HUD overlay
+          // ═══════════════════════════════════════════════════════════════════
+
+          // Travel progress callback for HUD updates
+          const onTravelProgress = (progress, bearing, phase) => {
+            setHudState(prev => ({
+              ...prev,
+              progress: phase === 'approach' ? progress : 1,
+              bearing,
+              isArrived: phase === 'orbit'
+            }));
+          };
+
+          // Execute premium cinematic flight with HUD feedback
+          await landmarkHighlight(mapRef.current, {
+            coordinates: destination.coordinates,
+            title: destination.title
+          }, {
+            approachDuration: 3500,
+            orbitDuration: 5000,
+            orbitAngle: 180,
+            orbitZoom: 17.5,
+            orbitPitch: 60
+          }, onTravelProgress);
+
+          // Hide HUD after orbit completes
+          setTimeout(() => {
+            setHudState(prev => ({ ...prev, isVisible: false }));
+          }, 1500);
+
+          // Graceful reveal - zoom out to show route context
           if (mapRef.current && routeGenerationRef.current === currentGeneration && clientBuilding?.coordinates && isFlyingRef.current) {
-            isFlyingRef.current = false; // Flight finished
+            isFlyingRef.current = false;
 
             const bounds = new mapboxgl.LngLatBounds()
               .extend(clientBuilding.coordinates)
               .extend(destination.coordinates);
 
             mapRef.current.fitBounds(bounds, {
-              padding: { top: 150, bottom: 350, left: 150, right: 150 },
-              pitch: 0, // Switch to top view after arrival
-              bearing: 0,
-              duration: 4000,
+              padding: { top: 140, bottom: 340, left: 140, right: 140 },
+              pitch: 50,
+              bearing: bearingToLandmark * 0.3,
+              duration: 3000,
               essential: true
             });
           }
-          isFlyingRef.current = false; // Ensure cleared
+          isFlyingRef.current = false;
         }
       }
     } catch (error) {
@@ -1875,6 +1930,18 @@ export default function MapContainer({
       <div
         ref={mapContainerRef}
         className="w-full h-full relative"
+      />
+
+      {/* Cinematic HUD - Iron Man-style travel overlay */}
+      <CinematicHUD
+        isVisible={hudState.isVisible}
+        landmark={hudState.landmark}
+        distance={hudState.distance}
+        duration={hudState.duration}
+        progress={hudState.progress}
+        bearing={hudState.bearing}
+        isArrived={hudState.isArrived}
+        theme={theme}
       />
 
       {/* Cinematic Tour Controls */}
