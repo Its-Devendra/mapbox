@@ -940,7 +940,7 @@ export default function MapContainer({
           <div class="p-4 pt-3">
              <div class="flex items-start justify-between gap-2 mb-1">
                 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider leading-none" 
-                      style="color: ${accentColor}; background-color: ${toRgba(accentColor, 12)}; border: 1px solid ${toRgba(accentColor, 20)}">
+                      style="color: ${textColor}; background-color: ${toRgba(accentColor, 12)}; border: 1px solid ${toRgba(accentColor, 20)}">
                   ${place.categoryName || 'Place'}
                 </span>
              </div>
@@ -992,7 +992,7 @@ export default function MapContainer({
               <div class="p-4 pt-3">
                 <div class="flex items-start justify-between gap-2 mb-1">
                     <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider leading-none" 
-                          style="color: ${accentColor}; background-color: ${toRgba(accentColor, 12)}; border: 1px solid ${toRgba(accentColor, 20)}">
+                          style="color: ${textColor}; background-color: ${toRgba(accentColor, 12)}; border: 1px solid ${toRgba(accentColor, 20)}">
                       ${place.categoryName || 'Place'}
                     </span>
                  </div>
