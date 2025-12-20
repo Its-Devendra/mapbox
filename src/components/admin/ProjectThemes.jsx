@@ -162,9 +162,9 @@ export default function ProjectThemes({ projectId }) {
           nearbyPrimaryOpacity: parseInt(formData.nearbyPrimaryOpacity) || 100,
           nearbySecondaryOpacity: parseInt(formData.nearbySecondaryOpacity) || 100,
           nearbyTertiaryOpacity: parseInt(formData.nearbyTertiaryOpacity) || 100,
-          nearbyPrimary: formData.nearbyPrimary,
-          nearbySecondary: formData.nearbySecondary,
-          nearbyTertiary: formData.nearbyTertiary,
+          nearbyPrimary: formData.nearbyPrimary || '#ffffff',
+          nearbySecondary: formData.nearbySecondary || '#1e3a8a',
+          nearbyTertiary: formData.nearbyTertiary || '#3b82f6',
         }),
       });
 
@@ -216,6 +216,18 @@ export default function ProjectThemes({ projectId }) {
       primaryOpacity: theme.primaryOpacity ?? 100,
       secondaryOpacity: theme.secondaryOpacity ?? 100,
       tertiaryOpacity: theme.tertiaryOpacity ?? 100,
+      // Nearby Tooltip Glass Controls
+      nearbyGlassEnabled: theme.nearbyGlassEnabled ?? true,
+      nearbyGlassBlur: theme.nearbyGlassBlur ?? 50,
+      nearbyGlassSaturation: theme.nearbyGlassSaturation ?? 200,
+      nearbyGlassOpacity: theme.nearbyGlassOpacity ?? 25,
+      nearbyBorderOpacity: theme.nearbyBorderOpacity ?? 35,
+      nearbyPrimaryOpacity: theme.nearbyPrimaryOpacity ?? 100,
+      nearbySecondaryOpacity: theme.nearbySecondaryOpacity ?? 100,
+      nearbyTertiaryOpacity: theme.nearbyTertiaryOpacity ?? 100,
+      nearbyPrimary: theme.nearbyPrimary || '#ffffff',
+      nearbySecondary: theme.nearbySecondary || '#1e3a8a',
+      nearbyTertiary: theme.nearbyTertiary || '#3b82f6',
     });
     setShowModal(true);
   };
@@ -267,6 +279,18 @@ export default function ProjectThemes({ projectId }) {
       primaryOpacity: 100,
       secondaryOpacity: 100,
       tertiaryOpacity: 100,
+      // Nearby Tooltip Glass Controls
+      nearbyGlassEnabled: true,
+      nearbyGlassBlur: 50,
+      nearbyGlassSaturation: 200,
+      nearbyGlassOpacity: 25,
+      nearbyBorderOpacity: 35,
+      nearbyPrimaryOpacity: 100,
+      nearbySecondaryOpacity: 100,
+      nearbyTertiaryOpacity: 100,
+      nearbyPrimary: '#ffffff',
+      nearbySecondary: '#1e3a8a',
+      nearbyTertiary: '#3b82f6',
     });
   };
 

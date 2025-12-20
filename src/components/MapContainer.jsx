@@ -8,6 +8,7 @@ import {
   createSVGImage,
   debounce,
   formatDistance,
+  formatDuration,
   getIconSize,
   easeInOutCubic
 } from "@/utils/mapUtils";
@@ -15,7 +16,6 @@ import { bustCache } from '@/utils/cacheUtils';
 import { useMapboxDirections } from "@/hooks/useMapboxDirections";
 import { MAPBOX_CONFIG, SOURCE_IDS, LAYER_IDS } from "@/constants/mapConfig";
 import useCinematicTour from "@/hooks/useCinematicTour";
-import CinematicHUD from "./CinematicHUD";
 
 // Mapbox access token
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
@@ -76,7 +76,19 @@ export default function MapContainer({
     secondary: '#ffffff',
     tertiary: '#64748b',
     quaternary: '#f1f5f9',
-    mapboxStyle: 'mapbox://styles/mapbox/dark-v11'
+    mapboxStyle: 'mapbox://styles/mapbox/dark-v11',
+    // Nearby tooltip defaults
+    nearbyGlassEnabled: true,
+    nearbyGlassBlur: 50,
+    nearbyGlassSaturation: 200,
+    nearbyGlassOpacity: 25,
+    nearbyBorderOpacity: 35,
+    nearbyPrimaryOpacity: 100,
+    nearbySecondaryOpacity: 100,
+    nearbyTertiaryOpacity: 100,
+    nearbyPrimary: '#ffffff',
+    nearbySecondary: '#1e3a8a',
+    nearbyTertiary: '#3b82f6'
   });
   const [themeLoading, setThemeLoading] = useState(true);
 
@@ -128,32 +140,11 @@ export default function MapContainer({
   const [showLandmarkCard, setShowLandmarkCard] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
 
-  // Cinematic HUD State
-  const [hudState, setHudState] = useState({
-    isVisible: false,
-    landmark: null,
-    distance: 0,
-    duration: 0,
-    progress: 0,
-    bearing: 0,
-    isArrived: false
-  });
-
   // Custom hook for directions
   const { getDistanceAndDuration } = useMapboxDirections();
 
-  // Cinematic Tour Hook - Premium Camera System
-  const {
-    startTour,
-    stopTour,
-    smoothFlyTo,
-    landmarkHighlight,
-    startBreathing,
-    stopBreathing,
-    isTourActive,
-    currentStep,
-    totalSteps
-  } = useCinematicTour();
+  // Cinematic Tour Hook
+  const { startTour, stopTour, smoothFlyTo, isTourActive, currentStep, totalSteps } = useCinematicTour();
 
   /**
    * Get map settings with fallbacks
@@ -791,56 +782,31 @@ export default function MapContainer({
             essential: true
           });
         } else {
-          // TILTED VIEW: Cinematic Flight Sequence with HUD
-          isFlyingRef.current = true;
-
-          // Calculate estimated travel time (approx 3.5s approach + 5s orbit)
-          const estimatedDuration = 8.5;
-
-          // Show HUD with destination info
-          setHudState({
-            isVisible: true,
-            landmark: destination,
-            distance: data.distance || 0,
-            duration: data.duration || estimatedDuration,
-            progress: 0,
-            bearing: bearingToLandmark,
-            isArrived: false
-          });
+          // TILTED VIEW: Cinematic Flight Sequence
+          isFlyingRef.current = true; // Mark flight as active
 
           // ═══════════════════════════════════════════════════════════════════
           // CINEMATIC FLIGHT: Professional drone-style camera movement
-          // with Iron Man-style HUD overlay
+          // Inspired by real estate cinematography and film techniques
           // ═══════════════════════════════════════════════════════════════════
 
-          // Travel progress callback for HUD updates
-          const onTravelProgress = (progress, bearing, phase) => {
-            setHudState(prev => ({
-              ...prev,
-              progress: phase === 'approach' ? progress : 1,
-              bearing,
-              isArrived: phase === 'orbit'
-            }));
-          };
+          // 1. Cinematic approach - smooth with parabolic arc (sweeping motion)
+          // Duration: 5 seconds for premium, graceful feel
+          await smoothFlyTo(mapRef.current, {
+            center: destination.coordinates,
+            zoom: 17,        // Good viewing distance
+            pitch: 55,       // Dramatic but clear angle
+            bearing: bearingToLandmark  // Arrive facing the landmark
+          }, 5000);  // 5 seconds: Professional pacing
 
-          // Execute premium cinematic flight with HUD feedback
-          await landmarkHighlight(mapRef.current, {
-            coordinates: destination.coordinates,
-            title: destination.title
-          }, {
-            approachDuration: 3500,
-            orbitDuration: 5000,
-            orbitAngle: 180,
-            orbitZoom: 17.5,
-            orbitPitch: 60
-          }, onTravelProgress);
+          // 2. Hold shot - let viewer appreciate the landmark
+          // This is crucial for premium feel - never rush past content
+          if (mapRef.current && routeGenerationRef.current === currentGeneration && isFlyingRef.current) {
+            await new Promise(resolve => setTimeout(resolve, 1500));  // 1.5s pause
+          }
 
-          // Hide HUD after orbit completes
-          setTimeout(() => {
-            setHudState(prev => ({ ...prev, isVisible: false }));
-          }, 1500);
-
-          // Graceful reveal - zoom out to show route context
+          // 3. Graceful reveal - zoom out to show route context
+          // Maintains 3D perspective for premium depth feel
           if (mapRef.current && routeGenerationRef.current === currentGeneration && clientBuilding?.coordinates && isFlyingRef.current) {
             isFlyingRef.current = false;
 
@@ -850,9 +816,9 @@ export default function MapContainer({
 
             mapRef.current.fitBounds(bounds, {
               padding: { top: 140, bottom: 340, left: 140, right: 140 },
-              pitch: 50,
-              bearing: bearingToLandmark * 0.3,
-              duration: 3000,
+              pitch: 50,  // Maintain 3D depth for premium feel
+              bearing: bearingToLandmark * 0.3,  // Subtle rotation adds visual interest
+              duration: 3000,  // 3 seconds for smooth, elegant transition
               essential: true
             });
           }
@@ -1063,13 +1029,17 @@ export default function MapContainer({
         // Popup already shows "Calculating..." which is fine, or we could update to "Error"
         if (nearbyPlacePopupRef.current === popup) {
           const errorContent = `
-            <div class="bg-white rounded-lg shadow-lg overflow-hidden" style="min-width: 200px; max-width: 280px;">
-              <div class="h-1.5" style="background-color: ${categoryColor}"></div>
-              <div class="p-4">
-                <h3 class="font-bold text-sm text-gray-900 leading-snug">${place.title}</h3>
-                <span class="inline-block text-[8px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide mt-1.5" style="color: ${categoryColor}; background-color: ${categoryColor}10">
-                  ${place.categoryName || 'Place'}
-                </span>
+            ${overrideStyles}
+            <div class="nearby-popup-content" style="${popupStyle.replace(/\n/g, '')}">
+              <div class="h-1.5" style="background-color: ${accentColor}"></div>
+              <div class="p-4 pt-3">
+                <div class="flex items-start justify-between gap-2 mb-1">
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider leading-none" 
+                          style="color: ${accentColor}; background-color: ${toRgba(accentColor, 12)}; border: 1px solid ${toRgba(accentColor, 20)}">
+                      ${place.categoryName || 'Place'}
+                    </span>
+                 </div>
+                <h3 class="font-bold text-sm leading-tight" style="color: ${textColor}">${place.title}</h3>
               </div>
             </div>
           `;
@@ -1079,7 +1049,7 @@ export default function MapContainer({
     } catch (error) {
       console.error('Error showing nearby place tooltip:', error);
     }
-  }, [nearbyPlaces, clientBuilding, getDistanceAndDuration]);
+  }, [nearbyPlaces, clientBuilding, getDistanceAndDuration, theme]);
 
 
 
@@ -1880,7 +1850,7 @@ export default function MapContainer({
     };
 
     updateMarkers();
-  }, [landmarks, nearbyPlaces, clientBuilding, project, loadCustomIcons, getDirections, handleNearbyPlaceLeave, getDistanceAndDuration, isMapLoaded]);
+  }, [landmarks, nearbyPlaces, clientBuilding, project, loadCustomIcons, getDirections, handleNearbyPlaceLeave, getDistanceAndDuration, isMapLoaded, theme]);
 
   /**
    * Close landmark card handler
@@ -1930,18 +1900,6 @@ export default function MapContainer({
       <div
         ref={mapContainerRef}
         className="w-full h-full relative"
-      />
-
-      {/* Cinematic HUD - Iron Man-style travel overlay */}
-      <CinematicHUD
-        isVisible={hudState.isVisible}
-        landmark={hudState.landmark}
-        distance={hudState.distance}
-        duration={hudState.duration}
-        progress={hudState.progress}
-        bearing={hudState.bearing}
-        isArrived={hudState.isArrived}
-        theme={theme}
       />
 
       {/* Cinematic Tour Controls */}

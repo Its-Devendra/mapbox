@@ -132,7 +132,7 @@ function MapPageContent() {
           const themesData = Array.isArray(themesResponse) ? themesResponse : (themesResponse.items || themesResponse.themes || []);
           const theme = themesData.find(t => t.isActive && t.projectId === projectId);
           if (theme) {
-            // Landmark Theme (Standard fields + glass controls)
+            // Landmark Theme (Standard fields + glass controls + nearby controls)
             activeTheme = {
               primary: theme.primary,
               secondary: theme.secondary,
@@ -148,6 +148,19 @@ function MapPageContent() {
               primaryOpacity: theme.primaryOpacity ?? 100,
               secondaryOpacity: theme.secondaryOpacity ?? 100,
               tertiaryOpacity: theme.tertiaryOpacity ?? 100,
+              // Nearby Tooltip Glass Controls
+              nearbyGlassEnabled: theme.nearbyGlassEnabled ?? true,
+              nearbyGlassBlur: theme.nearbyGlassBlur ?? 50,
+              nearbyGlassSaturation: theme.nearbyGlassSaturation ?? 200,
+              nearbyGlassOpacity: theme.nearbyGlassOpacity ?? 25,
+              nearbyBorderOpacity: theme.nearbyBorderOpacity ?? 35,
+              nearbyPrimaryOpacity: theme.nearbyPrimaryOpacity ?? 100,
+              nearbySecondaryOpacity: theme.nearbySecondaryOpacity ?? 100,
+              nearbyTertiaryOpacity: theme.nearbyTertiaryOpacity ?? 100,
+              // Nearby Tooltip Colors
+              nearbyPrimary: theme.nearbyPrimary || '#ffffff',
+              nearbySecondary: theme.nearbySecondary || '#1e3a8a',
+              nearbyTertiary: theme.nearbyTertiary || '#3b82f6',
             };
 
             // Filter Theme (Filter specific fields + glass controls)
