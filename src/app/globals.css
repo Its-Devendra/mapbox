@@ -65,6 +65,33 @@ body {
   z-index: 50; /* Ensure it's above other elements */
 }
 
+/* Client Building Tooltip/Tippy Styling - FULLY TRANSPARENT WRAPPER */
+.client-building-tippy {
+  z-index: 100 !important;
+}
+
+.client-building-tippy .mapboxgl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+.client-building-tippy .mapboxgl-popup-tip {
+  display: none !important;
+  border: none !important;
+}
+
+/* Remove any wrapper styling */
+.client-building-tippy .mapboxgl-popup-content-wrapper,
+.client-building-tippy > div {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
 /* Responsive Nearby Popup Styles */
 .nearby-popup-premium .mapboxgl-popup-content {
   padding: 0 !important;

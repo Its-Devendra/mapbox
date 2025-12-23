@@ -9,11 +9,81 @@ mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
     "pk.eyJ1IjoiZGV2Yml0czA5IiwiYSI6ImNtYzkyZTR2dDE0MDAyaXMzdXRndjJ0M2EifQ.Jhhx-1tf_NzrZNjGX8wp_w";
 
 /**
+ * Create a custom HTML marker element from SVG icon
+ */
+function createCustomMarkerElement(icon, width = 32, height = 32, color = null) {
+    const el = document.createElement('div');
+    el.style.width = `${width}px`;
+    el.style.height = `${height}px`;
+    el.style.cursor = 'pointer';
+
+    // Check if icon is SVG content
+    if (icon && typeof icon === 'string' && (icon.trim().toLowerCase().startsWith('<svg') || icon.includes('<svg'))) {
+        el.innerHTML = icon;
+        const svg = el.querySelector('svg');
+        if (svg) {
+            svg.style.width = '100%';
+            svg.style.height = '100%';
+            if (color) {
+                svg.style.fill = color;
+                svg.style.color = color;
+            }
+        }
+    } else {
+        // Fallback to a colored circle if no valid SVG
+        el.style.backgroundColor = color || '#3b82f6';
+        el.style.borderRadius = '50%';
+        el.style.border = '2px solid white';
+        el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+    }
+
+    return el;
+}
+
+/**
+ * Generate a GeoJSON circle polygon from center point and radius
+ * @param {number} centerLng - Center longitude
+ * @param {number} centerLat - Center latitude
+ * @param {number} radiusKm - Radius in kilometers
+ * @param {number} points - Number of points to use (more = smoother circle)
+ * @returns {object} GeoJSON Feature with Polygon geometry
+ */
+function generateCircleGeoJSON(centerLng, centerLat, radiusKm, points = 64) {
+    const coordinates = [];
+    const earthRadiusKm = 6371;
+
+    for (let i = 0; i <= points; i++) {
+        const angle = (i * 360) / points;
+        const radians = angle * Math.PI / 180;
+
+        // Calculate offset using Haversine formula inverse
+        const latOffset = (radiusKm / earthRadiusKm) * (180 / Math.PI);
+        const lngOffset = (radiusKm / earthRadiusKm) * (180 / Math.PI) / Math.cos(centerLat * Math.PI / 180);
+
+        const lat = centerLat + latOffset * Math.sin(radians);
+        const lng = centerLng + lngOffset * Math.cos(radians);
+
+        coordinates.push([lng, lat]);
+    }
+
+    return {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+            type: 'Polygon',
+            coordinates: [coordinates]
+        }
+    };
+}
+
+/**
  * Interactive Map Preview Component
- * Provides visual editing of camera position and map bounds
+ * Provides visual editing of camera position, map bounds, and distance radius
  * 
- * @param {string} mode - 'camera' or 'bounds'
+ * @param {string} mode - 'camera', 'bounds', or 'distance'
  * @param {object} value - Current camera/bounds configuration
+ * @param {number} distanceKm - Distance in km for 'distance' mode circle
+ * @param {object} panCenter - Custom center point {lat, lng} for distance mode (optional)
  * @param {function} onChange - Callback when map state changes
  * @param {string} mapStyle - Mapbox style URL
  * @param {array} landmarks - Array of landmark objects to display
@@ -23,6 +93,9 @@ mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
 export default function InteractiveMapPreview({
     mode = 'camera',
     value,
+    distanceKm = null,
+    panCenter = null,
+    zoomSettings = null, // {minZoom, maxZoom, defaultZoom} for zoom mode
     onChange,
     mapStyle = 'mapbox://styles/mapbox/dark-v11',
     landmarks = [],
@@ -32,30 +105,55 @@ export default function InteractiveMapPreview({
     const mapContainerRef = useRef();
     const mapRef = useRef();
     const boundsRectRef = useRef(null);
+    const distanceCenterRef = useRef(null); // Draggable center marker for distance mode
     const [isReady, setIsReady] = useState(false);
     const [currentCamera, setCurrentCamera] = useState(null);
+    const [currentZoom, setCurrentZoom] = useState(null); // For zoom mode
+
+    // Scale factor for preview - icons are designed for full map, scale them down for preview
+    const PREVIEW_SCALE = 0.6;
 
     // Initialize map
     useEffect(() => {
         if (!mapContainerRef.current || mapRef.current) return;
 
-        const initialCenter = mode === 'camera' && value?.lng && value?.lat
-            ? [value.lng, value.lat]
-            : [77.08, 28.49];
+        // Priority: 1) Provided value, 2) Client building location, 3) Default Gurugram
+        let initialCenter = [77.08, 28.49]; // Default fallback
 
-        const initialZoom = mode === 'camera' && value?.zoom ? value.zoom : 12;
-        const initialPitch = mode === 'camera' && value?.pitch !== undefined ? value.pitch : 70;
-        const initialBearing = mode === 'camera' && value?.bearing !== undefined ? value.bearing : -20;
+        if (mode === 'camera' && value?.lng && value?.lat) {
+            initialCenter = [value.lng, value.lat];
+        } else if (clientBuilding && clientBuilding.coordinates) {
+            // Auto-center on client building when opening
+            initialCenter = clientBuilding.coordinates;
+        }
+
+        // For zoom mode, use zoomSettings; for camera mode, use value
+        let initialZoom = 15;
+        if (mode === 'zoom' && zoomSettings?.defaultZoom) {
+            initialZoom = zoomSettings.defaultZoom;
+        } else if (mode === 'camera' && value?.zoom) {
+            initialZoom = value.zoom;
+        }
+
+        const initialPitch = mode === 'camera' && value?.pitch !== undefined ? value.pitch : (mode === 'zoom' ? 0 : 70);
+        const initialBearing = mode === 'camera' && value?.bearing !== undefined ? value.bearing : 0;
+
+        // In zoom mode, allow FREE scrolling from 0-22 so users can set any level
+        // The actual constraints are only for display/reference, not enforced on the preview map
+        const minZoom = 0;  // Always allow full range in preview
+        const maxZoom = 22;
 
         const map = new mapboxgl.Map({
             container: mapContainerRef.current,
             style: mapStyle,
             center: initialCenter,
             zoom: initialZoom,
+            minZoom: minZoom,
+            maxZoom: maxZoom,
             pitch: initialPitch,
             bearing: initialBearing,
-            dragRotate: true,
-            pitchWithRotate: true
+            dragRotate: mode !== 'zoom',
+            pitchWithRotate: mode !== 'zoom'
         });
 
         // Add navigation controls
@@ -64,46 +162,179 @@ export default function InteractiveMapPreview({
         map.on('load', () => {
             setIsReady(true);
 
-            // Add client building marker if exists
+            // Add client building marker if exists (with custom icon if available)
             if (clientBuilding && clientBuilding.coordinates) {
-                new mapboxgl.Marker({ color: '#10b981', scale: 1.2 })
-                    .setLngLat(clientBuilding.coordinates)
-                    .setPopup(new mapboxgl.Popup().setHTML(`
-                        <div class="font-semibold">${clientBuilding.name || 'Client Building'}</div>
-                        <div class="text-xs text-gray-600">🏢 Main Building</div>
-                    `))
-                    .addTo(map);
-            }
+                const buildingIcon = clientBuilding.icon;
+                const iconWidth = Math.round((clientBuilding.iconWidth || 40) * PREVIEW_SCALE);
+                const iconHeight = Math.round((clientBuilding.iconHeight || 40) * PREVIEW_SCALE);
 
-            // Add landmark markers
-            landmarks.forEach(landmark => {
-                if (landmark.longitude && landmark.latitude) {
-                    new mapboxgl.Marker({ color: '#3b82f6', scale: 0.9 })
-                        .setLngLat([landmark.longitude, landmark.latitude])
+                if (buildingIcon && typeof buildingIcon === 'string' && buildingIcon.includes('<svg')) {
+                    // Use custom SVG icon
+                    const el = createCustomMarkerElement(buildingIcon, iconWidth, iconHeight, '#10b981');
+                    new mapboxgl.Marker({ element: el })
+                        .setLngLat(clientBuilding.coordinates)
                         .setPopup(new mapboxgl.Popup().setHTML(`
-                            <div class="font-semibold">${landmark.title}</div>
-                            <div class="text-xs text-gray-600">🗺️ Landmark</div>
+                            <div class="font-semibold">${clientBuilding.name || 'Client Building'}</div>
+                            <div class="text-xs text-gray-600">🏢 Main Building</div>
+                        `))
+                        .addTo(map);
+                } else {
+                    // Fallback to default marker
+                    new mapboxgl.Marker({ color: '#10b981', scale: 0.8 })
+                        .setLngLat(clientBuilding.coordinates)
+                        .setPopup(new mapboxgl.Popup().setHTML(`
+                            <div class="font-semibold">${clientBuilding.name || 'Client Building'}</div>
+                            <div class="text-xs text-gray-600">🏢 Main Building</div>
                         `))
                         .addTo(map);
                 }
+            }
+
+            // Add landmark markers with real icons
+            landmarks.forEach(landmark => {
+                if (landmark.longitude && landmark.latitude) {
+                    // Get icon from landmark or category
+                    const icon = landmark.icon || landmark.category?.icon;
+                    const iconWidth = Math.round((landmark.iconWidth || landmark.category?.defaultIconWidth || 32) * PREVIEW_SCALE);
+                    const iconHeight = Math.round((landmark.iconHeight || landmark.category?.defaultIconHeight || 32) * PREVIEW_SCALE);
+
+                    if (icon && typeof icon === 'string' && icon.includes('<svg')) {
+                        // Use custom SVG icon
+                        const el = createCustomMarkerElement(icon, iconWidth, iconHeight);
+                        new mapboxgl.Marker({ element: el })
+                            .setLngLat([landmark.longitude, landmark.latitude])
+                            .setPopup(new mapboxgl.Popup().setHTML(`
+                                <div class="font-semibold">${landmark.title}</div>
+                                <div class="text-xs text-gray-600">${landmark.category?.name || '🗺️ Landmark'}</div>
+                            `))
+                            .addTo(map);
+                    } else {
+                        // Fallback to default marker
+                        new mapboxgl.Marker({ color: '#3b82f6', scale: 0.7 })
+                            .setLngLat([landmark.longitude, landmark.latitude])
+                            .setPopup(new mapboxgl.Popup().setHTML(`
+                                <div class="font-semibold">${landmark.title}</div>
+                                <div class="text-xs text-gray-600">${landmark.category?.name || '🗺️ Landmark'}</div>
+                            `))
+                            .addTo(map);
+                    }
+                }
             });
 
-            // Add nearby place markers
+            // Add nearby place markers with real icons
             nearbyPlaces.forEach(place => {
                 if (place.longitude && place.latitude) {
-                    new mapboxgl.Marker({ color: '#8b5cf6', scale: 0.8 })
-                        .setLngLat([place.longitude, place.latitude])
-                        .setPopup(new mapboxgl.Popup().setHTML(`
-                            <div class="font-semibold">${place.title}</div>
-                            <div class="text-xs text-gray-600">📍 Nearby Place</div>
-                        `))
-                        .addTo(map);
+                    // Get icon from place or category
+                    const icon = place.icon || place.category?.icon;
+                    const iconWidth = Math.round((place.iconWidth || place.category?.defaultIconWidth || 28) * PREVIEW_SCALE);
+                    const iconHeight = Math.round((place.iconHeight || place.category?.defaultIconHeight || 28) * PREVIEW_SCALE);
+                    const color = place.color || '#8b5cf6';
+
+                    if (icon && typeof icon === 'string' && icon.includes('<svg')) {
+                        // Use custom SVG icon
+                        const el = createCustomMarkerElement(icon, iconWidth, iconHeight, color);
+                        new mapboxgl.Marker({ element: el })
+                            .setLngLat([place.longitude, place.latitude])
+                            .setPopup(new mapboxgl.Popup().setHTML(`
+                                <div class="font-semibold">${place.title}</div>
+                                <div class="text-xs text-gray-600">${place.category?.name || '📍 Nearby Place'}</div>
+                            `))
+                            .addTo(map);
+                    } else {
+                        // Fallback to default marker
+                        new mapboxgl.Marker({ color: color, scale: 0.8 })
+                            .setLngLat([place.longitude, place.latitude])
+                            .setPopup(new mapboxgl.Popup().setHTML(`
+                                <div class="font-semibold">${place.title}</div>
+                                <div class="text-xs text-gray-600">${place.category?.name || '📍 Nearby Place'}</div>
+                            `))
+                            .addTo(map);
+                    }
                 }
             });
 
             // Initialize bounds rectangle in bounds mode
             if (mode === 'bounds') {
                 initializeBoundsEditor(map);
+            }
+
+            // Initialize distance circle in distance mode
+            if (mode === 'distance' && clientBuilding?.coordinates && distanceKm) {
+                // Use custom panCenter if provided, otherwise fall back to clientBuilding
+                const centerLng = panCenter?.lng ?? clientBuilding.coordinates[0];
+                const centerLat = panCenter?.lat ?? clientBuilding.coordinates[1];
+
+                // Generate and add circle
+                const circleGeoJSON = generateCircleGeoJSON(centerLng, centerLat, distanceKm);
+
+                map.addSource('distance-circle', {
+                    type: 'geojson',
+                    data: circleGeoJSON
+                });
+
+                // Add fill layer (semi-transparent)
+                map.addLayer({
+                    id: 'distance-circle-fill',
+                    type: 'fill',
+                    source: 'distance-circle',
+                    paint: {
+                        'fill-color': '#8b5cf6',
+                        'fill-opacity': 0.15
+                    }
+                });
+
+                // Add outline layer
+                map.addLayer({
+                    id: 'distance-circle-outline',
+                    type: 'line',
+                    source: 'distance-circle',
+                    paint: {
+                        'line-color': '#8b5cf6',
+                        'line-width': 3,
+                        'line-dasharray': [3, 2]
+                    }
+                });
+
+                // Create draggable center marker
+                const centerMarkerEl = document.createElement('div');
+                centerMarkerEl.style.width = '24px';
+                centerMarkerEl.style.height = '24px';
+                centerMarkerEl.style.backgroundColor = '#8b5cf6';
+                centerMarkerEl.style.borderRadius = '50%';
+                centerMarkerEl.style.border = '3px solid white';
+                centerMarkerEl.style.boxShadow = '0 3px 8px rgba(0,0,0,0.4)';
+                centerMarkerEl.style.cursor = 'move';
+                centerMarkerEl.title = 'Drag to adjust center point';
+
+                const centerMarker = new mapboxgl.Marker({
+                    element: centerMarkerEl,
+                    draggable: true
+                })
+                    .setLngLat([centerLng, centerLat])
+                    .addTo(map);
+
+                distanceCenterRef.current = centerMarker;
+
+                // Update circle when marker is dragged
+                centerMarker.on('drag', () => {
+                    const lngLat = centerMarker.getLngLat();
+                    const newCircleGeoJSON = generateCircleGeoJSON(lngLat.lng, lngLat.lat, distanceKm);
+
+                    if (map.getSource('distance-circle')) {
+                        map.getSource('distance-circle').setData(newCircleGeoJSON);
+                    }
+                });
+
+                // Call onChange when drag ends
+                centerMarker.on('dragend', () => {
+                    const lngLat = centerMarker.getLngLat();
+                    if (onChange) {
+                        onChange({
+                            panCenterLat: parseFloat(lngLat.lat.toFixed(6)),
+                            panCenterLng: parseFloat(lngLat.lng.toFixed(6))
+                        });
+                    }
+                });
             }
         });
 
@@ -128,6 +359,23 @@ export default function InteractiveMapPreview({
 
             // Initial camera state
             updateCamera();
+        }
+
+        // Track zoom changes in zoom mode
+        if (mode === 'zoom') {
+            const updateZoom = () => {
+                const zoom = parseFloat(map.getZoom().toFixed(2));
+                setCurrentZoom(zoom);
+                // Call onChange to pass zoom to parent
+                if (onChange) {
+                    onChange({ zoom: zoom });
+                }
+            };
+
+            map.on('zoom', updateZoom);
+
+            // Initial zoom state
+            updateZoom();
         }
 
         mapRef.current = map;
@@ -258,7 +506,9 @@ export default function InteractiveMapPreview({
 
     // "Set Camera" button handler
     const handleSetCamera = () => {
+        console.log('📷 handleSetCamera called:', { mode, currentCamera, hasOnChange: !!onChange });
         if (mode === 'camera' && currentCamera && onChange) {
+            console.log('📷 Calling onChange with camera:', currentCamera);
             onChange(currentCamera);
         }
     };
@@ -298,28 +548,112 @@ export default function InteractiveMapPreview({
             />
 
             {mode === 'camera' && currentCamera && (
-                <div className="space-y-2">
-                    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-lg border border-indigo-200">
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                            <div>
-                                <span className="text-gray-600 font-medium">Latitude:</span>
-                                <div className="font-mono text-indigo-700 font-semibold">{currentCamera.lat}°</div>
+                <div className="space-y-3">
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 space-y-4">
+                        {/* Position Info */}
+                        <div className="grid grid-cols-3 gap-3 text-sm">
+                            <div className="text-center p-2 bg-gray-50 rounded-lg">
+                                <span className="text-gray-500 text-xs block uppercase tracking-wide">Latitude</span>
+                                <div className="font-mono text-gray-900 font-semibold">{currentCamera.lat}°</div>
                             </div>
-                            <div>
-                                <span className="text-gray-600 font-medium">Longitude:</span>
-                                <div className="font-mono text-indigo-700 font-semibold">{currentCamera.lng}°</div>
+                            <div className="text-center p-2 bg-gray-50 rounded-lg">
+                                <span className="text-gray-500 text-xs block uppercase tracking-wide">Longitude</span>
+                                <div className="font-mono text-gray-900 font-semibold">{currentCamera.lng}°</div>
                             </div>
-                            <div>
-                                <span className="text-gray-600 font-medium">Zoom:</span>
-                                <div className="font-mono text-indigo-700 font-semibold">{currentCamera.zoom}</div>
+                            <div className="text-center p-2 bg-gray-50 rounded-lg">
+                                <span className="text-gray-500 text-xs block uppercase tracking-wide">Zoom</span>
+                                <div className="font-mono text-gray-900 font-semibold">{currentCamera.zoom}</div>
                             </div>
-                            <div>
-                                <span className="text-gray-600 font-medium">Pitch:</span>
-                                <div className="font-mono text-indigo-700 font-semibold">{currentCamera.pitch}°</div>
+                        </div>
+
+                        {/* Pitch Slider */}
+                        <div>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="text-gray-700 font-medium text-sm">Pitch (Tilt)</label>
+                                <span className="font-mono text-gray-900 font-medium text-sm bg-gray-100 px-2 py-0.5 rounded">{currentCamera.pitch}°</span>
                             </div>
-                            <div>
-                                <span className="text-gray-600 font-medium">Bearing:</span>
-                                <div className="font-mono text-indigo-700 font-semibold">{currentCamera.bearing}°</div>
+                            <input
+                                type="range"
+                                min="0"
+                                max="85"
+                                step="1"
+                                value={currentCamera.pitch}
+                                onChange={(e) => {
+                                    const newPitch = parseFloat(e.target.value);
+                                    setCurrentCamera(prev => ({ ...prev, pitch: newPitch }));
+                                    mapRef.current?.setPitch(newPitch);
+                                }}
+                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-900"
+                            />
+                            <div className="flex justify-between text-xs text-gray-400 mt-1">
+                                <span>0° (Flat)</span>
+                                <span>85° (Tilted)</span>
+                            </div>
+                        </div>
+
+                        {/* Bearing Slider */}
+                        <div>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="text-gray-700 font-medium text-sm">Bearing (Rotation)</label>
+                                <span className="font-mono text-gray-900 font-medium text-sm bg-gray-100 px-2 py-0.5 rounded">{currentCamera.bearing}°</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="-180"
+                                max="180"
+                                step="1"
+                                value={currentCamera.bearing}
+                                onChange={(e) => {
+                                    const newBearing = parseFloat(e.target.value);
+                                    setCurrentCamera(prev => ({ ...prev, bearing: newBearing }));
+                                    mapRef.current?.setBearing(newBearing);
+                                }}
+                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-900"
+                            />
+                            <div className="flex justify-between text-xs text-gray-400 mt-1">
+                                <span>-180°</span>
+                                <span>0° (North)</span>
+                                <span>180°</span>
+                            </div>
+                        </div>
+
+                        {/* Quick Presets */}
+                        <div className="border-t border-gray-100 pt-3">
+                            <label className="text-gray-600 text-xs block mb-2 uppercase tracking-wide">Presets</label>
+                            <div className="grid grid-cols-3 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setCurrentCamera(prev => ({ ...prev, pitch: 0, bearing: 0 }));
+                                        mapRef.current?.setPitch(0);
+                                        mapRef.current?.setBearing(0);
+                                    }}
+                                    className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                                >
+                                    2D Flat
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setCurrentCamera(prev => ({ ...prev, pitch: 60, bearing: -20 }));
+                                        mapRef.current?.setPitch(60);
+                                        mapRef.current?.setBearing(-20);
+                                    }}
+                                    className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                                >
+                                    3D City
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setCurrentCamera(prev => ({ ...prev, pitch: 70, bearing: 45 }));
+                                        mapRef.current?.setPitch(70);
+                                        mapRef.current?.setBearing(45);
+                                    }}
+                                    className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                                >
+                                    Cinematic
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -327,64 +661,53 @@ export default function InteractiveMapPreview({
                     <button
                         type="button"
                         onClick={handleSetCamera}
-                        className="w-full px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center space-x-2"
+                        className="w-full px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-medium transition-all"
                     >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>Set Camera Position</span>
+                        Apply Camera Position
                     </button>
-
-                    <p className="text-xs text-gray-600 italic text-center">
-                        🎥 Move, zoom, rotate, and tilt the map to find your perfect angle, then click "Set Camera Position"
-                    </p>
                 </div>
             )}
 
             {mode === 'bounds' && (
                 <div className="space-y-3">
-                    {/* Easy Method: Use Current View */}
+                    {/* Use Current View Button */}
                     <button
                         type="button"
                         onClick={handleUseCurrentView}
-                        className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg flex items-center justify-center space-x-2"
+                        className="w-full px-4 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-medium transition-all"
                     >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span>📍 Use Current View as Bounds</span>
+                        Use Current View as Bounds
                     </button>
 
-                    <div className="text-center text-xs text-gray-500">
-                        <strong className="text-purple-600">Easiest:</strong> Zoom/pan to desired area, then click button above
-                    </div>
+                    <p className="text-center text-xs text-gray-500">
+                        Zoom/pan to desired area, then click button above
+                    </p>
 
-                    {/* Instructions based on state */}
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm">
+                    {/* Instructions */}
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm">
                         {isReady === 'click-second' ? (
-                            <div className="text-purple-700 font-medium text-center">
-                                👆 <strong>Now click the opposite corner</strong> to complete the rectangle
+                            <div className="text-gray-700 font-medium text-center">
+                                Click the opposite corner to complete
                             </div>
                         ) : (
-                            <div className="text-gray-700">
-                                <strong className="text-purple-700">Two-click method:</strong><br />
-                                1️⃣ Click first corner → 2️⃣ Click opposite corner
+                            <div className="text-gray-600 text-xs">
+                                <span className="font-medium">Or:</span> Click first corner → Click opposite corner
                             </div>
                         )}
                     </div>
 
-                    {/* Show current bounds if set */}
+                    {/* Current bounds display */}
                     {value?.southWest && value?.northEast && (
-                        <div className="bg-green-50 p-3 rounded-lg border border-green-200 text-sm font-mono">
-                            <div className="text-green-700 font-semibold mb-1">✅ Bounds Set:</div>
-                            <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-sm font-mono">
+                            <div className="text-gray-700 font-medium mb-2 text-xs uppercase tracking-wide">Bounds Set</div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
                                 <div>
-                                    <span className="text-gray-600">SW:</span>
-                                    <div className="text-green-700">{value.southWest[1].toFixed(4)}, {value.southWest[0].toFixed(4)}</div>
+                                    <span className="text-gray-500">SW:</span>
+                                    <div className="text-gray-900">{value.southWest[1].toFixed(4)}, {value.southWest[0].toFixed(4)}</div>
                                 </div>
                                 <div>
-                                    <span className="text-gray-600">NE:</span>
-                                    <div className="text-green-700">{value.northEast[1].toFixed(4)}, {value.northEast[0].toFixed(4)}</div>
+                                    <span className="text-gray-500">NE:</span>
+                                    <div className="text-gray-900">{value.northEast[1].toFixed(4)}, {value.northEast[0].toFixed(4)}</div>
                                 </div>
                             </div>
                         </div>
@@ -394,9 +717,9 @@ export default function InteractiveMapPreview({
                     <button
                         type="button"
                         onClick={handleClearBounds}
-                        className="w-full px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-medium transition-colors"
+                        className="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm transition-colors"
                     >
-                        🗑️ Clear Bounds
+                        Clear Bounds
                     </button>
                 </div>
             )}

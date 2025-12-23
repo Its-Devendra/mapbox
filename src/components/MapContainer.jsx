@@ -60,6 +60,27 @@ function convertToMapboxStyleUrl(input) {
   return trimmed;
 }
 
+/**
+ * Calculate the Haversine distance between two geographic points
+ * @param {number} lat1 - Latitude of first point
+ * @param {number} lng1 - Longitude of first point
+ * @param {number} lat2 - Latitude of second point
+ * @param {number} lng2 - Longitude of second point
+ * @returns {number} Distance in kilometers
+ */
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 export default function MapContainer({
   landmarks = [],
   nearbyPlaces = [],
@@ -150,38 +171,8 @@ export default function MapContainer({
    * Get map settings with fallbacks
    */
   const getMapConfig = useCallback(() => {
-    // Check if all bound values are valid numbers (not null/undefined)
-    const hasBounds =
-      mapSettings?.southWestLat != null &&
-      mapSettings?.southWestLng != null &&
-      mapSettings?.northEastLat != null &&
-      mapSettings?.northEastLng != null;
-
-    // Add padding to bounds to prevent restrictive freeze (10% buffer)
-    let maxBounds = undefined;
-    if (hasBounds) {
-      const lngDiff = mapSettings.northEastLng - mapSettings.southWestLng;
-      const latDiff = mapSettings.northEastLat - mapSettings.southWestLat;
-
-      // Only apply bounds if they're reasonable (minimum 0.01 degrees)
-      if (Math.abs(lngDiff) > 0.01 && Math.abs(latDiff) > 0.01) {
-        const lngPadding = lngDiff * 0.1; // 10% padding
-        const latPadding = latDiff * 0.1; // 10% padding
-
-        maxBounds = [
-          [
-            mapSettings.southWestLng - lngPadding,
-            mapSettings.southWestLat - latPadding
-          ],
-          [
-            mapSettings.northEastLng + lngPadding,
-            mapSettings.northEastLat + latPadding
-          ]
-        ];
-      } else {
-        console.warn('Bounds too restrictive, ignoring maxBounds');
-      }
-    }
+    // Distance-based bounds - get max pan distance if configured
+    const maxPanDistanceKm = mapSettings?.maxPanDistanceKm || null;
 
     const config = {
       center: [
@@ -196,7 +187,8 @@ export default function MapContainer({
       interactive: interactive,
       dragRotate: mapSettings?.enableRotation ?? true,
       pitchWithRotate: mapSettings?.enablePitch ?? true,
-      maxBounds: maxBounds
+      // Distance-based bounds (no maxBounds - use event listener instead)
+      maxPanDistanceKm: maxPanDistanceKm
     };
     return config;
   }, [mapSettings, interactive]);
@@ -410,8 +402,8 @@ export default function MapContainer({
     // Restore original viewport
     if (originalViewportRef.current && mapRef.current) {
       try {
-        const targetPitch = viewModeRef.current === 'tilted' ? 70 : originalViewportRef.current.pitch || 0;
-        const targetBearing = viewModeRef.current === 'tilted' ? -20 : originalViewportRef.current.bearing || 0;
+        const targetPitch = viewModeRef.current === 'tilted' ? 70 : 0;
+        const targetBearing = viewModeRef.current === 'tilted' ? -20 : 0;
 
         mapRef.current.flyTo({
           center: originalViewportRef.current.center,
@@ -601,7 +593,10 @@ export default function MapContainer({
             data: {
               type: 'Feature',
               properties: {},
-              geometry: data.geometry
+              geometry: {
+                type: 'LineString',
+                coordinates: []
+              }
             }
           });
         }
@@ -710,7 +705,7 @@ export default function MapContainer({
         // Animate the route drawing - capture generation for animation closure
         const animationGeneration = currentGeneration;
         const animateRoute = () => {
-          const animationDuration = viewMode === 'top' ? 1000 : 5000; // Fast in top view, slow in cinematic
+          const animationDuration = viewModeRef.current === 'top' ? 2500 : 5000; // Slower in top view for better visibility
           const startTime = performance.now();
 
           const animate = (currentTime) => {
@@ -753,19 +748,8 @@ export default function MapContainer({
           animationFrameRef.current = requestAnimationFrame(animate);
         };
 
-        // Start route animation immediately (only in tilted view)
-        if (viewModeRef.current === 'tilted') {
-          animateRoute();
-        } else {
-          // In top view, show full route instantly
-          if (mapRef.current && mapRef.current.getSource(SOURCE_IDS.ROUTE)) {
-            mapRef.current.getSource(SOURCE_IDS.ROUTE).setData({
-              type: 'Feature',
-              properties: {},
-              geometry: data.geometry
-            });
-          }
-        }
+        // Always animate the route drawing
+        animateRoute();
 
         // LOGIC BRANCH BASED ON VIEW MODE
         if (viewModeRef.current === 'top') {
@@ -1215,12 +1199,48 @@ export default function MapContainer({
         hasMapSettings: !!mapSettings
       });
 
-      // Helper function to apply bounds after animation
-      const applyBoundsAfterAnimation = () => {
-        if (config.maxBounds) {
-          console.log('🔒 Applying map bounds after animation:', config.maxBounds);
-          mapRef.current.setMaxBounds(config.maxBounds);
+      // Distance-based bounds: Setup move event listener to restrict panning
+      const setupDistanceBounds = () => {
+        if (!config.maxPanDistanceKm || !clientBuilding?.coordinates) {
+          console.log('📍 Distance bounds: Not configured or no client building');
+          return;
         }
+
+        const maxDistance = config.maxPanDistanceKm;
+        // Use custom panCenter if configured, otherwise fall back to client building
+        const centerLng = mapSettings?.panCenterLng ?? clientBuilding.coordinates[0];
+        const centerLat = mapSettings?.panCenterLat ?? clientBuilding.coordinates[1];
+        let isEnforcing = false; // Prevent recursive calls
+
+        console.log('🔒 Setting up distance-based pan restriction:', maxDistance, 'km from', [centerLng, centerLat]);
+
+        const enforceDistanceBound = () => {
+          if (isEnforcing || !mapRef.current) return;
+
+          const currentCenter = mapRef.current.getCenter();
+          const distance = haversineDistance(centerLat, centerLng, currentCenter.lat, currentCenter.lng);
+
+          if (distance > maxDistance) {
+            isEnforcing = true;
+
+            // Calculate the point on the boundary circle (edge of allowed area)
+            const ratio = maxDistance / distance;
+            const newLat = centerLat + (currentCenter.lat - centerLat) * ratio;
+            const newLng = centerLng + (currentCenter.lng - centerLng) * ratio;
+
+            // Instantly jump to the edge - no animation, hard boundary
+            mapRef.current.jumpTo({ center: [newLng, newLat] });
+
+            // Reset flag on next frame
+            requestAnimationFrame(() => { isEnforcing = false; });
+          }
+        };
+
+        // Listen to MOVE event (during pan) for hard boundary instead of moveend (after pan)
+        mapRef.current.on('move', enforceDistanceBound);
+
+        // Store handler for cleanup
+        eventHandlersRef.current.push({ event: 'move', layer: null, handler: enforceDistanceBound });
       };
 
       // Convert duration to milliseconds if it's in seconds (less than 100 = seconds)
@@ -1239,8 +1259,8 @@ export default function MapContainer({
             duration: durationMs,
             essential: true
           });
-          // Apply bounds after animation duration
-          setTimeout(applyBoundsAfterAnimation, durationMs + 500);
+          // Setup distance-based pan restriction after animation
+          setTimeout(setupDistanceBounds, durationMs + 500);
         }, 500);
       } else {
         // ALWAYS play globe → client building animation (regardless of intro audio)
@@ -1255,8 +1275,8 @@ export default function MapContainer({
             duration: durationMs,
             essential: true
           });
-          // Apply bounds after animation duration
-          setTimeout(applyBoundsAfterAnimation, durationMs + 500);
+          // Setup distance-based pan restriction after animation
+          setTimeout(setupDistanceBounds, durationMs + 500);
         }, 500);
       }
 
@@ -1413,7 +1433,12 @@ export default function MapContainer({
       const layersToRemove = [
         LAYER_IDS.NEARBY_PLACES,
         LAYER_IDS.LANDMARKS,
-        LAYER_IDS.CLIENT_BUILDING
+        LAYER_IDS.CLIENT_BUILDING,
+        'client-building-core',
+        'client-building-glow',
+        'client-building-pulse-1',
+        'client-building-pulse-2',
+        'client-building-pulse-3'
       ];
 
       const sourcesToRemove = [
@@ -1437,99 +1462,6 @@ export default function MapContainer({
       // Remove all HTML markers
       markersRef.current.forEach(marker => marker.remove());
       markersRef.current = [];
-
-      // Add client building marker
-      if (clientBuilding) {
-        const clientPopup = new mapboxgl.Popup({ offset: MAPBOX_CONFIG.POPUP_OFFSET })
-          .setHTML(`
-            <div class="p-2">
-              <h3 class="font-bold text-lg mb-2 text-blue-600">${clientBuilding.name}</h3>
-              <p class="text-gray-600">${clientBuilding.description || 'Client Building'}</p>
-            </div>
-          `);
-
-        if (project?.clientBuildingIcon && mapRef.current.hasImage('client-building-icon')) {
-          // Use symbol layer for custom icon
-          mapRef.current.addSource(SOURCE_IDS.CLIENT_BUILDING, {
-            type: 'geojson',
-            data: {
-              type: 'Feature',
-              geometry: {
-                type: 'Point',
-                coordinates: clientBuilding.coordinates
-              },
-              properties: {
-                name: clientBuilding.name,
-                description: clientBuilding.description || 'Client Building'
-              }
-            }
-          });
-
-          mapRef.current.addLayer({
-            id: LAYER_IDS.CLIENT_BUILDING,
-            type: 'symbol',
-            source: SOURCE_IDS.CLIENT_BUILDING,
-            layout: {
-              'icon-image': 'client-building-icon',
-              'icon-size': MAPBOX_CONFIG.DEFAULT_MARKER_SIZE,
-              'icon-allow-overlap': true,
-              'icon-ignore-placement': true
-            }
-          });
-
-          // Click handler
-          const clientClickHandler = () => {
-            if (project?.clientBuildingUrl) {
-              window.open(project.clientBuildingUrl, '_blank', 'noopener,noreferrer');
-            } else {
-              clientPopup.setLngLat(clientBuilding.coordinates).addTo(mapRef.current);
-            }
-          };
-
-          // Hover handlers
-          const clientEnterHandler = () => {
-            mapRef.current.getCanvas().style.cursor = 'pointer';
-          };
-
-          const clientLeaveHandler = () => {
-            mapRef.current.getCanvas().style.cursor = '';
-          };
-
-          mapRef.current.on('click', LAYER_IDS.CLIENT_BUILDING, clientClickHandler);
-          mapRef.current.on('mouseenter', LAYER_IDS.CLIENT_BUILDING, clientEnterHandler);
-          mapRef.current.on('mouseleave', LAYER_IDS.CLIENT_BUILDING, clientLeaveHandler);
-
-          eventHandlersRef.current.push(
-            { event: 'click', layer: LAYER_IDS.CLIENT_BUILDING, handler: clientClickHandler },
-            { event: 'mouseenter', layer: LAYER_IDS.CLIENT_BUILDING, handler: clientEnterHandler },
-            { event: 'mouseleave', layer: LAYER_IDS.CLIENT_BUILDING, handler: clientLeaveHandler }
-          );
-        } else {
-          // Fallback to HTML marker
-          const clientMarkerEl = document.createElement('div');
-          clientMarkerEl.style.width = '20px';
-          clientMarkerEl.style.height = '20px';
-          clientMarkerEl.style.borderRadius = '50%';
-          clientMarkerEl.style.backgroundColor = '#3b82f6';
-          clientMarkerEl.style.border = '3px solid white';
-          clientMarkerEl.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
-          clientMarkerEl.style.cursor = 'pointer';
-
-          const clientMarker = new mapboxgl.Marker(clientMarkerEl)
-            .setLngLat(clientBuilding.coordinates)
-            .setPopup(clientPopup)
-            .addTo(mapRef.current);
-
-          if (project?.clientBuildingUrl) {
-            clientMarkerEl.addEventListener('click', (e) => {
-              e.stopPropagation();
-              window.open(project.clientBuildingUrl, '_blank', 'noopener,noreferrer');
-            });
-          }
-
-          markersRef.current.push(clientMarker);
-        }
-      }
 
       // Add landmarks
       if (landmarks.length > 0) {
@@ -1568,7 +1500,8 @@ export default function MapContainer({
             ],
             'icon-size': MAPBOX_CONFIG.DEFAULT_MARKER_SIZE,
             'icon-allow-overlap': true,
-            'icon-ignore-placement': true
+            'icon-ignore-placement': true,
+            'icon-anchor': 'bottom'
           },
           filter: ['get', 'hasIcon']
         });
@@ -1666,7 +1599,8 @@ export default function MapContainer({
             ],
             'icon-size': MAPBOX_CONFIG.DEFAULT_MARKER_SIZE * MAPBOX_CONFIG.NEARBY_PLACE_SIZE_FACTOR,
             'icon-allow-overlap': true,
-            'icon-ignore-placement': true
+            'icon-ignore-placement': true,
+            'icon-anchor': 'bottom'
           },
           paint: {
             'icon-opacity': MAPBOX_CONFIG.NEARBY_PLACE_OPACITY
@@ -1846,6 +1780,312 @@ export default function MapContainer({
             markersRef.current.push(marker);
           }
         });
+      }
+
+      // Add client building marker LAST so it appears on top of other markers (higher z-index)
+      if (clientBuilding) {
+        // Create hover tooltip popup with logo - positioned well above icon
+        const clientHoverPopup = new mapboxgl.Popup({
+          closeButton: false,
+          closeOnClick: false,
+          className: 'client-building-tippy',
+          anchor: 'bottom',
+          offset: [0, -50] // Move up 50px to clear the icon height (prevents overlap)
+        });
+
+        // Build tooltip content with logo if available
+        // Note: clientBuildingIcon is raw SVG text, not a URL. Use project.logo for image display.
+        const logoUrl = project?.logo; // Use project logo URL for tooltip image
+        const svgIcon = project?.clientBuildingIcon; // This is raw SVG, use for inline rendering if needed
+
+        let tooltipContent;
+        if (logoUrl) {
+          // Premium White Card Background for Logo
+          // Handles any logo shape (long/tall) with graceful padding and centering
+          tooltipContent = `
+            <div class="bg-white rounded-lg shadow-xl p-3 flex items-center justify-center border border-gray-100" style="min-width: 120px; min-height: 50px;">
+              <img 
+                src="${logoUrl}" 
+                alt="${clientBuilding.name}" 
+                style="
+                  height: 40px;
+                  width: auto;
+                  max-width: 160px;
+                  object-fit: contain;
+                  display: block;
+                " 
+              />
+            </div>
+          `;
+        } else if (svgIcon && svgIcon.includes('<svg')) {
+          // Fallback SVG display in white card
+          tooltipContent = `
+            <div class="bg-white rounded-lg shadow-xl p-3 flex items-center justify-center border border-gray-100">
+              <div style="height: 36px; width: 36px; display: flex; align-items: center; justify-content: center;">
+                ${svgIcon}
+              </div>
+            </div>
+          `;
+        } else {
+          // Text fallback
+          tooltipContent = `
+            <div class="bg-white rounded-lg shadow-xl p-3 px-4 border border-gray-100">
+              <span class="font-bold text-gray-800 text-sm whitespace-nowrap">${clientBuilding.name}</span>
+            </div>
+          `;
+        }
+
+
+
+
+        // Premium client building implementation - stands out as center of attraction
+        // 1. Pulsing circle on ground
+        // 2. Larger icon than landmarks
+        // 3. Subtle icon size animation
+
+        mapRef.current.addSource(SOURCE_IDS.CLIENT_BUILDING, {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: clientBuilding.coordinates
+            },
+            properties: {
+              name: clientBuilding.name,
+              description: clientBuilding.description || 'Client Building'
+            }
+          }
+        });
+
+        // Premium "Golden Beacon" Effect
+        // Concept: A radiating light source from the ground, making the building the "center of energy"
+
+        // 1. Base Glow: Large, soft, static light on the ground (The Foundation)
+        // Uses theme.primary for dynamic coloring
+        mapRef.current.addLayer({
+          id: 'client-building-glow',
+          type: 'circle',
+          source: SOURCE_IDS.CLIENT_BUILDING,
+          paint: {
+            'circle-radius': 35, // Large diffusion
+            'circle-color': theme.primary || '#fbbf24', // Use primary theme color
+            'circle-opacity': 0.15,
+            'circle-blur': 1, // Maximum blur for soft light effect
+            'circle-pitch-alignment': 'map'
+          }
+        });
+
+        // 2. Core Hotspot: Intense small point at the center (The Source)
+        mapRef.current.addLayer({
+          id: 'client-building-core',
+          type: 'circle',
+          source: SOURCE_IDS.CLIENT_BUILDING,
+          paint: {
+            'circle-radius': 4,
+            'circle-color': '#ffffff', // White hot center
+            'circle-opacity': 0.8,
+            'circle-blur': 0.5,
+            'circle-pitch-alignment': 'map'
+          }
+        });
+
+        // 3. Pulse Rings: 3 overlapping ripples for complex "breathing" motion
+        // Ring 1 (Inner/Fast)
+        mapRef.current.addLayer({
+          id: 'client-building-pulse-1',
+          type: 'circle',
+          source: SOURCE_IDS.CLIENT_BUILDING,
+          paint: {
+            'circle-radius': 5,
+            'circle-color': 'transparent',
+            'circle-stroke-width': 1.5,
+            'circle-stroke-color': theme.primary || '#f59e0b', // Use primary theme color
+            'circle-stroke-opacity': 0,
+            'circle-pitch-alignment': 'map'
+          }
+        });
+
+        // Ring 2 (Middle/Medium)
+        mapRef.current.addLayer({
+          id: 'client-building-pulse-2',
+          type: 'circle',
+          source: SOURCE_IDS.CLIENT_BUILDING,
+          paint: {
+            'circle-radius': 5,
+            'circle-color': 'transparent',
+            'circle-stroke-width': 1.5,
+            'circle-stroke-color': theme.primary || '#fbbf24', // Use primary theme color
+            'circle-stroke-opacity': 0,
+            'circle-pitch-alignment': 'map'
+          }
+        });
+
+        // Ring 3 (Outer/Slow)
+        mapRef.current.addLayer({
+          id: 'client-building-pulse-3',
+          type: 'circle',
+          source: SOURCE_IDS.CLIENT_BUILDING,
+          paint: {
+            'circle-radius': 5,
+            'circle-color': 'transparent',
+            'circle-stroke-width': 2,
+            'circle-stroke-color': theme.primary || '#d97706', // Use primary theme color
+            'circle-stroke-opacity': 0,
+            'circle-pitch-alignment': 'map'
+          }
+        });
+
+        // Animation Loop - Premium "Radar" Logic
+        // Uses performance.now() for smooth, frame-rate independent animation to prevent jitter
+
+        const animatePremiumPulse = (timestamp) => {
+          if (!mapRef.current || !mapRef.current.getLayer('client-building-pulse-1')) return;
+
+          // Timestamp might be undefined on first call if manually invoked
+          const safeTime = (timestamp || performance.now());
+          if (isNaN(safeTime)) return;
+
+          const time = safeTime / 1000; // Time in seconds
+
+          // Helper for loop info: (progress 0-1)
+          // Speed factor: 0.8 matches the desired "4" tempo roughly (1 cycle ~1.25s)
+          const getProgress = (offset, speed) => {
+            return ((time * speed) + offset) % 1;
+          };
+
+          // Easing function: Cubic ease-out for expanding (fast start, slow end)
+          const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);
+
+          // Easing for opacity: Fade in quickly, long hold, fade out slowly
+          const getOpacity = (t) => {
+            if (t < 0.2) return t * 5; // Fade in
+            if (t > 0.7) return (1 - t) * 3.33; // Fade out
+            return 1; // Hold
+          };
+
+          // --- Ring 1 Configuration (Fast, frequent) ---
+          const p1 = getProgress(0, 0.8);
+          const r1 = 2 + (25 * easeOutCubic(p1));
+          const o1 = 0.8 * getOpacity(p1);
+
+          // --- Ring 2 Configuration (Medium, main wave) ---
+          const p2 = getProgress(0.4, 0.5);
+          const r2 = 2 + (40 * easeOutCubic(p2));
+          const o2 = 0.6 * getOpacity(p2);
+
+          // --- Ring 3 Configuration (Slow, distant echo) ---
+          const p3 = getProgress(0.7, 0.3);
+          const r3 = 2 + (55 * easeOutCubic(p3));
+          const o3 = 0.4 * getOpacity(p3);
+
+          try {
+            // Apply updates
+            mapRef.current.setPaintProperty('client-building-pulse-1', 'circle-radius', r1);
+            mapRef.current.setPaintProperty('client-building-pulse-1', 'circle-stroke-opacity', o1);
+
+            mapRef.current.setPaintProperty('client-building-pulse-2', 'circle-radius', r2);
+            mapRef.current.setPaintProperty('client-building-pulse-2', 'circle-stroke-opacity', o2);
+
+            mapRef.current.setPaintProperty('client-building-pulse-3', 'circle-radius', r3);
+            mapRef.current.setPaintProperty('client-building-pulse-3', 'circle-stroke-opacity', o3);
+
+            // Subtle breathe on the static glow
+            const glowPulse = 35 + Math.sin(time * 2) * 2;
+            mapRef.current.setPaintProperty('client-building-glow', 'circle-radius', glowPulse);
+
+            // Icon "Breathing" Animation - Smooth Time-Based
+            // Oscillates between 1.25 and 1.56 size (+25%)
+            if (mapRef.current.getLayer(LAYER_IDS.CLIENT_BUILDING)) {
+              const baseSize = MAPBOX_CONFIG.DEFAULT_MARKER_SIZE * 1.25;
+
+              // Sine wave from 0 to 1
+              // Speed 3 puts it in a nice "alert" rhythm
+              const breathe = (Math.sin(time * 3) + 1) / 2;
+
+              // Exact +25% scale as requested
+              const newSize = baseSize + (baseSize * 0.25 * breathe);
+
+              mapRef.current.setLayoutProperty(LAYER_IDS.CLIENT_BUILDING, 'icon-size', newSize);
+            }
+
+          } catch (e) { return; } // Safety
+
+          requestAnimationFrame(animatePremiumPulse);
+        };
+
+        animatePremiumPulse();
+
+        // Add symbol layer for the icon - anchor at BOTTOM so it sits above the pulse
+        if (svgIcon && mapRef.current.hasImage('client-building-icon')) {
+          mapRef.current.addLayer({
+            id: LAYER_IDS.CLIENT_BUILDING,
+            type: 'symbol',
+            source: SOURCE_IDS.CLIENT_BUILDING,
+            layout: {
+              'icon-image': 'client-building-icon',
+              'icon-size': MAPBOX_CONFIG.DEFAULT_MARKER_SIZE * 1.25,
+              'icon-allow-overlap': true,
+              'icon-ignore-placement': true,
+              'icon-anchor': 'bottom', // Icon base at coordinate, pulse appears at ground
+              'icon-offset': [0, 5] // Slight offset up so pulse is visible
+            }
+          });
+        } else {
+          // Fallback: use a more prominent circle
+          mapRef.current.addLayer({
+            id: LAYER_IDS.CLIENT_BUILDING,
+            type: 'circle',
+            source: SOURCE_IDS.CLIENT_BUILDING,
+            paint: {
+              'circle-radius': 12,
+              'circle-color': '#f59e0b',
+              'circle-stroke-width': 3,
+              'circle-stroke-color': '#ffffff'
+            }
+          });
+        }
+
+        // Click handler
+        const clientClickHandler = () => {
+          if (project?.clientBuildingUrl) {
+            window.open(project.clientBuildingUrl, '_blank', 'noopener,noreferrer');
+          }
+        };
+
+        // Hover handlers - show tooltip with logo
+        const clientEnterHandler = () => {
+          mapRef.current.getCanvas().style.cursor = 'pointer';
+          clientHoverPopup
+            .setLngLat(clientBuilding.coordinates)
+            .setHTML(tooltipContent)
+            .addTo(mapRef.current);
+        };
+
+        const clientLeaveHandler = () => {
+          mapRef.current.getCanvas().style.cursor = '';
+          clientHoverPopup.remove();
+        };
+
+        // Register handlers on all layers
+        mapRef.current.on('click', LAYER_IDS.CLIENT_BUILDING, clientClickHandler);
+        mapRef.current.on('mouseenter', LAYER_IDS.CLIENT_BUILDING, clientEnterHandler);
+        mapRef.current.on('mouseleave', LAYER_IDS.CLIENT_BUILDING, clientLeaveHandler);
+
+        mapRef.current.on('click', 'client-building-core', clientClickHandler);
+        mapRef.current.on('mouseenter', 'client-building-core', clientEnterHandler);
+        mapRef.current.on('click', 'client-building-glow', clientClickHandler);
+        mapRef.current.on('mouseenter', 'client-building-glow', clientEnterHandler);
+
+        eventHandlersRef.current.push(
+          { event: 'click', layer: LAYER_IDS.CLIENT_BUILDING, handler: clientClickHandler },
+          { event: 'mouseenter', layer: LAYER_IDS.CLIENT_BUILDING, handler: clientEnterHandler },
+          { event: 'mouseleave', layer: LAYER_IDS.CLIENT_BUILDING, handler: clientLeaveHandler },
+          { event: 'click', layer: 'client-building-core', handler: clientClickHandler },
+          { event: 'mouseenter', layer: 'client-building-core', handler: clientEnterHandler },
+          { event: 'click', layer: 'client-building-glow', handler: clientClickHandler },
+          { event: 'mouseenter', layer: 'client-building-glow', handler: clientEnterHandler }
+        );
       }
     };
 

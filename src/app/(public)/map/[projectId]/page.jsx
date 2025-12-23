@@ -202,7 +202,9 @@ function MapPageContent() {
               useDefaultCamera: activeSetting.useDefaultCameraAfterLoad,
               pitch: activeSetting.defaultPitch,
               bearing: activeSetting.defaultBearing,
-              bounds: activeSetting.southWestLat ? 'Set' : 'None'
+              bounds: activeSetting.southWestLat ? 'Set' : 'None',
+              maxPanDistanceKm: activeSetting.maxPanDistanceKm || 'Not set',
+              panCenter: activeSetting.panCenterLat ? [activeSetting.panCenterLng, activeSetting.panCenterLat] : 'Using client building'
             });
             settings = activeSetting;
             setMapSettings(activeSetting);
@@ -408,6 +410,7 @@ function MapPageContent() {
           width={project?.logoWidth}
           height={project?.logoHeight}
           position="left"
+          theme={projectTheme}
         />
 
         {/* Secondary Logo (Right) */}
@@ -416,6 +419,7 @@ function MapPageContent() {
           width={project?.secondaryLogoWidth}
           height={project?.secondaryLogoHeight}
           position="right"
+          theme={projectTheme}
         />
       </div>
 

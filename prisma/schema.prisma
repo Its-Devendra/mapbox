@@ -155,11 +155,16 @@ model MapSetting {
   defaultPitch             Float  @default(70)      // Camera tilt angle (0-85 degrees)
   defaultBearing           Float  @default(-20)     // Camera rotation (-180 to 180 degrees)
   
-  // Map bounds - restrict navigation area
+  // Map bounds - restrict navigation area (DEPRECATED - use maxPanDistanceKm instead)
   southWestLat            Float?
   southWestLng            Float?
   northEastLat            Float?
   northEastLng            Float?
+  
+  // Distance-based bounds - max distance user can pan from center (client building)
+  maxPanDistanceKm        Float?  // Maximum pan distance in kilometers (null = no limit)
+  panCenterLat            Float?  // Custom center latitude for pan restriction (null = use client building)
+  panCenterLng            Float?  // Custom center longitude for pan restriction (null = use client building)
   isActive                Boolean @default(false)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt

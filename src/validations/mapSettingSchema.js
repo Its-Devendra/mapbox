@@ -22,6 +22,9 @@ export const mapSettingSchema = z.object({
   southWestLng: z.number().optional(),
   northEastLat: z.number().optional(),
   northEastLng: z.number().optional(),
+  maxPanDistanceKm: z.number().min(0.5).max(100).optional(), // Distance-based bounds (0.5km to 100km)
+  panCenterLat: z.number().optional(), // Custom center for pan restriction
+  panCenterLng: z.number().optional(), // Custom center for pan restriction
   isActive: z.boolean().optional(),
 });
 

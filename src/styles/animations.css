@@ -174,6 +174,55 @@
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+ * CLIENT BUILDING BEACON ANIMATIONS
+ * Premium pulsing effects for main building marker
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* Radiating pulse rings - like Google Maps location indicator */
+@keyframes beaconPulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+/* Second ring with delay for layered effect */
+@keyframes beaconPulse2 {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+/* Subtle glow breathing animation */
+@keyframes glowBreath {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(59, 130, 246, 0.9));
+  }
+}
+
+/* Gentle float animation */
+@keyframes markerFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
 /* Attention */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
