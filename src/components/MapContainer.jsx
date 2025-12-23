@@ -1996,17 +1996,23 @@ export default function MapContainer({
 
             // Icon "Breathing" Animation - Smooth Time-Based
             // Oscillates between 1.25 and 1.56 size (+25%)
+            // OPTIMIZATION: Only update layout property (icon-size) when map is NOT moving/zooming.
+            // Layout updates are CPU expensive and cause the icon to flicker/disappear during fast interaction.
             if (mapRef.current.getLayer(LAYER_IDS.CLIENT_BUILDING)) {
-              const baseSize = MAPBOX_CONFIG.DEFAULT_MARKER_SIZE * 1.25;
+              const isInteracting = mapRef.current.isMoving() || mapRef.current.isZooming();
 
-              // Sine wave from 0 to 1
-              // Speed 3 puts it in a nice "alert" rhythm
-              const breathe = (Math.sin(time * 3) + 1) / 2;
+              if (!isInteracting) {
+                const baseSize = MAPBOX_CONFIG.DEFAULT_MARKER_SIZE; // Revert to default size
 
-              // Exact +25% scale as requested
-              const newSize = baseSize + (baseSize * 0.25 * breathe);
+                // Sine wave from 0 to 1
+                // Speed 3 puts it in a nice "alert" rhythm
+                const breathe = (Math.sin(time * 3) + 1) / 2;
 
-              mapRef.current.setLayoutProperty(LAYER_IDS.CLIENT_BUILDING, 'icon-size', newSize);
+                // Exact +25% scale as requested
+                const newSize = baseSize + (baseSize * 0.25 * breathe);
+
+                mapRef.current.setLayoutProperty(LAYER_IDS.CLIENT_BUILDING, 'icon-size', newSize);
+              }
             }
 
           } catch (e) { return; } // Safety
@@ -2024,7 +2030,7 @@ export default function MapContainer({
             source: SOURCE_IDS.CLIENT_BUILDING,
             layout: {
               'icon-image': 'client-building-icon',
-              'icon-size': MAPBOX_CONFIG.DEFAULT_MARKER_SIZE * 1.25,
+              'icon-size': MAPBOX_CONFIG.DEFAULT_MARKER_SIZE, // Revert to default size
               'icon-allow-overlap': true,
               'icon-ignore-placement': true,
               'icon-anchor': 'bottom', // Icon base at coordinate, pulse appears at ground
