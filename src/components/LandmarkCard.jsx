@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { bustCache } from '@/utils/cacheUtils';
 
 export default function LandmarkCard({
   landmark,
@@ -157,7 +158,7 @@ export default function LandmarkCard({
           {hasImage && (
             <div className="w-28 flex-shrink-0 overflow-hidden">
               <img
-                src={landmark.image}
+                src={bustCache(landmark.image)}
                 alt={landmark.title}
                 className="w-full h-full object-cover"
                 style={{ minHeight: '120px' }}

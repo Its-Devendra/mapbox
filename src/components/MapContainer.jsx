@@ -132,7 +132,7 @@ export default function MapContainer({
   const routeRef = useRef(null);
   const activeLandmarkRef = useRef(null);
   const originalViewportRef = useRef(null);
-  const loadedIconsRef = useRef(new Set());
+  const loadedIconsRef = useRef(new Map()); // Changed to Map to track content/url for updates
   const eventHandlersRef = useRef([]);
   const nearbyPlacePopupRef = useRef(null);
   const animationFrameRef = useRef(null);
@@ -430,27 +430,37 @@ export default function MapContainer({
 
     const iconsToLoad = [];
 
+    // Helper to add icon to load list if new or changed
+    const queueIconLoad = (id, rawContent, width, height) => {
+      const currentContent = loadedIconsRef.current.get(id);
+      // Load if not in cache OR if content has changed (e.g. new URL/SVG string)
+      if (!currentContent || currentContent !== rawContent) {
+        iconsToLoad.push({
+          id,
+          rawContent, // store raw for comparison
+          svg: bustCache(rawContent), // cache bust for fetch/create
+          width,
+          height
+        });
+      }
+    };
+
     // Client building icon
-    if (project?.clientBuildingIcon && !loadedIconsRef.current.has('client-building-icon')) {
-      iconsToLoad.push({
-        id: 'client-building-icon',
-        svg: bustCache(project.clientBuildingIcon),
-        width: project.clientBuildingIconWidth || MAPBOX_CONFIG.DEFAULT_ICON_WIDTH,
-        height: project.clientBuildingIconHeight || MAPBOX_CONFIG.DEFAULT_ICON_HEIGHT
-      });
+    if (project?.clientBuildingIcon) {
+      queueIconLoad(
+        'client-building-icon',
+        project.clientBuildingIcon,
+        project.clientBuildingIconWidth || MAPBOX_CONFIG.DEFAULT_ICON_WIDTH,
+        project.clientBuildingIconHeight || MAPBOX_CONFIG.DEFAULT_ICON_HEIGHT
+      );
     }
 
     // Landmark icons
     landmarks.forEach(landmark => {
       const iconId = `landmark-icon-${landmark.id}`;
-      if (landmark.icon && !loadedIconsRef.current.has(iconId)) {
+      if (landmark.icon) {
         const { width, height } = getIconSize(landmark, landmark.category);
-        iconsToLoad.push({
-          id: iconId,
-          svg: bustCache(landmark.icon),
-          width,
-          height
-        });
+        queueIconLoad(iconId, landmark.icon, width, height);
       }
     });
 
@@ -458,28 +468,25 @@ export default function MapContainer({
     nearbyPlaces.forEach(place => {
       const iconToUse = place.icon || place.categoryIcon;
       const iconId = `nearby-icon-${place.id}`;
-      if (iconToUse && !loadedIconsRef.current.has(iconId)) {
+      if (iconToUse) {
         const { width, height } = getIconSize(place, place.category);
-        iconsToLoad.push({
-          id: iconId,
-          svg: bustCache(iconToUse),
-          width,
-          height
-        });
+        queueIconLoad(iconId, iconToUse, width, height);
       }
     });
 
     // Load all icons in parallel (with concurrency limit)
     const loadBatch = async (batch) => {
       const results = await Promise.allSettled(
-        batch.map(async ({ id, svg, width, height }) => {
+        batch.map(async ({ id, svg, rawContent, width, height }) => {
           try {
             const img = await createSVGImage(svg, width, height);
-            if (mapRef.current && !mapRef.current.hasImage(id)) {
+            if (mapRef.current) {
+              // Remove existing image if updating
+              if (mapRef.current.hasImage(id)) {
+                mapRef.current.removeImage(id);
+              }
               mapRef.current.addImage(id, img, { pixelRatio: MAPBOX_CONFIG.ICON_PIXEL_RATIO });
-              loadedIconsRef.current.add(id);
-            } else if (mapRef.current && mapRef.current.hasImage(id)) {
-              loadedIconsRef.current.add(id);
+              loadedIconsRef.current.set(id, rawContent); // Update cache with new content
             }
           } catch (error) {
             console.warn(`Failed to load icon ${id}:`, error);
@@ -1782,7 +1789,7 @@ export default function MapContainer({
           const svgIcon = project?.clientBuildingIcon;
           let tooltipContent = '';
           if (logoUrl) {
-            tooltipContent = `<div class="bg-white rounded-lg shadow-xl p-3 flex items-center justify-center border border-gray-100" style="min-width: 120px; min-height: 50px;"><img src="${logoUrl}" alt="${clientBuilding.name}" style="height: 40px; width: auto; max-width: 160px; object-fit: contain; display: block;" /></div>`;
+            tooltipContent = `<div class="bg-white rounded-lg shadow-xl p-3 flex items-center justify-center border border-gray-100" style="min-width: 120px; min-height: 50px;"><img src="${bustCache(logoUrl)}" alt="${clientBuilding.name}" style="height: 40px; width: auto; max-width: 160px; object-fit: contain; display: block;" /></div>`;
           } else if (svgIcon && svgIcon.includes('<svg')) {
             tooltipContent = `<div class="bg-white rounded-lg shadow-xl p-3 flex items-center justify-center border border-gray-100"><div style="height: 36px; width: 36px; display: flex; align-items: center; justify-content: center;">${svgIcon}</div></div>`;
           } else {

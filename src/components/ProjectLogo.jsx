@@ -37,7 +37,7 @@ export default function ProjectLogo({ logo, width = 120, height = 40, position =
             className={`absolute top-2 sm:top-4 ${positionClass} z-10 pointer-events-none project-logo-container ${position}`}
         >
             <div
-                className="overflow-hidden rounded-lg sm:rounded-xl shadow-lg p-2 sm:p-3 transition-all duration-300"
+                className="overflow-hidden rounded-lg sm:rounded-xl shadow-lg p-0 flex items-center justify-center transition-all duration-300"
                 style={containerStyle}
             >
                 {/* Mobile logo - hidden on sm and up */}
@@ -46,8 +46,9 @@ export default function ProjectLogo({ logo, width = 120, height = 40, position =
                     alt="Project Logo"
                     className="sm:hidden block"
                     style={{
-                        width: `${mobileWidth}px`,
                         height: `${mobileHeight}px`,
+                        width: 'auto',
+                        maxWidth: `${mobileWidth}px`,
                         objectFit: 'contain'
                     }}
                 />
@@ -57,8 +58,9 @@ export default function ProjectLogo({ logo, width = 120, height = 40, position =
                     alt="Project Logo"
                     className="hidden sm:block"
                     style={{
-                        width: `${width}px`,
                         height: `${height}px`,
+                        width: 'auto',
+                        maxWidth: `${width}px`,
                         objectFit: 'contain'
                     }}
                 />
