@@ -107,13 +107,15 @@ export default function ProjectSettings({ projectId }) {
         body: JSON.stringify({
           ...formData,
           projectId: projectId,
-          southWestLat: formData.southWestLat === '' ? undefined : formData.southWestLat,
-          southWestLng: formData.southWestLng === '' ? undefined : formData.southWestLng,
-          northEastLat: formData.northEastLat === '' ? undefined : formData.northEastLat,
-          northEastLng: formData.northEastLng === '' ? undefined : formData.northEastLng,
-          maxPanDistanceKm: formData.maxPanDistanceKm === '' ? undefined : formData.maxPanDistanceKm,
-          panCenterLat: formData.panCenterLat === '' ? undefined : formData.panCenterLat,
-          panCenterLng: formData.panCenterLng === '' ? undefined : formData.panCenterLng
+          // Deprecated rectangular bounds - send null to clear
+          southWestLat: formData.southWestLat === '' ? null : formData.southWestLat,
+          southWestLng: formData.southWestLng === '' ? null : formData.southWestLng,
+          northEastLat: formData.northEastLat === '' ? null : formData.northEastLat,
+          northEastLng: formData.northEastLng === '' ? null : formData.northEastLng,
+          // Distance-based bounds - send null to clear (not undefined!)
+          maxPanDistanceKm: formData.maxPanDistanceKm === '' ? null : parseFloat(formData.maxPanDistanceKm),
+          panCenterLat: formData.panCenterLat === '' ? null : parseFloat(formData.panCenterLat),
+          panCenterLng: formData.panCenterLng === '' ? null : parseFloat(formData.panCenterLng)
         }),
       });
 
@@ -442,7 +444,7 @@ export default function ProjectSettings({ projectId }) {
                       <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Min Zoom</label>
                       <input
                         type="number"
-                        min="1"
+                        min="0"
                         max="22"
                         name="minZoom"
                         value={formData.minZoom}
@@ -450,13 +452,13 @@ export default function ProjectSettings({ projectId }) {
                         className="w-full px-3 py-2.5 bg-gray-50 border border-transparent rounded-lg focus:bg-white focus:border-gray-300 focus:ring-0 text-sm font-mono transition-all"
                         required
                       />
-                      <p className="text-xs text-gray-400 mt-1">World view</p>
+                      <p className="text-xs text-gray-400 mt-1">Animation Start + Limit</p>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Default</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Default Zoom</label>
                       <input
                         type="number"
-                        min="1"
+                        min="0"
                         max="22"
                         name="defaultZoom"
                         value={formData.defaultZoom}
@@ -464,13 +466,13 @@ export default function ProjectSettings({ projectId }) {
                         className="w-full px-3 py-2.5 bg-gray-50 border border-transparent rounded-lg focus:bg-white focus:border-gray-300 focus:ring-0 text-sm font-mono transition-all"
                         required
                       />
-                      <p className="text-xs text-gray-400 mt-1">Starting view</p>
+                      <p className="text-xs text-gray-400 mt-1">Animation Destination</p>
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Max Zoom</label>
                       <input
                         type="number"
-                        min="1"
+                        min="0"
                         max="22"
                         name="maxZoom"
                         value={formData.maxZoom}
@@ -478,7 +480,7 @@ export default function ProjectSettings({ projectId }) {
                         className="w-full px-3 py-2.5 bg-gray-50 border border-transparent rounded-lg focus:bg-white focus:border-gray-300 focus:ring-0 text-sm font-mono transition-all"
                         required
                       />
-                      <p className="text-xs text-gray-400 mt-1">Street level</p>
+                      <p className="text-xs text-gray-400 mt-1">Closest View Limit</p>
                     </div>
                   </div>
                 </div>
@@ -683,7 +685,8 @@ export default function ProjectSettings({ projectId }) {
                 <div className="space-y-4 p-5 bg-white rounded-xl border border-gray-100">
                   <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                     <h4 className="font-semibold text-gray-900 flex items-center gap-2">
-                      <Crosshair className="w-4 h-4 text-gray-600" /> Camera Preview
+                      <Crosshair className="w-4 h-4 text-gray-600" /> Destination Camera
+                      <span className="text-xs font-normal text-gray-400">(After Animation)</span>
                     </h4>
                     <div className="flex items-center gap-3">
                       <label className="flex items-center gap-2 cursor-pointer">
@@ -750,51 +753,81 @@ export default function ProjectSettings({ projectId }) {
                       <Map className="w-4 h-4 text-gray-600" /> Navigation Bounds
                       <span className="text-xs font-normal text-gray-400">(Optional)</span>
                     </h4>
-                    <button
-                      type="button"
-                      onClick={() => setShowBoundsPreview(!showBoundsPreview)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showBoundsPreview ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-                    >
-                      {showBoundsPreview ? 'Hide Editor' : 'Edit Bounds'}
-                    </button>
                   </div>
 
-                  {showBoundsPreview && (
-                    <div className="rounded-xl overflow-hidden border border-gray-200">
-                      <InteractiveMapPreview
-                        mode="bounds"
-                        value={{
-                          southWest: formData.southWestLat && formData.southWestLng
-                            ? [parseFloat(formData.southWestLng), parseFloat(formData.southWestLat)]
-                            : null,
-                          northEast: formData.northEastLat && formData.northEastLng
-                            ? [parseFloat(formData.northEastLng), parseFloat(formData.northEastLat)]
-                            : null
-                        }}
-                        onChange={(bounds) => {
-                          if (bounds && bounds.southWest && bounds.northEast) {
-                            setFormData(prev => ({
-                              ...prev,
-                              southWestLat: bounds.southWest[1],
-                              southWestLng: bounds.southWest[0],
-                              northEastLat: bounds.northEast[1],
-                              northEastLng: bounds.northEast[0]
-                            }));
-                          } else {
-                            setFormData(prev => ({
-                              ...prev,
-                              southWestLat: '',
-                              southWestLng: '',
-                              northEastLat: '',
-                              northEastLng: ''
-                            }));
-                          }
-                        }}
-                        mapStyle="mapbox://styles/mapbox/streets-v12"
-                        landmarks={projectData.landmarks}
-                        nearbyPlaces={projectData.nearbyPlaces}
-                        clientBuilding={projectData.clientBuilding}
+                  <p className="text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg">
+                    Restrict how far users can pan from the center point. Leave empty for no restrictions.
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Max Pan Distance (km)</label>
+                      <input
+                        type="number"
+                        min="0.5"
+                        max="100"
+                        step="0.5"
+                        name="maxPanDistanceKm"
+                        value={formData.maxPanDistanceKm}
+                        onChange={handleInputChange}
+                        placeholder="e.g. 5 (leave empty for no limit)"
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-transparent rounded-lg focus:bg-white focus:border-gray-300 focus:ring-0 text-sm font-mono transition-all"
                       />
+                      <p className="text-xs text-gray-400 mt-1">Users cannot pan beyond this radius from the center</p>
+                    </div>
+                  </div>
+
+                  {formData.maxPanDistanceKm && (
+                    <div className="pt-3 border-t border-gray-100">
+                      <button
+                        type="button"
+                        onClick={() => setShowDistancePreview(!showDistancePreview)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showDistancePreview ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                      >
+                        {showDistancePreview ? 'Hide Preview' : 'Preview & Adjust Center'}
+                      </button>
+
+                      {showDistancePreview && (
+                        <div className="mt-4 rounded-xl overflow-hidden border border-gray-200">
+                          <InteractiveMapPreview
+                            mode="distance"
+                            distanceKm={parseFloat(formData.maxPanDistanceKm) || 5}
+                            panCenter={formData.panCenterLat && formData.panCenterLng ? {
+                              lat: parseFloat(formData.panCenterLat),
+                              lng: parseFloat(formData.panCenterLng)
+                            } : null}
+                            onChange={(data) => {
+                              if (data.panCenterLat !== undefined && data.panCenterLng !== undefined) {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  panCenterLat: data.panCenterLat,
+                                  panCenterLng: data.panCenterLng
+                                }));
+                              }
+                            }}
+                            mapStyle="mapbox://styles/mapbox/streets-v12"
+                            landmarks={projectData.landmarks}
+                            nearbyPlaces={projectData.nearbyPlaces}
+                            clientBuilding={projectData.clientBuilding}
+                          />
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormData(prev => ({
+                            ...prev,
+                            maxPanDistanceKm: '',
+                            panCenterLat: '',
+                            panCenterLng: ''
+                          }));
+                          setShowDistancePreview(false);
+                        }}
+                        className="mt-3 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                      >
+                        Clear Bounds
+                      </button>
                     </div>
                   )}
                 </div>

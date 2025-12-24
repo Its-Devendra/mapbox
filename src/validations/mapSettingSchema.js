@@ -18,13 +18,15 @@ export const mapSettingSchema = z.object({
   useDefaultCameraAfterLoad: z.boolean().optional(),
   defaultPitch: z.number().min(0).max(85).optional(),
   defaultBearing: z.number().min(-180).max(180).optional(),
-  southWestLat: z.number().optional(),
-  southWestLng: z.number().optional(),
-  northEastLat: z.number().optional(),
-  northEastLng: z.number().optional(),
-  maxPanDistanceKm: z.number().min(0.5).max(100).optional(), // Distance-based bounds (0.5km to 100km)
-  panCenterLat: z.number().optional(), // Custom center for pan restriction
-  panCenterLng: z.number().optional(), // Custom center for pan restriction
+  // Deprecated rectangular bounds - nullable to allow clearing
+  southWestLat: z.number().nullable().optional(),
+  southWestLng: z.number().nullable().optional(),
+  northEastLat: z.number().nullable().optional(),
+  northEastLng: z.number().nullable().optional(),
+  // Distance-based bounds - nullable to allow clearing
+  maxPanDistanceKm: z.number().min(0.5).max(100).nullable().optional(),
+  panCenterLat: z.number().nullable().optional(),
+  panCenterLng: z.number().nullable().optional(),
   isActive: z.boolean().optional(),
 });
 

@@ -142,9 +142,13 @@ export default function MapContainer({
   const introPlayedRef = useRef(false); // Track if intro has played
   const initialZoomDoneRef = useRef(false); // Track if initial zoom is done
 
+  // Timeout refs to prevent race conditions during updates/cleanup
+  const initialAnimationTimeoutRef = useRef(null);
+  const boundsSetupTimeoutRef = useRef(null);
+
   // View Mode State (`tilted` | `top`)
-  const [viewMode, setViewMode] = useState('tilted');
-  const viewModeRef = useRef('tilted'); // Ref to access viewMode without causing effect re-runs
+  const [viewMode, setViewMode] = useState('top');
+  const viewModeRef = useRef('top'); // Ref to access viewMode without causing effect re-runs
   const isFlyingRef = useRef(false); // Track if a cinematic flight is in progress
 
   // Intro State
@@ -169,25 +173,38 @@ export default function MapContainer({
 
   /**
    * Get map settings with fallbacks
+   * 
+   * Key settings:
+   * - minZoom: Starting zoom for animation AND the limit users can zoom out to
+   * - maxZoom: Maximum zoom users can zoom in to  
+   * - defaultZoom: Destination zoom after intro animation
+   * - defaultPitch/Bearing: Camera angle after animation
+   * - maxPanDistanceKm: Circular navigation boundary (null = no bounds)
    */
   const getMapConfig = useCallback(() => {
     // Distance-based bounds - get max pan distance if configured
-    const maxPanDistanceKm = mapSettings?.maxPanDistanceKm || null;
+    // Only use if it's a positive number, otherwise null (no bounds)
+    const maxPanDistanceKm = (mapSettings?.maxPanDistanceKm && mapSettings.maxPanDistanceKm > 0)
+      ? mapSettings.maxPanDistanceKm
+      : null;
 
     const config = {
       center: [
         mapSettings?.defaultCenterLng ?? MAPBOX_CONFIG.DEFAULT_CENTER.lng,
         mapSettings?.defaultCenterLat ?? MAPBOX_CONFIG.DEFAULT_CENTER.lat
       ],
-      zoom: mapSettings?.defaultZoom ?? MAPBOX_CONFIG.DEFAULT_ZOOM,
-      minZoom: mapSettings?.minZoom ?? 0, // Default to 0 (fully zoomed out) if not set
-      maxZoom: mapSettings?.maxZoom ?? 22, // Default to 22 (fully zoomed in) if not set
-      pitch: mapSettings?.enablePitch ? 70 : 0, // Matched to 80 for Tilted Mode consistency
-      bearing: 0,
+      // Zoom settings
+      minZoom: mapSettings?.minZoom ?? 0,      // Far view + user limit
+      maxZoom: mapSettings?.maxZoom ?? 22,     // Close view limit  
+      defaultZoom: mapSettings?.defaultZoom ?? MAPBOX_CONFIG.DEFAULT_ZOOM, // Destination
+      // Camera angle settings
+      defaultPitch: mapSettings?.defaultPitch ?? 70,
+      defaultBearing: mapSettings?.defaultBearing ?? -20,
+      // Interaction settings
       interactive: interactive,
       dragRotate: mapSettings?.enableRotation ?? true,
       pitchWithRotate: mapSettings?.enablePitch ?? true,
-      // Distance-based bounds (no maxBounds - use event listener instead)
+      // Distance-based navigation bounds
       maxPanDistanceKm: maxPanDistanceKm
     };
     return config;
@@ -348,6 +365,16 @@ export default function MapContainer({
 
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
+    }
+
+    if (initialAnimationTimeoutRef.current) {
+      clearTimeout(initialAnimationTimeoutRef.current);
+      initialAnimationTimeoutRef.current = null;
+    }
+
+    if (boundsSetupTimeoutRef.current) {
+      clearTimeout(boundsSetupTimeoutRef.current);
+      boundsSetupTimeoutRef.current = null;
     }
   }, []);
   /**
@@ -1171,11 +1198,20 @@ export default function MapContainer({
     // Debug log map settings
     console.log('🗺️ Map Settings:', {
       center: config.center,
-      zoom: config.zoom,
       minZoom: config.minZoom,
       maxZoom: config.maxZoom,
-      maxBounds: config.maxBounds,
-      useDefaultCamera: mapSettings?.useDefaultCameraAfterLoad
+      defaultZoom: config.defaultZoom,
+      defaultPitch: config.defaultPitch,
+      defaultBearing: config.defaultBearing,
+      maxPanDistanceKm: config.maxPanDistanceKm,
+      rawMapSettings: mapSettings
+    });
+
+    // Debug: Log what bounds restrictions are in place
+    console.log('🔓 Navigation restrictions:', {
+      hasPanDistanceLimit: !!config.maxPanDistanceKm,
+      panDistanceKm: config.maxPanDistanceKm,
+      zoomRange: `${config.minZoom} - ${config.maxZoom}`
     });
 
     // Animate to location after load
@@ -1187,42 +1223,40 @@ export default function MapContainer({
 
       const duration = mapSettings?.initialAnimationDuration || MAPBOX_CONFIG.INITIAL_ANIMATION_DURATION;
 
-      // Determine target center: prioritize client building, fallback to map center
-      const targetCenter = clientBuilding
-        ? clientBuilding.coordinates
-        : config.center;
+      // Determine target center: USE THE USER'S CONFIGURED POSITION from Camera Preview
+      // config.center comes from mapSettings.defaultCenterLat/Lng (set via Camera Preview)
+      // Only fall back to client building if no custom center is configured
+      const targetCenter = config.center;
 
-      // Store original viewport using client building location if available
+      // Store original viewport for reset functionality
       originalViewportRef.current = {
         center: targetCenter,
-        zoom: config.zoom,
-        pitch: config.pitch || 70,
-        bearing: config.bearing || -20
+        zoom: config.defaultZoom,
+        pitch: config.defaultPitch,
+        bearing: config.defaultBearing
       };
 
-      // Check if we should use default camera or standard animation
-      const useDefaultCamera = mapSettings?.useDefaultCameraAfterLoad;
-
-      // Debug: Log animation decision
-      console.log('🚀 Animation Decision:', {
-        useDefaultCamera,
-        targetCenter,
-        configZoom: config.zoom,
+      // Debug: Log animation settings
+      console.log('🚀 Animation Settings:', {
+        from: { zoom: config.minZoom, pitch: 0, bearing: 0 },
+        to: { zoom: config.defaultZoom, pitch: config.defaultPitch, bearing: config.defaultBearing },
         duration: duration,
-        hasMapSettings: !!mapSettings
+        maxPanDistanceKm: config.maxPanDistanceKm
       });
 
       // Distance-based bounds: Setup move event listener to restrict panning
       const setupDistanceBounds = () => {
-        if (!config.maxPanDistanceKm || !clientBuilding?.coordinates) {
-          console.log('📍 Distance bounds: Not configured or no client building');
+        // Only setup if maxPanDistanceKm is configured and we have a center point
+        if (!config.maxPanDistanceKm) {
+          console.log('📍 Distance bounds: Not configured (no restrictions)');
           return;
         }
 
+        // Use custom panCenter if configured, otherwise fall back to client building or map center
+        const centerLng = mapSettings?.panCenterLng ?? clientBuilding?.coordinates?.[0] ?? config.center[0];
+        const centerLat = mapSettings?.panCenterLat ?? clientBuilding?.coordinates?.[1] ?? config.center[1];
+
         const maxDistance = config.maxPanDistanceKm;
-        // Use custom panCenter if configured, otherwise fall back to client building
-        const centerLng = mapSettings?.panCenterLng ?? clientBuilding.coordinates[0];
-        const centerLat = mapSettings?.panCenterLat ?? clientBuilding.coordinates[1];
         let isEnforcing = false; // Prevent recursive calls
 
         console.log('🔒 Setting up distance-based pan restriction:', maxDistance, 'km from', [centerLng, centerLat]);
@@ -1259,39 +1293,28 @@ export default function MapContainer({
       // Convert duration to milliseconds if it's in seconds (less than 100 = seconds)
       const durationMs = duration < 100 ? duration * 1000 : duration;
 
-      // If useDefaultCamera is enabled, fly to the configured default camera position
-      if (useDefaultCamera && mapSettings) {
-        console.log('🎥 Using default camera position from map settings');
-        setTimeout(() => {
-          if (!mapRef.current) return;
-          mapRef.current.flyTo({
-            center: [mapSettings.defaultCenterLng, mapSettings.defaultCenterLat],
-            zoom: mapSettings.defaultZoom,
-            pitch: mapSettings.defaultPitch || 70,
-            bearing: mapSettings.defaultBearing || -20,
-            duration: durationMs,
-            essential: true
-          });
-          // Setup distance-based pan restriction after animation
-          setTimeout(setupDistanceBounds, durationMs + 500);
-        }, 500);
-      } else {
-        // ALWAYS play globe → client building animation (regardless of intro audio)
-        console.log('📍 ANIMATING: Globe → Client Building', { center: targetCenter, zoom: config.zoom, durationMs });
-        setTimeout(() => {
-          if (!mapRef.current) return;
-          mapRef.current.flyTo({
-            center: targetCenter,
-            zoom: mapSettings?.defaultZoom ?? config.zoom, // Use default zoom from settings specifically
-            pitch: mapSettings?.defaultPitch ?? 70, // Use user settings or fallback
-            bearing: mapSettings?.defaultBearing ?? -20, // Use user settings or fallback
-            duration: durationMs,
-            essential: true
-          });
-          // Setup distance-based pan restriction after animation
-          setTimeout(setupDistanceBounds, durationMs + 500);
-        }, 500);
-      }
+      // Fly from minZoom (starting position) to defaultZoom (destination)
+      console.log('📍 ANIMATING: Starting fly-in transition', {
+        center: targetCenter,
+        zoom: config.defaultZoom,
+        pitch: config.defaultPitch,
+        bearing: config.defaultBearing,
+        durationMs
+      });
+
+      initialAnimationTimeoutRef.current = setTimeout(() => {
+        if (!mapRef.current) return;
+        mapRef.current.flyTo({
+          center: targetCenter,
+          zoom: config.defaultZoom,
+          pitch: config.defaultPitch,
+          bearing: config.defaultBearing,
+          duration: durationMs,
+          essential: true
+        });
+        // Setup distance-based pan restriction after animation
+        boundsSetupTimeoutRef.current = setTimeout(setupDistanceBounds, durationMs + 500);
+      }, 500);
 
     });
 
@@ -1944,32 +1967,24 @@ export default function MapContainer({
    * Reset camera to default view (centered on client building if available)
    */
   /**
-   * Reset camera to default view (centered on client building if available)
+   * Reset camera to default view (using configured center from Camera Preview)
    */
   const resetCamera = useCallback(() => {
     if (!mapRef.current) return;
 
     const config = getMapConfig();
 
-    // Use client building as center if available, otherwise fall back to config center
-    const targetCenter = clientBuilding?.coordinates || config.center;
+    // Use the user's configured center position from Camera Preview
+    const targetCenter = config.center;
 
     // Determine pitch/bearing based on viewMode
-    // If 'tilted', use USER'S settings from preview (mapSettings.defaultPitch/Bearing).
-    // If 'top', use 0.
-    const settingsPitch = mapSettings?.defaultPitch ?? 70;
-    const settingsBearing = mapSettings?.defaultBearing ?? -20;
-
-    // config.zoom might be minZoom now if we aren't careful, so we should prefer mapSettings.defaultZoom
-    // which effectively IS "config.zoom" but let's be explicit to avoid confusion with the "initial load" config.
-    const targetZoom = mapSettings?.defaultZoom ?? config.zoom;
-
-    const targetPitch = viewModeRef.current === 'tilted' ? settingsPitch : 0;
-    const targetBearing = viewModeRef.current === 'tilted' ? settingsBearing : 0;
+    // If 'tilted', use the user's default settings. If 'top', use flat view.
+    const targetPitch = viewModeRef.current === 'tilted' ? config.defaultPitch : 0;
+    const targetBearing = viewModeRef.current === 'tilted' ? config.defaultBearing : 0;
 
     mapRef.current.flyTo({
       center: targetCenter,
-      zoom: targetZoom,
+      zoom: config.defaultZoom,
       pitch: targetPitch,
       bearing: targetBearing,
       duration: 2000,
