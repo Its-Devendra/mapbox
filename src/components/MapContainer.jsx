@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import { toast } from 'react-toastify';
 import LandmarkCard from "./LandmarkCard";
+import Compass from "./Compass";
 import {
   createSVGImage,
   debounce,
@@ -164,6 +165,7 @@ export default function MapContainer({
   const [selectedLandmark, setSelectedLandmark] = useState(null);
   const [showLandmarkCard, setShowLandmarkCard] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
+  const [currentBearing, setCurrentBearing] = useState(0);
 
   // Custom hook for directions
   const { getDistanceAndDuration } = useMapboxDirections();
@@ -1220,6 +1222,13 @@ export default function MapContainer({
     mapRef.current.on('load', () => {
       setIsMapLoaded(true);
 
+      // Track bearing changes for compass
+      mapRef.current.on('rotate', () => {
+        if (mapRef.current) {
+          setCurrentBearing(mapRef.current.getBearing());
+        }
+      });
+
       // Add 3D buildings layer
       add3DBuildings();
 
@@ -2092,6 +2101,22 @@ export default function MapContainer({
           </button>
         </div>
       )}
+
+      {/* Compass Component */}
+      <Compass
+        bearing={currentBearing}
+        onResetNorth={() => {
+          if (mapRef.current) {
+            mapRef.current.easeTo({
+              bearing: 0,
+              duration: 500,
+              essential: true
+            });
+          }
+        }}
+        theme={theme}
+      />
+
       <LandmarkCard
         landmark={selectedLandmark}
         clientBuilding={clientBuilding}

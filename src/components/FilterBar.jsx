@@ -216,7 +216,7 @@ export default function FilterBar({
                 <button
                   key={typeof category === 'object' ? (category.id || category.name) : name}
                   onClick={() => handleFilterClick(name)}
-                  className="px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 cursor-pointer"
+                  className="px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap flex-shrink-0"
                   style={{
                     backgroundColor: isActive
                       ? (filterTheme.filterPrimary || filterTheme.primary)
@@ -230,7 +230,7 @@ export default function FilterBar({
                   }}
                 >
                   {renderIcon(category)}
-                  {name}
+                  <span className="leading-tight">{name}</span>
                 </button>
               );
             })}
