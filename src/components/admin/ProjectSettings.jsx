@@ -15,6 +15,7 @@ export default function ProjectSettings({ projectId }) {
   const [showDistancePreview, setShowDistancePreview] = useState(false);
   const [showZoomPreview, setShowZoomPreview] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(null);
+  const [zoomTarget, setZoomTarget] = useState('defaultZoom');
 
   // Project data for preview
   const [projectData, setProjectData] = useState({
@@ -519,40 +520,42 @@ export default function ProjectSettings({ projectId }) {
                         />
                       </div>
 
-                      <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
-                        <div className="text-sm text-gray-600">
-                          Zoom: <span className="font-mono font-semibold text-gray-900 text-lg">{previewZoom !== null ? previewZoom : parseFloat(formData.defaultZoom) || 12}</span>
+                      <div className="flex flex-col gap-4 bg-gray-50 rounded-lg p-4 transition-all">
+                        {/* Target Selector */}
+                        <div className="flex p-1 bg-gray-200/50 rounded-lg">
+                          {[
+                            { id: 'minZoom', label: 'Min Zoom' },
+                            { id: 'defaultZoom', label: 'Default' },
+                            { id: 'maxZoom', label: 'Max Zoom' }
+                          ].map((target) => (
+                            <button
+                              key={target.id}
+                              type="button"
+                              onClick={() => setZoomTarget(target.id)}
+                              className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${zoomTarget === target.id
+                                ? 'bg-white text-gray-900 shadow-sm'
+                                : 'text-gray-600 hover:text-gray-900'
+                                }`}
+                            >
+                              {target.label}
+                            </button>
+                          ))}
                         </div>
-                        <div className="flex gap-2">
+
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm text-gray-600">
+                            Current Preview: <span className="font-mono font-semibold text-gray-900 text-lg">{previewZoom !== null ? previewZoom : parseFloat(formData.defaultZoom) || 12}</span>
+                          </div>
                           <button
                             type="button"
                             onClick={() => {
                               const zoomValue = previewZoom !== null ? previewZoom : parseFloat(formData.defaultZoom) || 12;
-                              setFormData(prev => ({ ...prev, minZoom: zoomValue }));
+                              setFormData(prev => ({ ...prev, [zoomTarget]: zoomValue }));
+                              toast.info(`Set ${zoomTarget === 'defaultZoom' ? 'Default' : zoomTarget === 'minZoom' ? 'Min' : 'Max'} Zoom to ${zoomValue}`);
                             }}
-                            className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-gray-800 transition-colors shadow-sm active:translate-y-0.5"
                           >
-                            Set as Min
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const zoomValue = previewZoom !== null ? previewZoom : parseFloat(formData.defaultZoom) || 12;
-                              setFormData(prev => ({ ...prev, defaultZoom: zoomValue }));
-                            }}
-                            className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-gray-800 transition-colors"
-                          >
-                            Set as Default
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const zoomValue = previewZoom !== null ? previewZoom : parseFloat(formData.defaultZoom) || 12;
-                              setFormData(prev => ({ ...prev, maxZoom: zoomValue }));
-                            }}
-                            className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
-                          >
-                            Set as Max
+                            Set as {zoomTarget === 'defaultZoom' ? 'Default' : zoomTarget === 'minZoom' ? 'Min' : 'Max'}
                           </button>
                         </div>
                       </div>

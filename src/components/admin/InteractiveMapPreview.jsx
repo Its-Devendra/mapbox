@@ -6,7 +6,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
     process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ||
-    "pk.eyJ1IjoiZGV2Yml0czA5IiwiYSI6ImNtYzkyZTR2dDE0MDAyaXMzdXRndjJ0M2EifQ.Jhhx-1tf_NzrZNjGX8wp_w";
+    "pk.eyJ1IjoiZGV2Yml0czA5IiwiYSI6ImNtYzkyZTR2dDE0MDAyaXMzdXRndjJ0M2EifQ.Jhhx-1tf_NzrZNfGX8wp_w";
 
 /**
  * Create a custom HTML marker element from SVG icon
@@ -109,6 +109,7 @@ export default function InteractiveMapPreview({
     const [isReady, setIsReady] = useState(false);
     const [currentCamera, setCurrentCamera] = useState(null);
     const [currentZoom, setCurrentZoom] = useState(null); // For zoom mode
+    const [enforceLimits, setEnforceLimits] = useState(false); // Toggle for verifying zoom limits
 
     // Scale factor for preview - icons are designed for full map, scale them down for preview
     const PREVIEW_SCALE = 0.6;
@@ -138,10 +139,10 @@ export default function InteractiveMapPreview({
         const initialPitch = mode === 'camera' && value?.pitch !== undefined ? value.pitch : (mode === 'zoom' ? 0 : 70);
         const initialBearing = mode === 'camera' && value?.bearing !== undefined ? value.bearing : 0;
 
-        // In zoom mode, allow FREE scrolling from 0-22 so users can set any level
-        // The actual constraints are only for display/reference, not enforced on the preview map
-        const minZoom = 0;  // Always allow full range in preview
-        const maxZoom = 22;
+        // In zoom mode, allow toggle between FREE scrolling (to set values) and STRICT limits (to verify)
+        // Default is FREE so users can select any value
+        const minZoom = (mode === 'zoom' && enforceLimits && zoomSettings?.minZoom) ? zoomSettings.minZoom : 0;
+        const maxZoom = (mode === 'zoom' && enforceLimits && zoomSettings?.maxZoom) ? zoomSettings.maxZoom : 22;
 
         const map = new mapboxgl.Map({
             container: mapContainerRef.current,
@@ -384,7 +385,7 @@ export default function InteractiveMapPreview({
             map.remove();
             mapRef.current = null;
         };
-    }, [mode, mapStyle]);
+    }, [mode, mapStyle, enforceLimits]);
 
     // Initialize bounds editor
     const initializeBoundsEditor = (map) => {
@@ -682,7 +683,6 @@ export default function InteractiveMapPreview({
                     <p className="text-center text-xs text-gray-500">
                         Zoom/pan to desired area, then click button above
                     </p>
-
                     {/* Instructions */}
                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm">
                         {isReady === 'click-second' ? (
@@ -721,6 +721,21 @@ export default function InteractiveMapPreview({
                     >
                         Clear Bounds
                     </button>
+                </div>
+            )}
+
+            {/* Limit Testing Toggle for Zoom Mode */}
+            {mode === 'zoom' && (
+                <div className="flex items-center justify-center pt-2">
+                    <label className="flex items-center gap-2 cursor-pointer bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200 hover:bg-gray-100 transition-colors">
+                        <input
+                            type="checkbox"
+                            checked={enforceLimits}
+                            onChange={(e) => setEnforceLimits(e.target.checked)}
+                            className="w-3.5 h-3.5 text-gray-900 rounded border-gray-300 focus:ring-gray-900"
+                        />
+                        <span className="text-xs font-medium text-gray-700">Test Limits (Effect)</span>
+                    </label>
                 </div>
             )}
         </div>

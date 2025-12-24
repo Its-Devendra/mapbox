@@ -218,11 +218,12 @@ export default function MapContainer({
         if (clientBuilding && clientBuilding.coordinates) {
           if (!mapRef.current) return;
 
+          // Fly to client building
           mapRef.current.flyTo({
             center: clientBuilding.coordinates,
-            zoom: 17.5,
-            pitch: 70,
-            bearing: 45,
+            zoom: mapSettings?.defaultZoom ?? 17.5,
+            pitch: mapSettings?.defaultPitch ?? 70,
+            bearing: mapSettings?.defaultBearing ?? 45,
             duration: 3000,
             essential: true
           });
@@ -1148,11 +1149,16 @@ export default function MapContainer({
     // Convert style URL to proper mapbox:// format
     const styleUrl = convertToMapboxStyleUrl(theme.mapboxStyle) || MAPBOX_CONFIG.DEFAULT_STYLE || 'mapbox://styles/mapbox/dark-v11';
 
+    // 1. INITIAL LOAD STATE: Start "Far Away" (Min Zoom)
+    // The user wants the map to start at the minZoom level (zoomed out) of the constraints, or specifically the "min zoom which i set".
+    // We use config.minZoom which comes from mapSettings.minZoom.
+    const initialZoom = config.minZoom || 0;
+
     mapRef.current = new mapboxgl.Map({
       container: mapContainerRef.current,
       style: styleUrl,
       center: config.center,
-      zoom: MAPBOX_CONFIG.GLOBE_ZOOM, // Start with globe view
+      zoom: initialZoom, // Start at minZoom
       minZoom: config.minZoom,
       maxZoom: config.maxZoom,
       pitch: 0, // Start flat, animate to tilted during transition
@@ -1276,9 +1282,9 @@ export default function MapContainer({
           if (!mapRef.current) return;
           mapRef.current.flyTo({
             center: targetCenter,
-            zoom: config.zoom,
-            pitch: 70,
-            bearing: -20,
+            zoom: mapSettings?.defaultZoom ?? config.zoom, // Use default zoom from settings specifically
+            pitch: mapSettings?.defaultPitch ?? 70, // Use user settings or fallback
+            bearing: mapSettings?.defaultBearing ?? -20, // Use user settings or fallback
             duration: durationMs,
             essential: true
           });
@@ -1949,14 +1955,21 @@ export default function MapContainer({
     const targetCenter = clientBuilding?.coordinates || config.center;
 
     // Determine pitch/bearing based on viewMode
-    // If we're in 'tilted' mode, return to a nice 3D angle (60 pitch, -20 bearing)
-    // If 'top', use standard or 0
-    const targetPitch = viewModeRef.current === 'tilted' ? 70 : (config.pitch || 0);
-    const targetBearing = viewModeRef.current === 'tilted' ? -20 : (config.bearing || 0);
+    // If 'tilted', use USER'S settings from preview (mapSettings.defaultPitch/Bearing).
+    // If 'top', use 0.
+    const settingsPitch = mapSettings?.defaultPitch ?? 70;
+    const settingsBearing = mapSettings?.defaultBearing ?? -20;
+
+    // config.zoom might be minZoom now if we aren't careful, so we should prefer mapSettings.defaultZoom
+    // which effectively IS "config.zoom" but let's be explicit to avoid confusion with the "initial load" config.
+    const targetZoom = mapSettings?.defaultZoom ?? config.zoom;
+
+    const targetPitch = viewModeRef.current === 'tilted' ? settingsPitch : 0;
+    const targetBearing = viewModeRef.current === 'tilted' ? settingsBearing : 0;
 
     mapRef.current.flyTo({
       center: targetCenter,
-      zoom: config.zoom,
+      zoom: targetZoom,
       pitch: targetPitch,
       bearing: targetBearing,
       duration: 2000,
