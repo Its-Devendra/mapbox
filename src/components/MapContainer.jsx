@@ -1420,25 +1420,27 @@ export default function MapContainer({
       return;
     }
 
+    const config = getMapConfig();
+
     if (viewMode === 'top') {
       // Switch to Top View (2D) - pitch is 0 but bearing is preserved
-      const config = getMapConfig();
       mapRef.current.easeTo({
         pitch: 0,
-        bearing: config.defaultBearing || -20,
+        bearing: config.defaultBearing ?? -20,
         duration: 1000,
         essential: true
       });
     } else {
-      // Switch to Tilted View (3D) - camera transitions to dramatic angle
+      // Switch to Tilted View (3D) - use configured pitch and bearing from settings
+      // Using ?? instead of || so that 0 values are respected (0 is falsy in JS)
       mapRef.current.easeTo({
-        pitch: 70,
-        bearing: -20,
+        pitch: config.defaultPitch ?? 70,
+        bearing: config.defaultBearing ?? -20,
         duration: 1000,
         essential: true
       });
     }
-  }, [viewMode, isMapLoaded]);
+  }, [viewMode, isMapLoaded, getMapConfig]);
 
   /**
    * Update markers when data changes - Optimized to use setData
