@@ -431,7 +431,8 @@ export default function MapContainer({
     if (originalViewportRef.current && mapRef.current) {
       try {
         const targetPitch = viewModeRef.current === 'tilted' ? 70 : 0;
-        const targetBearing = viewModeRef.current === 'tilted' ? -20 : 0;
+        // In 2D Top mode, keep bearing but remove pitch
+        const targetBearing = -20;
 
         mapRef.current.flyTo({
           center: originalViewportRef.current.center,
@@ -1304,10 +1305,12 @@ export default function MapContainer({
 
       initialAnimationTimeoutRef.current = setTimeout(() => {
         if (!mapRef.current) return;
+        // In 2D Top mode (default), pitch is 0 but bearing is applied
+        const initialPitch = viewModeRef.current === 'tilted' ? config.defaultPitch : 0;
         mapRef.current.flyTo({
           center: targetCenter,
           zoom: config.defaultZoom,
-          pitch: config.defaultPitch,
+          pitch: initialPitch,
           bearing: config.defaultBearing,
           duration: durationMs,
           essential: true
@@ -1417,10 +1420,11 @@ export default function MapContainer({
     }
 
     if (viewMode === 'top') {
-      // Switch to Top View (2D) - camera transitions from tilted to straight down
+      // Switch to Top View (2D) - pitch is 0 but bearing is preserved
+      const config = getMapConfig();
       mapRef.current.easeTo({
         pitch: 0,
-        bearing: 0,
+        bearing: config.defaultBearing || -20,
         duration: 1000,
         essential: true
       });
@@ -1978,9 +1982,9 @@ export default function MapContainer({
     const targetCenter = config.center;
 
     // Determine pitch/bearing based on viewMode
-    // If 'tilted', use the user's default settings. If 'top', use flat view.
+    // If 'tilted', use the user's default settings. If 'top', pitch is 0 but bearing is preserved.
     const targetPitch = viewModeRef.current === 'tilted' ? config.defaultPitch : 0;
-    const targetBearing = viewModeRef.current === 'tilted' ? config.defaultBearing : 0;
+    const targetBearing = config.defaultBearing || 0;
 
     mapRef.current.flyTo({
       center: targetCenter,
