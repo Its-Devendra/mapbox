@@ -427,29 +427,30 @@ export default function MapContainer({
     routeRef.current = null;
     activeLandmarkRef.current = null;
 
-    // Restore original viewport
-    if (originalViewportRef.current && mapRef.current) {
+    // Return to configured camera preview position (default view from settings)
+    if (mapRef.current) {
       try {
-        const targetPitch = viewModeRef.current === 'tilted' ? 70 : 0;
+        const config = getMapConfig();
+        const targetPitch = viewModeRef.current === 'tilted' ? config.defaultPitch : 0;
         // In 2D Top mode, keep bearing but remove pitch
-        const targetBearing = -20;
+        const targetBearing = config.defaultBearing || -20;
 
         mapRef.current.flyTo({
-          center: originalViewportRef.current.center,
-          zoom: originalViewportRef.current.zoom,
+          center: config.center,
+          zoom: config.defaultZoom,
           pitch: targetPitch,
           bearing: targetBearing,
           duration: MAPBOX_CONFIG.ROUTE_ANIMATION_DURATION
         });
       } catch (e) {
-        console.warn('Could not fly to original viewport:', e);
+        console.warn('Could not fly to default camera position:', e);
       }
     }
 
     // Deselect landmark
     setSelectedLandmark(null);
     setShowLandmarkCard(false);
-  }, []); // No viewMode dependency - uses ref instead
+  }, [getMapConfig]); // Added getMapConfig dependency
 
   /**
    * Load custom icons with error handling and caching
