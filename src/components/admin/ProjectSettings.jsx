@@ -49,6 +49,8 @@ export default function ProjectSettings({ projectId }) {
     maxPanDistanceKm: '',
     panCenterLat: '',
     panCenterLng: '',
+    autoFitBounds: false,
+    autoFitPadding: 50,
     isActive: false
   });
 
@@ -163,6 +165,8 @@ export default function ProjectSettings({ projectId }) {
       maxPanDistanceKm: setting.maxPanDistanceKm || '',
       panCenterLat: setting.panCenterLat || '',
       panCenterLng: setting.panCenterLng || '',
+      autoFitBounds: setting.autoFitBounds || false,
+      autoFitPadding: setting.autoFitPadding || 50,
       isActive: setting.isActive
     });
     setShowModal(true);
@@ -213,6 +217,8 @@ export default function ProjectSettings({ projectId }) {
       maxPanDistanceKm: '',
       panCenterLat: '',
       panCenterLng: '',
+      autoFitBounds: false,
+      autoFitPadding: 50,
       isActive: false
     });
   };
@@ -223,7 +229,8 @@ export default function ProjectSettings({ projectId }) {
 
     if (type === 'checkbox') {
       parsedValue = checked;
-    } else if (type === 'number') {
+    } else if (type === 'number' || type === 'range') {
+      // Both number and range inputs return strings that need to be parsed
       parsedValue = value === '' ? '' : parseFloat(value);
     }
 
@@ -763,6 +770,62 @@ export default function ProjectSettings({ projectId }) {
                         nearbyPlaces={projectData.nearbyPlaces}
                         clientBuilding={projectData.clientBuilding}
                       />
+                    </div>
+                  )}
+                </div>
+
+                {/* Responsive Viewport (Auto-Fit Bounds) */}
+                <div className="space-y-4 p-5 bg-white rounded-xl border border-gray-100">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <div>
+                      <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                        <Eye className="w-4 h-4 text-gray-600" /> Responsive Viewport
+                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">NEW</span>
+                      </h4>
+                      <p className="text-xs text-gray-500 mt-1">Auto-fits all landmarks on screen for any device size</p>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="autoFitBounds"
+                        checked={formData.autoFitBounds}
+                        onChange={handleInputChange}
+                        className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Enable</span>
+                    </label>
+                  </div>
+
+                  {formData.autoFitBounds && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-4">
+                      <p className="text-xs text-gray-700">
+                        <strong>How it works:</strong> Instead of a fixed zoom level, the map will calculate the
+                        optimal zoom to show all landmarks on any screen size (mobile, tablet, desktop).
+                      </p>
+
+                      <div className="flex items-center justify-between gap-4">
+                        <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                          Padding around landmarks
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            name="autoFitPadding"
+                            min="10"
+                            max="150"
+                            value={formData.autoFitPadding}
+                            onChange={handleInputChange}
+                            className="w-28 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+                          />
+                          <span className="text-sm font-mono bg-white px-2 py-1 rounded border border-gray-200 min-w-[55px] text-center">
+                            {formData.autoFitPadding}px
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-gray-500 italic">
+                        💡 When enabled, the Default Zoom setting acts as a maximum zoom limit.
+                      </p>
                     </div>
                   )}
                 </div>
