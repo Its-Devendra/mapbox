@@ -449,7 +449,7 @@ export default function ProjectSettings({ projectId }) {
                         type="number"
                         min="0"
                         max="22"
-                        step="0.1"
+                        step="any"
                         name="minZoom"
                         value={formData.minZoom}
                         onChange={handleInputChange}
@@ -464,7 +464,7 @@ export default function ProjectSettings({ projectId }) {
                         type="number"
                         min="0"
                         max="22"
-                        step="0.1"
+                        step="any"
                         name="defaultZoom"
                         value={formData.defaultZoom}
                         onChange={handleInputChange}
@@ -479,7 +479,7 @@ export default function ProjectSettings({ projectId }) {
                         type="number"
                         min="0"
                         max="22"
-                        step="0.1"
+                        step="any"
                         name="maxZoom"
                         value={formData.maxZoom}
                         onChange={handleInputChange}
