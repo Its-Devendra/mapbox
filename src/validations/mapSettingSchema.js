@@ -28,6 +28,9 @@ export const mapSettingSchema = z.object({
   maxPanDistanceKm: z.number().min(0.5).max(100).nullable().optional(),
   panCenterLat: z.number().nullable().optional(),
   panCenterLng: z.number().nullable().optional(),
+  // Auto-fit bounds - automatically zoom to show all landmarks
+  autoFitBounds: z.boolean().optional(),
+  autoFitPadding: z.number().min(0).max(200).optional(),
   isActive: z.boolean().optional(),
 });
 

@@ -168,6 +168,11 @@ model MapSetting {
   maxPanDistanceKm        Float?  // Maximum pan distance in kilometers (null = no limit)
   panCenterLat            Float?  // Custom center latitude for pan restriction (null = use client building)
   panCenterLng            Float?  // Custom center longitude for pan restriction (null = use client building)
+  
+  // Auto-fit bounds - automatically zoom to show all landmarks (responsive for all screen sizes)
+  autoFitBounds           Boolean @default(false)  // If true, auto-calculate zoom to fit all landmarks
+  autoFitPadding          Int     @default(50)     // Padding in pixels around the fitted bounds
+  
   isActive                Boolean @default(false)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt

@@ -35,6 +35,8 @@ export default function MapSettingsManager() {
     southWestLng: null,
     northEastLat: null,
     northEastLng: null,
+    autoFitBounds: false,
+    autoFitPadding: 50,
     projectId: '',
     isActive: false
   });
@@ -143,6 +145,8 @@ export default function MapSettingsManager() {
       southWestLng: setting.southWestLng || null,
       northEastLat: setting.northEastLat || null,
       northEastLng: setting.northEastLng || null,
+      autoFitBounds: setting.autoFitBounds || false,
+      autoFitPadding: setting.autoFitPadding || 50,
       projectId: setting.projectId,
       isActive: setting.isActive
     });
@@ -554,6 +558,55 @@ export default function MapSettingsManager() {
                     />
                   </div>
                 )}
+
+                {/* Auto-Fit Bounds Section */}
+                <div className="border-t border-dashed border-gray-300 pt-4 mt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h4 className="font-semibold text-gray-900">Responsive Viewport (Auto-Fit)</h4>
+                      <p className="text-xs text-gray-500 mt-1">Automatically fits all landmarks on screen for any device size</p>
+                    </div>
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="autoFitBounds"
+                        checked={formData.autoFitBounds}
+                        onChange={handleInputChange}
+                        className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded mr-2"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Enable</span>
+                    </label>
+                  </div>
+
+                  {formData.autoFitBounds && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <p className="text-xs text-gray-700 mb-3">
+                        <strong>How it works:</strong> Instead of a fixed zoom level, the map will calculate the
+                        optimal zoom to show all landmarks on any screen size (mobile, tablet, desktop).
+                      </p>
+
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-700">
+                          Padding around landmarks
+                        </label>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="range"
+                            name="autoFitPadding"
+                            min="10"
+                            max="150"
+                            value={formData.autoFitPadding}
+                            onChange={handleInputChange}
+                            className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                          <span className="text-sm font-mono bg-white px-2 py-1 rounded border min-w-[50px] text-center">
+                            {formData.autoFitPadding}px
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Interactive Bounds Preview Section */}

@@ -208,10 +208,38 @@ export default function MapContainer({
       dragRotate: mapSettings?.enableRotation ?? true,
       pitchWithRotate: mapSettings?.enablePitch ?? true,
       // Distance-based navigation bounds
-      maxPanDistanceKm: maxPanDistanceKm
+      maxPanDistanceKm: maxPanDistanceKm,
+      // Auto-fit bounds - responsive zoom to fit all landmarks
+      autoFitBounds: mapSettings?.autoFitBounds ?? false,
+      autoFitPadding: mapSettings?.autoFitPadding ?? 50
     };
     return config;
   }, [mapSettings, interactive]);
+
+  /**
+   * Calculate bounds that contain all landmarks and client building
+   * Used for auto-fit bounds feature (responsive zoom for all screen sizes)
+   */
+  const calculateAllMarkersBounds = useCallback(() => {
+    const bounds = new mapboxgl.LngLatBounds();
+    let hasCoordinates = false;
+
+    // Include client building
+    if (clientBuilding?.coordinates) {
+      bounds.extend(clientBuilding.coordinates);
+      hasCoordinates = true;
+    }
+
+    // Include all landmarks
+    landmarks.forEach(landmark => {
+      if (landmark.latitude && landmark.longitude) {
+        bounds.extend([landmark.longitude, landmark.latitude]);
+        hasCoordinates = true;
+      }
+    });
+
+    return hasCoordinates ? bounds : null;
+  }, [clientBuilding, landmarks]);
 
   /**
    * Intro Sequence Logic
@@ -448,33 +476,56 @@ export default function MapContainer({
         // In 2D Top mode, keep bearing but remove pitch
         const targetBearing = config.defaultBearing ?? -20;
 
-        console.log('🎯 CLEAR_ROUTE: Flying to camera position:', {
-          center: config.center,
-          zoom: config.defaultZoom,
-          pitch: targetPitch,
-          bearing: targetBearing,
-          viewMode: viewModeRef.current,
-          rawMapSettings: {
-            defaultCenterLat: mapSettings?.defaultCenterLat,
-            defaultCenterLng: mapSettings?.defaultCenterLng,
-            defaultZoom: mapSettings?.defaultZoom,
-            defaultPitch: mapSettings?.defaultPitch,
-            defaultBearing: mapSettings?.defaultBearing
-          }
-        });
-
         // CRITICAL: Reset any map padding set by fitBounds before flying to default view
-        // fitBounds with uneven padding (e.g., bottom: 350) sets persistent padding that
-        // offsets the visual center even when flyTo uses correct coordinates
         mapRef.current.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
 
-        mapRef.current.flyTo({
-          center: config.center,
-          zoom: config.defaultZoom,
-          pitch: targetPitch,
-          bearing: targetBearing,
-          duration: MAPBOX_CONFIG.ROUTE_ANIMATION_DURATION
-        });
+        // Check if auto-fit bounds is enabled
+        if (config.autoFitBounds) {
+          const markersBounds = calculateAllMarkersBounds();
+          if (markersBounds) {
+            console.log('🎯 CLEAR_ROUTE: Using fitBounds (autoFitBounds enabled)', {
+              bounds: markersBounds,
+              padding: config.autoFitPadding,
+              pitch: targetPitch,
+              bearing: targetBearing,
+              viewMode: viewModeRef.current
+            });
+
+            mapRef.current.fitBounds(markersBounds, {
+              padding: config.autoFitPadding,
+              pitch: targetPitch,
+              bearing: targetBearing,
+              duration: MAPBOX_CONFIG.ROUTE_ANIMATION_DURATION,
+              maxZoom: config.defaultZoom
+            });
+          } else {
+            // Fallback to flyTo if no markers
+            mapRef.current.flyTo({
+              center: config.center,
+              zoom: config.defaultZoom,
+              pitch: targetPitch,
+              bearing: targetBearing,
+              duration: MAPBOX_CONFIG.ROUTE_ANIMATION_DURATION
+            });
+          }
+        } else {
+          // Original behavior: flyTo with fixed zoom
+          console.log('🎯 CLEAR_ROUTE: Flying to camera position:', {
+            center: config.center,
+            zoom: config.defaultZoom,
+            pitch: targetPitch,
+            bearing: targetBearing,
+            viewMode: viewModeRef.current
+          });
+
+          mapRef.current.flyTo({
+            center: config.center,
+            zoom: config.defaultZoom,
+            pitch: targetPitch,
+            bearing: targetBearing,
+            duration: MAPBOX_CONFIG.ROUTE_ANIMATION_DURATION
+          });
+        }
 
         // Debug: Log actual position after animation completes
         mapRef.current.once('moveend', () => {
@@ -495,7 +546,7 @@ export default function MapContainer({
     // Deselect landmark
     setSelectedLandmark(null);
     setShowLandmarkCard(false);
-  }, [getMapConfig]); // Added getMapConfig dependency
+  }, [getMapConfig, calculateAllMarkersBounds]); // Added calculateAllMarkersBounds dependency
 
   /**
    * Load custom icons with error handling and caching
@@ -1391,29 +1442,64 @@ export default function MapContainer({
         // In 2D Top mode (default), pitch is 0 but bearing is applied
         const initialPitch = viewModeRef.current === 'tilted' ? config.defaultPitch : 0;
 
-        console.log('🎯 INITIAL_ANIMATION: Flying to camera position:', {
-          center: targetCenter,
-          zoom: config.defaultZoom,
-          pitch: initialPitch,
-          bearing: config.defaultBearing,
-          viewMode: viewModeRef.current,
-          rawMapSettings: {
-            defaultCenterLat: mapSettings?.defaultCenterLat,
-            defaultCenterLng: mapSettings?.defaultCenterLng,
-            defaultZoom: mapSettings?.defaultZoom,
-            defaultPitch: mapSettings?.defaultPitch,
-            defaultBearing: mapSettings?.defaultBearing
-          }
-        });
+        // Check if auto-fit bounds is enabled
+        if (config.autoFitBounds) {
+          const markersBounds = calculateAllMarkersBounds();
+          if (markersBounds) {
+            console.log('🎯 INITIAL_ANIMATION: Using fitBounds (autoFitBounds enabled)', {
+              bounds: markersBounds,
+              padding: config.autoFitPadding,
+              pitch: initialPitch,
+              bearing: config.defaultBearing,
+              viewMode: viewModeRef.current
+            });
 
-        mapRef.current.flyTo({
-          center: targetCenter,
-          zoom: config.defaultZoom,
-          pitch: initialPitch,
-          bearing: config.defaultBearing ?? 0,
-          duration: durationMs,
-          essential: true
-        });
+            mapRef.current.fitBounds(markersBounds, {
+              padding: config.autoFitPadding,
+              pitch: initialPitch,
+              bearing: config.defaultBearing ?? 0,
+              duration: durationMs,
+              essential: true,
+              maxZoom: config.defaultZoom // Don't zoom in more than defaultZoom
+            });
+          } else {
+            // Fallback to flyTo if no markers found
+            console.log('🎯 INITIAL_ANIMATION: No markers found, using flyTo fallback');
+            mapRef.current.flyTo({
+              center: targetCenter,
+              zoom: config.defaultZoom,
+              pitch: initialPitch,
+              bearing: config.defaultBearing ?? 0,
+              duration: durationMs,
+              essential: true
+            });
+          }
+        } else {
+          // Original behavior: flyTo with fixed zoom
+          console.log('🎯 INITIAL_ANIMATION: Flying to camera position:', {
+            center: targetCenter,
+            zoom: config.defaultZoom,
+            pitch: initialPitch,
+            bearing: config.defaultBearing,
+            viewMode: viewModeRef.current,
+            rawMapSettings: {
+              defaultCenterLat: mapSettings?.defaultCenterLat,
+              defaultCenterLng: mapSettings?.defaultCenterLng,
+              defaultZoom: mapSettings?.defaultZoom,
+              defaultPitch: mapSettings?.defaultPitch,
+              defaultBearing: mapSettings?.defaultBearing
+            }
+          });
+
+          mapRef.current.flyTo({
+            center: targetCenter,
+            zoom: config.defaultZoom,
+            pitch: initialPitch,
+            bearing: config.defaultBearing ?? 0,
+            duration: durationMs,
+            essential: true
+          });
+        }
 
         // Debug: Log actual position after animation completes
         mapRef.current.once('moveend', () => {
@@ -2097,36 +2183,66 @@ export default function MapContainer({
 
     const config = getMapConfig();
 
-    // Use the same targetCenter as initial animation (config.center from Camera Preview)
-    const targetCenter = config.center;
-
-    // Pitch based on viewMode (same logic as initial animation line 1387)
-    // If 'top', pitch is 0. If 'tilted', use configured defaultPitch.
+    // Pitch based on viewMode (same logic as initial animation)
     const targetPitch = viewModeRef.current === 'tilted' ? config.defaultPitch : 0;
 
-    // Use ?? instead of || to handle bearing of 0 correctly (same as initial animation)
+    // Use ?? instead of || to handle bearing of 0 correctly
     const targetBearing = config.defaultBearing ?? 0;
-
-    console.log('🔄 RESET_CAMERA: Flying to configured position:', {
-      center: targetCenter,
-      zoom: config.defaultZoom,
-      pitch: targetPitch,
-      bearing: targetBearing,
-      viewMode: viewModeRef.current
-    });
 
     // Reset any map padding set by fitBounds before flying to default view
     mapRef.current.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
 
-    mapRef.current.flyTo({
-      center: targetCenter,
-      zoom: config.defaultZoom,
-      pitch: targetPitch,
-      bearing: targetBearing,
-      duration: 2000,
-      essential: true
-    });
-  }, [getMapConfig]); // Removed clientBuilding dependency - not used
+    // Check if auto-fit bounds is enabled
+    if (config.autoFitBounds) {
+      const markersBounds = calculateAllMarkersBounds();
+      if (markersBounds) {
+        console.log('🔄 RESET_CAMERA: Using fitBounds (autoFitBounds enabled)', {
+          bounds: markersBounds,
+          padding: config.autoFitPadding,
+          pitch: targetPitch,
+          bearing: targetBearing,
+          viewMode: viewModeRef.current
+        });
+
+        mapRef.current.fitBounds(markersBounds, {
+          padding: config.autoFitPadding,
+          pitch: targetPitch,
+          bearing: targetBearing,
+          duration: 2000,
+          essential: true,
+          maxZoom: config.defaultZoom
+        });
+      } else {
+        // Fallback to flyTo if no markers
+        mapRef.current.flyTo({
+          center: config.center,
+          zoom: config.defaultZoom,
+          pitch: targetPitch,
+          bearing: targetBearing,
+          duration: 2000,
+          essential: true
+        });
+      }
+    } else {
+      // Original behavior: flyTo with fixed zoom
+      console.log('🔄 RESET_CAMERA: Flying to configured position:', {
+        center: config.center,
+        zoom: config.defaultZoom,
+        pitch: targetPitch,
+        bearing: targetBearing,
+        viewMode: viewModeRef.current
+      });
+
+      mapRef.current.flyTo({
+        center: config.center,
+        zoom: config.defaultZoom,
+        pitch: targetPitch,
+        bearing: targetBearing,
+        duration: 2000,
+        essential: true
+      });
+    }
+  }, [getMapConfig, calculateAllMarkersBounds]);
 
   /**
    * Expose functionality via refs or context if needed in future
