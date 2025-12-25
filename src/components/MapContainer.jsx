@@ -463,6 +463,11 @@ export default function MapContainer({
           }
         });
 
+        // CRITICAL: Reset any map padding set by fitBounds before flying to default view
+        // fitBounds with uneven padding (e.g., bottom: 350) sets persistent padding that
+        // offsets the visual center even when flyTo uses correct coordinates
+        mapRef.current.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
+
         mapRef.current.flyTo({
           center: config.center,
           zoom: config.defaultZoom,
@@ -1405,7 +1410,7 @@ export default function MapContainer({
           center: targetCenter,
           zoom: config.defaultZoom,
           pitch: initialPitch,
-          bearing: config.defaultBearing,
+          bearing: config.defaultBearing ?? 0,
           duration: durationMs,
           essential: true
         });
@@ -2084,23 +2089,34 @@ export default function MapContainer({
   }, [clearRoute]);
 
   /**
-   * Reset camera to default view (centered on client building if available)
-   */
-  /**
    * Reset camera to default view (using configured center from Camera Preview)
+   * MUST match the initial animation flyTo parameters exactly
    */
   const resetCamera = useCallback(() => {
     if (!mapRef.current) return;
 
     const config = getMapConfig();
 
-    // Use the user's configured center position from Camera Preview
+    // Use the same targetCenter as initial animation (config.center from Camera Preview)
     const targetCenter = config.center;
 
-    // Determine pitch/bearing based on viewMode
-    // If 'tilted', use the user's default settings. If 'top', pitch is 0 but bearing is preserved.
+    // Pitch based on viewMode (same logic as initial animation line 1387)
+    // If 'top', pitch is 0. If 'tilted', use configured defaultPitch.
     const targetPitch = viewModeRef.current === 'tilted' ? config.defaultPitch : 0;
-    const targetBearing = config.defaultBearing || 0;
+
+    // Use ?? instead of || to handle bearing of 0 correctly (same as initial animation)
+    const targetBearing = config.defaultBearing ?? 0;
+
+    console.log('🔄 RESET_CAMERA: Flying to configured position:', {
+      center: targetCenter,
+      zoom: config.defaultZoom,
+      pitch: targetPitch,
+      bearing: targetBearing,
+      viewMode: viewModeRef.current
+    });
+
+    // Reset any map padding set by fitBounds before flying to default view
+    mapRef.current.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
 
     mapRef.current.flyTo({
       center: targetCenter,
@@ -2110,7 +2126,7 @@ export default function MapContainer({
       duration: 2000,
       essential: true
     });
-  }, [getMapConfig, clientBuilding]); // No viewMode dependency - uses ref instead
+  }, [getMapConfig]); // Removed clientBuilding dependency - not used
 
   /**
    * Expose functionality via refs or context if needed in future
