@@ -152,6 +152,11 @@ export default function MapContainer({
   const viewModeRef = useRef('top'); // Ref to access viewMode without causing effect re-runs
   const isFlyingRef = useRef(false); // Track if a cinematic flight is in progress
 
+  // Stable refs for callbacks used in map init effect (prevent re-init on filter change)
+  const clearRouteRef = useRef(null);
+  const cleanupRef = useRef(null);
+  const add3DBuildingsRef = useRef(null);
+
   // Intro State
   const [showIntroButton, setShowIntroButton] = useState(false); // Show button if autoplay blocks
   const introAudioRef = useRef(introAudio); // Track introAudio prop for non-reactive access
@@ -418,6 +423,7 @@ export default function MapContainer({
       boundsSetupTimeoutRef.current = null;
     }
   }, []);
+
   /**
    * Clear route and restore viewport
    */
@@ -428,7 +434,12 @@ export default function MapContainer({
 
     console.log('clearRoute called, routeRef:', routeRef.current, 'isCreating:', isCreatingRouteRef.current);
 
-    // FIRST: Cancel any ongoing animation to prevent race conditions
+    // FIRST: Stop any ongoing cinematic flight animation
+    // This sets cancelRef.current = true in the hook, which stops smoothFlyTo
+    stopTour(mapRef.current);
+    isFlyingRef.current = false;
+
+    // Cancel any ongoing route animation frame
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -546,7 +557,7 @@ export default function MapContainer({
     // Deselect landmark
     setSelectedLandmark(null);
     setShowLandmarkCard(false);
-  }, [getMapConfig, calculateAllMarkersBounds]); // Added calculateAllMarkersBounds dependency
+  }, [getMapConfig, calculateAllMarkersBounds, stopTour]); // Added stopTour dependency
 
   /**
    * Load custom icons with error handling and caching
@@ -1263,6 +1274,20 @@ export default function MapContainer({
     }
   }, [mapSettings]);
 
+  // Keep callback refs in sync (prevents map re-init when callbacks change due to filter changes)
+  // These must be defined AFTER all callbacks to avoid "Cannot access before initialization" errors
+  useEffect(() => {
+    clearRouteRef.current = clearRoute;
+  }, [clearRoute]);
+
+  useEffect(() => {
+    cleanupRef.current = cleanup;
+  }, [cleanup]);
+
+  useEffect(() => {
+    add3DBuildingsRef.current = add3DBuildings;
+  }, [add3DBuildings]);
+
   /**
    * Initialize map
    */
@@ -1353,8 +1378,8 @@ export default function MapContainer({
         setDebugCameraPosition(debugData);
       });
 
-      // Add 3D buildings layer
-      add3DBuildings();
+      // Add 3D buildings layer (using ref to avoid dependency causing re-init)
+      add3DBuildingsRef.current?.();
 
       const duration = mapSettings?.initialAnimationDuration || MAPBOX_CONFIG.INITIAL_ANIMATION_DURATION;
 
@@ -1579,14 +1604,14 @@ export default function MapContainer({
     eventHandlersRef.current.push({ event: 'click', handler: mapClickHandler });
 
     return () => {
-      cleanup();
+      cleanupRef.current?.();
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
       }
       loadedIconsRef.current.clear();
     };
-  }, [theme.mapboxStyle, themeLoading, getMapConfig, mapSettings, clearRoute, cleanup, add3DBuildings]);
+  }, [theme.mapboxStyle, themeLoading, getMapConfig, mapSettings]);
 
   /**
    * Update map style when theme changes
@@ -2422,7 +2447,7 @@ export default function MapContainer({
                 }),
               }}
             >
-              Recenter
+              Re-center
               <div
                 className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent"
                 style={{ borderRightColor: hexToRgba(bgColor, 80 / 100) }}
