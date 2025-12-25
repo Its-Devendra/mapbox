@@ -276,7 +276,7 @@ export function useCinematicTour() {
     // MAIN TOUR ORCHESTRATION
     // ═══════════════════════════════════════════════════════════════════════════
 
-    const startTour = useCallback(async (map, clientBuilding, landmarks) => {
+    const startTour = useCallback(async (map, clientBuilding, landmarks, outroSettings = null) => {
         if (!map || !clientBuilding?.coordinates) return;
 
         const validLandmarks = landmarks?.filter(l => l?.coordinates) || [];
@@ -351,13 +351,14 @@ export function useCinematicTour() {
             if (cancelRef.current) return;
             setCurrentStep(total);
 
-            console.log('🎬 Ascending to overview...');
+            console.log('🎬 Ascending to overview...', { outroSettings });
 
+            // Use configured camera preview settings if provided, otherwise fallback to defaults
             await smoothFlyTo(map, {
-                center: clientBuilding.coordinates,
-                zoom: 14,
-                pitch: 0,
-                bearing: 0
+                center: outroSettings?.center ?? clientBuilding.coordinates,
+                zoom: outroSettings?.zoom ?? 14,
+                pitch: outroSettings?.pitch ?? 0,
+                bearing: outroSettings?.bearing ?? 0
             }, TIMINGS.OUTRO_DURATION);
 
             console.log('🎬 Cinematic tour complete!');

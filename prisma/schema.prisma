@@ -155,6 +155,9 @@ model MapSetting {
   defaultPitch             Float  @default(70)      // Camera tilt angle (0-85 degrees)
   defaultBearing           Float  @default(-20)     // Camera rotation (-180 to 180 degrees)
   
+  // Initial transition control
+  useMinZoomForInitialTransition Boolean @default(false) // false = globe view, true = start from minZoom
+  
   // Map bounds - restrict navigation area (DEPRECATED - use maxPanDistanceKm instead)
   southWestLat            Float?
   southWestLng            Float?

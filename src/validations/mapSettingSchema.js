@@ -18,6 +18,7 @@ export const mapSettingSchema = z.object({
   useDefaultCameraAfterLoad: z.boolean().optional(),
   defaultPitch: z.number().min(0).max(85).optional(),
   defaultBearing: z.number().min(-180).max(180).optional(),
+  useMinZoomForInitialTransition: z.boolean().optional(),
   // Deprecated rectangular bounds - nullable to allow clearing
   southWestLat: z.number().nullable().optional(),
   southWestLng: z.number().nullable().optional(),

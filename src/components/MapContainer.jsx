@@ -166,6 +166,7 @@ export default function MapContainer({
   const [showLandmarkCard, setShowLandmarkCard] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [currentBearing, setCurrentBearing] = useState(0);
+  const [debugCameraPosition, setDebugCameraPosition] = useState(null); // DEBUG: Real-time camera position
 
   // Custom hook for directions
   const { getDistanceAndDuration } = useMapboxDirections();
@@ -251,7 +252,17 @@ export default function MapContainer({
         // On audio end, start tour or zoom back out
         audio.onended = () => {
           if (landmarks && landmarks.length > 0 && clientBuilding) {
-            startTour(mapRef.current, clientBuilding, landmarks);
+            // Pass configured camera preview settings for the tour outro
+            const outroSettings = {
+              center: [
+                mapSettings?.defaultCenterLng ?? clientBuilding?.coordinates?.[0],
+                mapSettings?.defaultCenterLat ?? clientBuilding?.coordinates?.[1]
+              ],
+              zoom: mapSettings?.defaultZoom ?? 14,
+              pitch: 0, // 2D Top mode default
+              bearing: mapSettings?.defaultBearing ?? 0
+            };
+            startTour(mapRef.current, clientBuilding, landmarks, outroSettings);
           } else {
             resetCamera();
           }
@@ -435,7 +446,22 @@ export default function MapContainer({
         const config = getMapConfig();
         const targetPitch = viewModeRef.current === 'tilted' ? config.defaultPitch : 0;
         // In 2D Top mode, keep bearing but remove pitch
-        const targetBearing = config.defaultBearing || -20;
+        const targetBearing = config.defaultBearing ?? -20;
+
+        console.log('🎯 CLEAR_ROUTE: Flying to camera position:', {
+          center: config.center,
+          zoom: config.defaultZoom,
+          pitch: targetPitch,
+          bearing: targetBearing,
+          viewMode: viewModeRef.current,
+          rawMapSettings: {
+            defaultCenterLat: mapSettings?.defaultCenterLat,
+            defaultCenterLng: mapSettings?.defaultCenterLng,
+            defaultZoom: mapSettings?.defaultZoom,
+            defaultPitch: mapSettings?.defaultPitch,
+            defaultBearing: mapSettings?.defaultBearing
+          }
+        });
 
         mapRef.current.flyTo({
           center: config.center,
@@ -443,6 +469,18 @@ export default function MapContainer({
           pitch: targetPitch,
           bearing: targetBearing,
           duration: MAPBOX_CONFIG.ROUTE_ANIMATION_DURATION
+        });
+
+        // Debug: Log actual position after animation completes
+        mapRef.current.once('moveend', () => {
+          if (!mapRef.current) return;
+          const finalCenter = mapRef.current.getCenter();
+          console.log('🏁 CLEAR_ROUTE COMPLETE: Actual final camera position:', {
+            center: [finalCenter.lng, finalCenter.lat],
+            zoom: mapRef.current.getZoom(),
+            pitch: mapRef.current.getPitch(),
+            bearing: mapRef.current.getBearing()
+          });
         });
       } catch (e) {
         console.warn('Could not fly to default camera position:', e);
@@ -1180,17 +1218,29 @@ export default function MapContainer({
     // Convert style URL to proper mapbox:// format
     const styleUrl = convertToMapboxStyleUrl(theme.mapboxStyle) || MAPBOX_CONFIG.DEFAULT_STYLE || 'mapbox://styles/mapbox/dark-v11';
 
-    // 1. INITIAL LOAD STATE: Start "Far Away" (Min Zoom)
-    // The user wants the map to start at the minZoom level (zoomed out) of the constraints, or specifically the "min zoom which i set".
-    // We use config.minZoom which comes from mapSettings.minZoom.
-    const initialZoom = config.minZoom || 0;
+    // 1. INITIAL LOAD STATE: Start from configured position or globe view
+    // If useMinZoomForInitialTransition is true, start from minZoom; otherwise start from globe view (zoom 0)
+    const useMinZoomStart = mapSettings?.useMinZoomForInitialTransition === true;
+    const initialZoom = useMinZoomStart ? config.minZoom : 0;
+
+    // When starting from globe view (zoom 0), we need to temporarily allow zoom < minZoom
+    // The real minZoom constraint will be applied AFTER the fly animation completes
+    const initialMinZoom = useMinZoomStart ? config.minZoom : 0;
+
+    console.log('🚀 Initial Zoom Config:', {
+      useMinZoomForInitialTransition: mapSettings?.useMinZoomForInitialTransition,
+      useMinZoomStart,
+      initialZoom,
+      initialMinZoom,
+      configMinZoom: config.minZoom
+    });
 
     mapRef.current = new mapboxgl.Map({
       container: mapContainerRef.current,
       style: styleUrl,
       center: config.center,
-      zoom: initialZoom, // Start at minZoom
-      minZoom: config.minZoom,
+      zoom: initialZoom, // Start at globe view (0) or minZoom
+      minZoom: initialMinZoom, // Temporarily allow zoom 0, will be updated after animation
       maxZoom: config.maxZoom,
       pitch: 0, // Start flat, animate to tilted during transition
       bearing: 0, // Start neutral, animate to final bearing during transition
@@ -1227,6 +1277,24 @@ export default function MapContainer({
         if (mapRef.current) {
           setCurrentBearing(mapRef.current.getBearing());
         }
+      });
+
+      // DEBUG: Track ALL camera movements to find unexpected changes
+      let moveCount = 0;
+      mapRef.current.on('moveend', () => {
+        if (!mapRef.current) return;
+        moveCount++;
+        const center = mapRef.current.getCenter();
+        const debugData = {
+          moveCount,
+          timestamp: new Date().toISOString(),
+          center: [center.lng.toFixed(6), center.lat.toFixed(6)],
+          zoom: mapRef.current.getZoom().toFixed(2),
+          pitch: mapRef.current.getPitch().toFixed(1),
+          bearing: mapRef.current.getBearing().toFixed(1)
+        };
+        console.log(`📸 CAMERA_MOVE #${moveCount}:`, debugData);
+        setDebugCameraPosition(debugData);
       });
 
       // Add 3D buildings layer
@@ -1317,6 +1385,22 @@ export default function MapContainer({
         if (!mapRef.current) return;
         // In 2D Top mode (default), pitch is 0 but bearing is applied
         const initialPitch = viewModeRef.current === 'tilted' ? config.defaultPitch : 0;
+
+        console.log('🎯 INITIAL_ANIMATION: Flying to camera position:', {
+          center: targetCenter,
+          zoom: config.defaultZoom,
+          pitch: initialPitch,
+          bearing: config.defaultBearing,
+          viewMode: viewModeRef.current,
+          rawMapSettings: {
+            defaultCenterLat: mapSettings?.defaultCenterLat,
+            defaultCenterLng: mapSettings?.defaultCenterLng,
+            defaultZoom: mapSettings?.defaultZoom,
+            defaultPitch: mapSettings?.defaultPitch,
+            defaultBearing: mapSettings?.defaultBearing
+          }
+        });
+
         mapRef.current.flyTo({
           center: targetCenter,
           zoom: config.defaultZoom,
@@ -1325,6 +1409,26 @@ export default function MapContainer({
           duration: durationMs,
           essential: true
         });
+
+        // Debug: Log actual position after animation completes
+        mapRef.current.once('moveend', () => {
+          if (!mapRef.current) return;
+          const finalCenter = mapRef.current.getCenter();
+          console.log('🏁 INITIAL_ANIMATION COMPLETE: Actual final camera position:', {
+            center: [finalCenter.lng, finalCenter.lat],
+            zoom: mapRef.current.getZoom(),
+            pitch: mapRef.current.getPitch(),
+            bearing: mapRef.current.getBearing()
+          });
+
+          // Apply the real minZoom constraint AFTER animation completes
+          // This allows globe view start (zoom 0) but prevents users from zooming out past minZoom
+          if (!useMinZoomStart && config.minZoom > 0) {
+            console.log('🔒 Applying minZoom constraint after animation:', config.minZoom);
+            mapRef.current.setMinZoom(config.minZoom);
+          }
+        });
+
         // Setup distance-based pan restriction after animation
         boundsSetupTimeoutRef.current = setTimeout(setupDistanceBounds, durationMs + 500);
       }, 500);
@@ -2115,7 +2219,86 @@ export default function MapContainer({
           }
         }}
         theme={theme}
+        isShifted={showLandmarkCard}
       />
+
+      {/* Recenter Button - Positioned above Compass, matching Compass styling */}
+      {(() => {
+        // Use same styling logic as Compass component
+        const isGlass = theme.filterGlassEnabled !== false;
+        const bgOpacity = isGlass ? (theme.filterGlassOpacity ?? 25) : (theme.filterTertiaryOpacity ?? 100);
+        const blur = theme.filterGlassBlur ?? 50;
+        const saturation = theme.filterGlassSaturation ?? 200;
+        const borderOpacity = theme.filterBorderOpacity ?? 35;
+        const bgColor = theme.filterTertiary || theme.tertiary || '#ffffff';
+        const textColor = theme.filterSecondary || theme.secondary || '#ffffff';
+
+        const hexToRgba = (hex, alpha) => {
+          if (!hex) return 'rgba(255,255,255,0.25)';
+          let c;
+          if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
+            c = hex.substring(1).split('');
+            if (c.length === 3) c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+            c = '0x' + c.join('');
+            return `rgba(${(c >> 16) & 255}, ${(c >> 8) & 255}, ${c & 255}, ${alpha})`;
+          }
+          return hex;
+        };
+
+        const buttonStyle = {
+          backgroundColor: hexToRgba(bgColor, bgOpacity / 100),
+          borderColor: hexToRgba(bgColor, borderOpacity / 100),
+          ...(isGlass && {
+            backdropFilter: `blur(${blur}px) saturate(${saturation}%)`,
+            WebkitBackdropFilter: `blur(${blur}px) saturate(${saturation}%)`,
+          }),
+        };
+
+        return (
+          <button
+            onClick={resetCamera}
+            className="absolute left-2 sm:left-4 bottom-8 sm:bottom-10 z-30 group"
+            title="Reset to default view"
+          >
+            <div
+              className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border shadow-lg flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl"
+              style={buttonStyle}
+            >
+              {/* Google Maps Navigation Pointer - Outline */}
+              <svg
+                className="w-5 h-5 sm:w-6 sm:h-6"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke={textColor}
+                strokeWidth={1.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                {/* Navigation pointer shape - like paper airplane */}
+                <path d="M3 11L22 2L13 21L11 13L3 11Z" />
+              </svg>
+            </div>
+            {/* Tooltip on hover - appears on right since button is on left */}
+            <div
+              className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-lg"
+              style={{
+                backgroundColor: hexToRgba(bgColor, 80 / 100),
+                color: textColor,
+                ...(isGlass && {
+                  backdropFilter: `blur(${blur}px)`,
+                  WebkitBackdropFilter: `blur(${blur}px)`,
+                }),
+              }}
+            >
+              Recenter
+              <div
+                className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent"
+                style={{ borderRightColor: hexToRgba(bgColor, 80 / 100) }}
+              ></div>
+            </div>
+          </button>
+        );
+      })()}
 
       <LandmarkCard
         landmark={selectedLandmark}

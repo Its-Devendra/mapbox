@@ -39,6 +39,7 @@ export default function ProjectSettings({ projectId }) {
     initialAnimationDuration: 3.0,
     routeAnimationDuration: 1.0,
     useDefaultCameraAfterLoad: false,
+    useMinZoomForInitialTransition: false,
     defaultPitch: 70,
     defaultBearing: -20,
     southWestLat: '',
@@ -152,6 +153,7 @@ export default function ProjectSettings({ projectId }) {
       initialAnimationDuration: setting.initialAnimationDuration,
       routeAnimationDuration: setting.routeAnimationDuration,
       useDefaultCameraAfterLoad: setting.useDefaultCameraAfterLoad || false,
+      useMinZoomForInitialTransition: setting.useMinZoomForInitialTransition || false,
       defaultPitch: setting.defaultPitch || 70,
       defaultBearing: setting.defaultBearing || -20,
       southWestLat: setting.southWestLat || '',
@@ -201,6 +203,7 @@ export default function ProjectSettings({ projectId }) {
       initialAnimationDuration: 3.0,
       routeAnimationDuration: 1.0,
       useDefaultCameraAfterLoad: false,
+      useMinZoomForInitialTransition: false,
       defaultPitch: 70,
       defaultBearing: -20,
       southWestLat: '',
@@ -483,6 +486,21 @@ export default function ProjectSettings({ projectId }) {
                       <p className="text-xs text-gray-400 mt-1">Closest View Limit</p>
                     </div>
                   </div>
+
+                  {/* Initial Zoom Toggle */}
+                  <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors mt-4">
+                    <input
+                      type="checkbox"
+                      name="useMinZoomForInitialTransition"
+                      checked={formData.useMinZoomForInitialTransition}
+                      onChange={handleInputChange}
+                      className="h-4 w-4 text-gray-900 focus:ring-gray-500 border-gray-300 rounded"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-800">Start from Min Zoom</span>
+                      <p className="text-xs text-gray-500">When checked, initial animation starts from Min Zoom instead of globe view</p>
+                    </div>
+                  </label>
                 </div>
 
                 {/* Zoom Preview */}

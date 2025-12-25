@@ -10,8 +10,9 @@ import React from "react";
  * @param {number} bearing - Current map bearing in degrees (0 = north)
  * @param {function} onResetNorth - Callback to reset map bearing to 0
  * @param {object} theme - Theme object for styling
+ * @param {boolean} isShifted - Whether to shift position up (when landmark card is visible)
  */
-export default function Compass({ bearing = 0, onResetNorth, theme = {} }) {
+export default function Compass({ bearing = 0, onResetNorth, theme = {}, isShifted = false }) {
     // Normalize bearing from Mapbox (-180 to 180) to compass (0 to 360)
     const normalizedBearing = ((bearing % 360) + 360) % 360;
 
@@ -56,7 +57,7 @@ export default function Compass({ bearing = 0, onResetNorth, theme = {} }) {
 
     return (
         <div
-            className="absolute bottom-8 right-2 sm:bottom-10 sm:right-4 z-40"
+            className={`absolute right-2 sm:right-4 z-40 transition-all duration-500 ease-out ${isShifted ? 'bottom-52 sm:bottom-56' : 'bottom-8 sm:bottom-10'}`}
             title="Click to reset to North"
         >
             <button
