@@ -310,10 +310,17 @@ function MapPageContent() {
   const filteredLandmarks = React.useMemo(() => {
     if (!landmarks.length) return [];
 
-    if (!activeFilter || activeFilter.length === 0 || (activeFilter.length === 1 && activeFilter[0] === 'All')) {
+    // HideAll: User explicitly clicked to hide all landmarks
+    if (activeFilter.includes('HideAll')) {
+      return [];
+    }
+
+    // Show all landmarks when no filter is active (default state)
+    if (!activeFilter || activeFilter.length === 0) {
       return landmarks;
     }
 
+    // Filter by selected categories
     const filtered = landmarks.filter((landmark) => {
       if (!landmark.category) return false;
       // Loose comparison just in case of formatting diffs
@@ -330,7 +337,13 @@ function MapPageContent() {
   const filteredNearbyPlaces = React.useMemo(() => {
     if (!nearbyPlaces.length) return [];
 
-    if (!activeFilter || activeFilter.length === 0 || (activeFilter.length === 1 && activeFilter[0] === 'All')) {
+    // HideAll: User explicitly clicked to hide all landmarks
+    if (activeFilter.includes('HideAll')) {
+      return [];
+    }
+
+    // Show all nearby places when no filter is active (default state)
+    if (!activeFilter || activeFilter.length === 0) {
       return nearbyPlaces;
     }
 

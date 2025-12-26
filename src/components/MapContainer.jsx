@@ -849,8 +849,59 @@ export default function MapContainer({
         // Animate the route drawing - capture generation for animation closure
         const animationGeneration = currentGeneration;
         const animateRoute = () => {
-          const animationDuration = viewModeRef.current === 'top' ? 2500 : 5000; // Slower in top view for better visibility
+          const animationDuration = viewModeRef.current === 'top' ? 3500 : 4000; // 3.5s for top view, 4s for tilted
           const startTime = performance.now();
+
+          // Precompute cumulative distances for accurate interpolation
+          const distances = [0];
+          let totalDistance = 0;
+          for (let i = 1; i < coordinates.length; i++) {
+            const dx = coordinates[i][0] - coordinates[i - 1][0];
+            const dy = coordinates[i][1] - coordinates[i - 1][1];
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            totalDistance += dist;
+            distances.push(totalDistance);
+          }
+
+          // Interpolation helper - get point at distance along path
+          const getPointAtDistance = (targetDist) => {
+            if (targetDist <= 0) return coordinates[0];
+            if (targetDist >= totalDistance) return coordinates[coordinates.length - 1];
+
+            // Find segment containing this distance
+            for (let i = 1; i < distances.length; i++) {
+              if (distances[i] >= targetDist) {
+                const segmentStart = distances[i - 1];
+                const segmentLength = distances[i] - segmentStart;
+                const t = segmentLength > 0 ? (targetDist - segmentStart) / segmentLength : 0;
+
+                // Linear interpolation between points
+                return [
+                  coordinates[i - 1][0] + t * (coordinates[i][0] - coordinates[i - 1][0]),
+                  coordinates[i - 1][1] + t * (coordinates[i][1] - coordinates[i - 1][1])
+                ];
+              }
+            }
+            return coordinates[coordinates.length - 1];
+          };
+
+          // Get all coordinates up to a distance, plus interpolated endpoint
+          const getCoordinatesUpToDistance = (targetDist) => {
+            if (targetDist <= 0) return [coordinates[0]];
+            if (targetDist >= totalDistance) return [...coordinates];
+
+            const result = [];
+            for (let i = 0; i < distances.length; i++) {
+              if (distances[i] <= targetDist) {
+                result.push(coordinates[i]);
+              } else {
+                // Add interpolated final point
+                result.push(getPointAtDistance(targetDist));
+                break;
+              }
+            }
+            return result.length >= 2 ? result : [coordinates[0], getPointAtDistance(targetDist)];
+          };
 
           const animate = (currentTime) => {
             // Stop animation if route was cleared (generation changed OR refs cleared)
@@ -859,14 +910,14 @@ export default function MapContainer({
             }
 
             const elapsedTime = currentTime - startTime;
-            const progress = Math.min(elapsedTime / animationDuration, 1);
-            const easedProgress = easeInOutCubic(progress);
+            const rawProgress = Math.min(elapsedTime / animationDuration, 1);
 
-            // Calculate how many coordinates to show
-            // Ensure at least 2 coordinates to form a line
-            const totalPoints = coordinates.length;
-            const currentCount = Math.max(2, Math.ceil(totalPoints * easedProgress));
-            const currentCoordinates = coordinates.slice(0, currentCount);
+            // Smooth easing for premium feel
+            const easedProgress = easeInOutCubic(rawProgress);
+
+            // Calculate current distance along path
+            const currentDistance = totalDistance * easedProgress;
+            const currentCoordinates = getCoordinatesUpToDistance(currentDistance);
 
             const currentGeoJson = {
               type: 'Feature',
@@ -881,7 +932,7 @@ export default function MapContainer({
               mapRef.current.getSource(SOURCE_IDS.ROUTE).setData(currentGeoJson);
             }
 
-            if (progress < 1) {
+            if (rawProgress < 1) {
               animationFrameRef.current = requestAnimationFrame(animate);
             }
           };
@@ -897,16 +948,19 @@ export default function MapContainer({
 
         // LOGIC BRANCH BASED ON VIEW MODE
         if (viewModeRef.current === 'top') {
-          // TOP VIEW: Instant zoom to show both client building and landmark
+          // TOP VIEW: Zoom to show both client building and landmark at opposite ends
+          // Route animation already started above - synced to same duration for cohesive feel
           const bounds = new mapboxgl.LngLatBounds()
             .extend(clientBuilding.coordinates)
             .extend(destination.coordinates);
 
+          const zoomDuration = 3500; // Match route animation duration for sync
+
           mapRef.current.fitBounds(bounds, {
-            padding: { top: 100, bottom: 350, left: 100, right: 100 },
+            padding: { top: 120, bottom: 180, left: 80, right: 80 }, // Balanced padding for full route visibility
             pitch: 0,
             bearing: 0,
-            duration: 1000, // Smooth but quick animation
+            duration: zoomDuration, // Synced with route animation
             essential: true
           });
         } else {
@@ -943,7 +997,7 @@ export default function MapContainer({
               .extend(destination.coordinates);
 
             mapRef.current.fitBounds(bounds, {
-              padding: { top: 140, bottom: 340, left: 140, right: 140 },
+              padding: { top: 100, bottom: 180, left: 80, right: 80 }, // Balanced padding for clear route view
               pitch: 50,  // Maintain 3D depth for premium feel
               bearing: bearingToLandmark * 0.3,  // Subtle rotation adds visual interest
               duration: 3000,  // 3 seconds for smooth, elegant transition
@@ -2189,6 +2243,51 @@ export default function MapContainer({
 
     updateMarkers();
   }, [landmarks, nearbyPlaces, clientBuilding, project, loadCustomIcons, getDirections, handleNearbyPlaceLeave, getDistanceAndDuration, isMapLoaded, theme]);
+
+  /**
+   * Dim other landmarks when one is selected (focused view)
+   * Creates a visual hierarchy highlighting the active route
+   */
+  useEffect(() => {
+    if (!mapRef.current || !isMapLoaded) return;
+
+    // Apply visual dimming to non-selected landmarks
+    if (selectedLandmark) {
+      // Dim landmark icons (symbol layer)
+      if (mapRef.current.getLayer(LAYER_IDS.LANDMARKS)) {
+        mapRef.current.setPaintProperty(LAYER_IDS.LANDMARKS, 'icon-opacity', [
+          'case',
+          ['==', ['get', 'id'], selectedLandmark.id],
+          1,     // Selected landmark: full opacity
+          0.25   // Other landmarks: dimmed
+        ]);
+      }
+
+      // Dim HTML markers (nearby places) - add dim class
+      markersRef.current.forEach(marker => {
+        const el = marker.getElement();
+        if (el) {
+          el.style.opacity = '0.3';
+          el.style.filter = 'grayscale(70%)';
+          el.style.transition = 'opacity 0.3s ease, filter 0.3s ease';
+        }
+      });
+    } else {
+      // Restore full visibility when no landmark is selected
+      if (mapRef.current.getLayer(LAYER_IDS.LANDMARKS)) {
+        mapRef.current.setPaintProperty(LAYER_IDS.LANDMARKS, 'icon-opacity', 1);
+      }
+
+      // Restore HTML markers
+      markersRef.current.forEach(marker => {
+        const el = marker.getElement();
+        if (el) {
+          el.style.opacity = '1';
+          el.style.filter = 'none';
+        }
+      });
+    }
+  }, [selectedLandmark, isMapLoaded]);
 
   /**
    * Close landmark card handler

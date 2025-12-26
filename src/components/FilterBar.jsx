@@ -23,7 +23,10 @@ export default function FilterBar({
 
   // Normalize activeFilter to always be an array
   const activeFilters = Array.isArray(activeFilter) ? activeFilter : [activeFilter];
-  const isAllActive = activeFilters.length === 0 || activeFilters.includes('All');
+  // 'All' is active when filter is empty array (default state showing everything)
+  // 'HideAll' is when user explicitly clicked All to deselect it
+  const isAllActive = activeFilters.length === 0;
+  const isHideAll = activeFilters.includes('HideAll');
 
   // Check scroll position for arrows
   const checkScroll = () => {
@@ -103,13 +106,23 @@ export default function FilterBar({
 
   const handleFilterClick = (name) => {
     if (name === 'All') {
-      onFilterChange([]);
+      // Toggle between showing all and hiding all
+      if (isAllActive) {
+        // Currently showing all, switch to hide all
+        onFilterChange(['HideAll']);
+      } else {
+        // Currently hiding or filtering, switch to show all
+        onFilterChange([]);
+      }
     } else {
+      // Category filter logic
       if (activeFilters.includes(name)) {
-        const newFilters = activeFilters.filter(f => f !== name && f !== 'All');
+        // Deselecting a category
+        const newFilters = activeFilters.filter(f => f !== name && f !== 'HideAll');
         onFilterChange(newFilters.length === 0 ? [] : newFilters);
       } else {
-        const newFilters = activeFilters.filter(f => f !== 'All');
+        // Selecting a category (remove HideAll if present)
+        const newFilters = activeFilters.filter(f => f !== 'HideAll');
         onFilterChange([...newFilters, name]);
       }
     }
