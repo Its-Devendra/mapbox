@@ -1764,7 +1764,8 @@ export default function MapContainer({
             id: landmark.id,
             title: landmark.title,
             description: landmark.description,
-            hasIcon: !!landmark.icon
+            hasIcon: !!landmark.icon,
+            isSelected: selectedLandmark?.id === landmark.id
           }
         }))
       };
@@ -1797,6 +1798,14 @@ export default function MapContainer({
               'icon-allow-overlap': true,
               'icon-ignore-placement': true,
               'icon-anchor': 'bottom'
+            },
+            paint: {
+              'icon-opacity': [
+                'case',
+                ['get', 'isSelected'], 1,
+                ['any', ['get', 'hasSelectedLandmark'], ['!', ['get', 'isSelected']]], 0.3,
+                1
+              ]
             },
             filter: ['get', 'hasIcon']
           });
@@ -1856,7 +1865,8 @@ export default function MapContainer({
             id: place.id,
             title: place.title,
             categoryName: place.categoryName || '',
-            hasIcon: !!(place.icon || place.categoryIcon)
+            hasIcon: !!(place.icon || place.categoryIcon),
+            hasSelectedLandmark: !!selectedLandmark
           }
         }))
       };
@@ -1890,7 +1900,11 @@ export default function MapContainer({
             'icon-anchor': 'bottom'
           },
           paint: {
-            'icon-opacity': MAPBOX_CONFIG.NEARBY_PLACE_OPACITY
+            'icon-opacity': [
+              'case',
+              ['get', 'hasSelectedLandmark'], 0.3,
+              MAPBOX_CONFIG.NEARBY_PLACE_OPACITY
+            ]
           },
           filter: ['get', 'hasIcon']
         });
@@ -2242,7 +2256,7 @@ export default function MapContainer({
     };
 
     updateMarkers();
-  }, [landmarks, nearbyPlaces, clientBuilding, project, loadCustomIcons, getDirections, handleNearbyPlaceLeave, getDistanceAndDuration, isMapLoaded, theme]);
+  }, [landmarks, nearbyPlaces, clientBuilding, project, loadCustomIcons, getDirections, handleNearbyPlaceLeave, getDistanceAndDuration, isMapLoaded, theme, selectedLandmark]);
 
   /**
    * Dim other landmarks when one is selected (focused view)
