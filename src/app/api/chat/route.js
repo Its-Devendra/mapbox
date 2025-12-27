@@ -18,11 +18,13 @@ export async function POST(req) {
 
         if (!response.ok) {
             console.error(`Backend API error: ${response.status} ${response.statusText}`);
-            const errorText = await response.text();
-            return NextResponse.json(
-                { error: `Backend error: ${response.status}`, details: errorText },
-                { status: response.status }
-            );
+            let errorBody;
+            try {
+                errorBody = await response.json();
+            } catch (e) {
+                errorBody = { message: await response.text() || response.statusText };
+            }
+            return NextResponse.json(errorBody, { status: response.status });
         }
 
         const data = await response.json();

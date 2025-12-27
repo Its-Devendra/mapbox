@@ -220,10 +220,20 @@ const ChatInterface = () => {
             });
 
             if (!response.ok) {
-                throw new Error(`API Error: ${response.status}`);
+                const errorData = await response.json().catch(() => ({}));
+
+                if (response.status === 429) {
+                    const retryAfter = errorData.retry_after || 60;
+                    throw new QuotaExceededError("Usage limit exceeded. Please try again later.", retryAfter);
+                }
+
+                // Use backend error message if available
+                const backendMessage = errorData.message || errorData.detail || errorData.error;
+                throw new Error(backendMessage || `API Error: ${response.status}`);
             }
 
             const data = await response.json();
+            console.log("Chat API Response:", data); // DEBUG: Inspection
 
             const assistantMsg = {
                 role: "assistant",
@@ -246,12 +256,31 @@ const ChatInterface = () => {
             }
 
         } catch (err) {
-            console.error(err);
-            setError(err.message);
+            console.error("Chat Error:", err);
+            let errorMessage = "Sorry, I encountered an error. Please try again.";
+            let isRetryable = true;
+
+            if (err instanceof QuotaExceededError) {
+                errorMessage = "You've reached the request limit. Please wait a moment.";
+                isRetryable = false;
+            } else if (err.message.includes("401") || err.message.includes("403")) {
+                errorMessage = "Authentication failed. Please refresh the page.";
+                isRetryable = false;
+            } else if (err.message.includes("503") || err.message.includes("504")) {
+                errorMessage = "The service is currently unavailable. Please check back later.";
+            } else if (err.name === 'TypeError' && err.message.includes('fetch')) {
+                errorMessage = "Network error. Please check your internet connection.";
+            } else if (err.message) {
+                // Use specific error message but keep it user friendly if possible
+                errorMessage = `Error: ${err.message}`;
+            }
+
+            setError(errorMessage);
             setMessages(prev => [...prev, {
                 role: "assistant",
-                content: "Sorry, I encountered an error. Please try again.",
-                id: (Date.now() + 1).toString()
+                content: errorMessage,
+                id: (Date.now() + 1).toString(),
+                isError: true
             }]);
         } finally {
             setIsLoading(false);
@@ -259,13 +288,22 @@ const ChatInterface = () => {
     };
 
     const handleHighlightLocations = (locations) => {
-        locations.forEach(loc => {
-            // Dispatch event for MapContainer to pick up
-            const event = new CustomEvent('CHAT_HIGHLIGHT_LOCATION', {
-                detail: loc
-            });
-            window.dispatchEvent(event);
+        if (!locations || locations.length === 0) return;
+
+        // Dispatch general event with ALL locations for batch processing (filtering/bounding box)
+        const batchEvent = new CustomEvent('CHAT_HIGHLIGHT_LOCATION', {
+            detail: {
+                all_locations: locations,
+                // If the user asked "Show me schools", we might infer we want to filter by the type of the first result
+                location_type: locations[0]?.location_type
+            }
         });
+        window.dispatchEvent(batchEvent);
+
+        // NOTE: We don't need to dispatch individual events if the batch handler covers the "fit bounds" logic.
+        // However, if we want to "highlight" (tooltip) the SPECIFIC one mentioned, we can still do so.
+        // But usually, if it's a list, we just show them all.
+        // If it's a single item list, the batch handler handles it too.
     };
 
     const handleAudioStream = (url) => {
