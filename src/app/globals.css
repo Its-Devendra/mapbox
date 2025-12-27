@@ -351,25 +351,129 @@ body {
 /* Landscape mobile orientation */
 @media (max-height: 500px) and (orientation: landscape) {
   .landmark-card-container {
+    left: auto !important;
+    right: 8px !important;
     bottom: 8px !important;
-    max-height: calc(100vh - 80px);
+    max-width: 240px !important;
+    max-height: calc(100vh - 60px);
     overflow-y: auto;
   }
 
-  .landmark-card-container .hero-image {
-    height: 80px !important;
+  /* Make card content more compact */
+  .landmark-card-container .ios-glass-card {
+    padding: 0 !important;
+  }
+
+  .landmark-card-container .hero-image,
+  .landmark-card-container img {
+    width: 80px !important;
+    min-height: 90px !important;
+    height: 90px !important;
+  }
+
+  .landmark-card-container h2 {
+    font-size: 12px !important;
+  }
+
+  .landmark-card-container p {
+    font-size: 10px !important;
+    -webkit-line-clamp: 1 !important;
+    line-clamp: 1 !important;
   }
 
   .landmark-card-container .card-content {
-    padding: 12px !important;
+    padding: 8px !important;
+  }
+
+  /* Category badge smaller */
+  .landmark-card-container span[class*="rounded-full"] {
+    font-size: 8px !important;
+    padding: 2px 6px !important;
+    margin-bottom: 4px !important;
+  }
+
+  /* Stats row smaller */
+  .landmark-card-container .flex.items-center.gap-2 > div {
+    padding: 4px 6px !important;
+  }
+
+  .landmark-card-container .flex.items-center.gap-2 span {
+    font-size: 9px !important;
+  }
+
+  .landmark-card-container .flex.items-center.gap-2 svg {
+    width: 10px !important;
+    height: 10px !important;
   }
 
   .filter-bar-container {
     bottom: 8px !important;
+    left: 8px !important;
+    right: auto !important;
+    max-width: calc(100vw - 260px) !important;
+    transform: none !important;
   }
 
   .filter-bar-container .filter-button {
-    padding: 6px 10px !important;
+    padding: 5px 8px !important;
+    font-size: 11px !important;
+  }
+
+  /* Compass - smaller in landscape, stays on right */
+  .compass-container {
+    bottom: 8px !important;
+    right: 8px !important;
+  }
+
+  /* When landmark card is visible, compass shifts up above the card */
+  .compass-container.compass-shifted {
+    bottom: 140px !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+  
+  .compass-container button {
+    width: 36px !important;
+    height: 36px !important;
+  }
+  
+  .compass-container .compass-needle {
+    width: 20px !important;
+    height: 20px !important;
+  }
+  
+  .compass-container .compass-label {
+    font-size: 5px !important;
+  }
+
+  /* Recenter button - smaller in landscape */
+  .recenter-button {
+    bottom: 50px !important;
+  }
+  
+  .recenter-button > div {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  
+  .recenter-button svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  /* View mode toggle - smaller in landscape */
+  .view-mode-toggle {
+    padding: 2px !important;
+  }
+  
+  .view-mode-toggle button {
+    padding: 4px 8px !important;
+    font-size: 10px !important;
+  }
+  
+  .view-mode-toggle svg {
+    width: 12px !important;
+    height: 12px !important;
   }
 }
 

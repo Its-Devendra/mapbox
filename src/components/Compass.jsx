@@ -57,7 +57,10 @@ export default function Compass({ bearing = 0, onResetNorth, theme = {}, isShift
 
     return (
         <div
-            className={`absolute right-2 sm:right-4 z-40 transition-all duration-500 ease-out ${isShifted ? 'bottom-52 sm:bottom-56' : 'bottom-8 sm:bottom-10'}`}
+            className={`compass-container ${isShifted ? 'compass-shifted' : ''} absolute right-2 sm:right-4 z-40 transition-all duration-500 ease-out ${isShifted
+                ? 'opacity-0 pointer-events-none sm:opacity-100 sm:pointer-events-auto sm:bottom-57'
+                : 'bottom-[72px] sm:bottom-8'
+                }`}
             title="Click to reset to North"
         >
             <button
@@ -78,28 +81,28 @@ export default function Compass({ bearing = 0, onResetNorth, theme = {}, isShift
                 <div className="absolute inset-0 flex items-center justify-center">
                     {/* N - Top */}
                     <span
-                        className="absolute top-1 text-[8px] sm:text-[9px] font-bold tracking-wider"
+                        className="compass-label absolute top-1 text-[8px] sm:text-[9px] font-bold tracking-wider"
                         style={{ color: '#ef4444' }}
                     >
                         N
                     </span>
                     {/* E - Right */}
                     <span
-                        className="absolute right-1.5 text-[7px] sm:text-[8px] font-medium opacity-60"
+                        className="compass-label absolute right-1.5 text-[7px] sm:text-[8px] font-medium opacity-60"
                         style={{ color: textColor }}
                     >
                         E
                     </span>
                     {/* S - Bottom */}
                     <span
-                        className="absolute bottom-1 text-[7px] sm:text-[8px] font-medium opacity-60"
+                        className="compass-label absolute bottom-1 text-[7px] sm:text-[8px] font-medium opacity-60"
                         style={{ color: textColor }}
                     >
                         S
                     </span>
                     {/* W - Left */}
                     <span
-                        className="absolute left-1.5 text-[7px] sm:text-[8px] font-medium opacity-60"
+                        className="compass-label absolute left-1.5 text-[7px] sm:text-[8px] font-medium opacity-60"
                         style={{ color: textColor }}
                     >
                         W
@@ -108,7 +111,7 @@ export default function Compass({ bearing = 0, onResetNorth, theme = {}, isShift
 
                 {/* Rotating compass needle */}
                 <div
-                    className="relative w-8 h-8 sm:w-10 sm:h-10 transition-transform duration-150 ease-out"
+                    className="compass-needle relative w-8 h-8 sm:w-10 sm:h-10 transition-transform duration-150 ease-out"
                     style={{ transform: `rotate(${needleRotation}deg)` }}
                 >
                     {/* Needle SVG */}

@@ -2421,7 +2421,7 @@ export default function MapContainer({
 
       {/* View Mode Toggle - Uses filter glass theme controls */}
       <div
-        className="absolute top-2 right-2 sm:top-4 sm:right-4 z-40 flex rounded-lg p-1 border shadow-lg"
+        className="view-mode-toggle absolute top-2 right-2 sm:top-4 sm:right-4 z-40 flex rounded-lg p-1 border shadow-lg"
         style={{
           backgroundColor: theme.filterGlassEnabled !== false
             ? `${theme.filterTertiary || theme.tertiary || '#ffffff'}${Math.round((theme.filterGlassOpacity ?? 25) * 2.55).toString(16).padStart(2, '0')}`
@@ -2527,7 +2527,8 @@ export default function MapContainer({
         return (
           <button
             onClick={resetCamera}
-            className="absolute left-2 sm:left-4 bottom-8 sm:bottom-10 z-30 group"
+            className={`recenter-button absolute left-2 sm:left-4 bottom-[72px] sm:bottom-8 z-30 group transition-all duration-300 ${showLandmarkCard ? 'opacity-0 pointer-events-none sm:opacity-100 sm:pointer-events-auto' : ''
+              }`}
             title="Reset to default view"
           >
             <div

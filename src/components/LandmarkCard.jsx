@@ -9,7 +9,7 @@ export default function LandmarkCard({
   onClose,
   isVisible,
   theme,
-  className = "fixed bottom-20 left-3 right-3 sm:left-auto sm:right-6 sm:bottom-24 sm:max-w-sm"
+  className = "fixed bottom-[80px] left-2 right-2 max-w-[calc(100vw-16px)] landscape:max-w-xs landscape:right-2 landscape:left-auto landscape:bottom-[70px] sm:left-auto sm:right-4 sm:bottom-20 sm:max-w-sm md:max-w-md"
 }) {
   // Use provided theme or fallback to default
   const cardTheme = theme || {
@@ -137,14 +137,13 @@ export default function LandmarkCard({
           onClick={onClose}
           className="absolute top-2 right-2 z-20 w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer"
           style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
             color: '#ffffff'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+            e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
+            e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.25)';
           }}
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

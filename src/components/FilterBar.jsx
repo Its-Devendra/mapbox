@@ -7,7 +7,7 @@ export default function FilterBar({
   onFilterChange,
   activeFilter = [],
   theme,
-  className = "fixed bottom-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:transform sm:-translate-x-1/2 sm:bottom-6"
+  className = "fixed bottom-3 left-2 right-2 sm:left-1/2 sm:right-auto sm:transform sm:-translate-x-1/2 sm:bottom-4"
 }) {
   const scrollContainerRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
