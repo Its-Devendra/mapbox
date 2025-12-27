@@ -64,3 +64,453 @@ body {
 .nearby-popup-premium {
   z-index: 50; /* Ensure it's above other elements */
 }
+
+/* Client Building Tooltip/Tippy Styling - FULLY TRANSPARENT WRAPPER */
+.client-building-tippy {
+  z-index: 100 !important;
+}
+
+.client-building-tippy .mapboxgl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+.client-building-tippy .mapboxgl-popup-tip {
+  display: none !important;
+  border: none !important;
+}
+
+/* Remove any wrapper styling */
+.client-building-tippy .mapboxgl-popup-content-wrapper,
+.client-building-tippy > div {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* Responsive Nearby Popup Styles */
+.nearby-popup-premium .mapboxgl-popup-content {
+  padding: 0 !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+
+/* Mobile popup adjustments */
+@media (max-width: 639px) {
+  .nearby-popup-premium {
+    max-width: calc(100vw - 32px) !important;
+  }
+  
+  .nearby-popup-premium .mapboxgl-popup-content {
+    max-width: calc(100vw - 32px) !important;
+    border-radius: 10px !important;
+  }
+  
+  /* Popup close button - larger for touch */
+  .mapboxgl-popup-close-button {
+    font-size: 20px !important;
+    width: 32px !important;
+    height: 32px !important;
+    line-height: 32px !important;
+    right: 4px !important;
+    top: 4px !important;
+  }
+  
+  /* Popup content adjustments */
+  .nearby-popup-premium .popup-content {
+    min-width: 180px !important;
+    max-width: calc(100vw - 48px) !important;
+  }
+  
+  .nearby-popup-premium .popup-title {
+    font-size: 13px !important;
+  }
+  
+  .nearby-popup-premium .popup-category {
+    font-size: 9px !important;
+    padding: 2px 6px !important;
+  }
+  
+  .nearby-popup-premium .popup-stats {
+    flex-wrap: wrap;
+    gap: 4px !important;
+  }
+  
+  .nearby-popup-premium .popup-stat {
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * RESPONSIVE DESIGN SYSTEM
+ * Mobile-first approach with breakpoints for all devices
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* Mobile styles (default - xs to sm: < 640px) */
+@media (max-width: 639px) {
+  /* Project Logo - much smaller on mobile to prevent overlap */
+  .project-logo-container {
+    top: 8px !important;
+  }
+  .project-logo-container.left {
+    left: 8px !important;
+  }
+  .project-logo-container.right {
+    right: 8px !important;
+  }
+  .project-logo-container img {
+    max-width: 90px !important;
+    max-height: 36px !important;
+  }
+
+  /* Landmark Card - full width on mobile, bottom position */
+  .landmark-card-container {
+    left: 12px !important;
+    right: 12px !important;
+    bottom: 70px !important;
+    max-width: calc(100% - 24px) !important;
+    width: auto !important;
+  }
+
+  .landmark-card-container .card-content {
+    padding: 14px !important;
+  }
+
+  .landmark-card-container .hero-image {
+    height: 100px !important;
+  }
+
+  .landmark-card-container .card-title {
+    font-size: 16px !important;
+  }
+
+  .landmark-card-container .card-description {
+    font-size: 12px !important;
+    max-height: 48px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  /* Filter Bar - CRITICAL FIX for cutoff issue */
+  .filter-bar-container {
+    left: 12px !important;
+    right: 12px !important;
+    transform: none !important;
+    bottom: 12px !important;
+    width: calc(100% - 24px) !important;
+    max-width: none !important;
+  }
+
+  .filter-bar-container > div {
+    width: 100% !important;
+    padding: 8px 12px !important;
+  }
+
+  .filter-bar-container .filter-scroll {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding-bottom: 4px;
+  }
+
+  .filter-bar-container .filter-button {
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+    flex-shrink: 0;
+  }
+
+  .filter-bar-container .filter-button .icon {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  /* Map container adjustments */
+  .mapboxgl-ctrl-top-right {
+    top: 40px !important;
+    right: 8px !important;
+  }
+
+  .mapboxgl-ctrl-bottom-right {
+    bottom: 120px !important;
+    right: 8px !important;
+  }
+
+  .mapboxgl-ctrl-bottom-left {
+    bottom: 120px !important;
+    left: 8px !important;
+  }
+
+  /* Intro button - smaller on mobile */
+  .intro-button {
+    padding: 8px 16px !important;
+    font-size: 12px !important;
+  }
+
+  /* Loading and error states */
+  .loading-container,
+  .error-container {
+    padding: 16px !important;
+  }
+
+  .error-container .error-card {
+    padding: 24px 16px !important;
+  }
+}
+
+/* Tablet styles (sm to md: 640px - 1023px) */
+@media (min-width: 640px) and (max-width: 1023px) {
+  /* Project Logo - medium size on tablet */
+  .project-logo-container img {
+    max-width: 100px !important;
+    max-height: 35px !important;
+  }
+
+  /* Landmark Card - positioned right side */
+  .landmark-card-container {
+    right: 16px !important;
+    bottom: 70px !important;
+    max-width: 320px !important;
+  }
+
+  .landmark-card-container .hero-image {
+    height: 130px !important;
+  }
+
+  /* Filter Bar - centered bottom */
+  .filter-bar-container {
+    bottom: 16px !important;
+  }
+
+  .filter-bar-container .filter-scroll {
+    max-width: 85vw !important;
+  }
+
+  /* Map controls */
+  .mapboxgl-ctrl-bottom-right {
+    bottom: 100px !important;
+  }
+
+  .mapboxgl-ctrl-bottom-left {
+    bottom: 100px !important;
+  }
+}
+
+/* Desktop styles (md to lg: 1024px+) */
+@media (min-width: 1024px) {
+  /* Landmark Card - full size */
+  .landmark-card-container {
+    right: 24px !important;
+    bottom: 70px !important;
+    max-width: 360px !important;
+  }
+
+  /* Filter Bar */
+  .filter-bar-container {
+    bottom: 24px !important;
+  }
+
+  /* Map controls */
+  .mapboxgl-ctrl-bottom-right {
+    bottom: 100px !important;
+  }
+}
+
+/* Large desktop (xl: 1280px+) */
+@media (min-width: 1280px) {
+  .landmark-card-container {
+    max-width: 420px !important;
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+  /* Larger touch targets */
+  .filter-bar-container .filter-button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .landmark-card-container .close-button {
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  /* Disable hover effects on touch */
+  .filter-button:hover {
+    transform: none !important;
+  }
+}
+
+/* Landscape mobile orientation */
+@media (max-height: 500px) and (orientation: landscape) {
+  .landmark-card-container {
+    left: auto !important;
+    right: 8px !important;
+    bottom: 8px !important;
+    max-width: 240px !important;
+    max-height: calc(100vh - 60px);
+    overflow-y: auto;
+  }
+
+  /* Make card content more compact */
+  .landmark-card-container .ios-glass-card {
+    padding: 0 !important;
+  }
+
+  .landmark-card-container .hero-image,
+  .landmark-card-container img {
+    width: 80px !important;
+    min-height: 90px !important;
+    height: 90px !important;
+  }
+
+  .landmark-card-container h2 {
+    font-size: 12px !important;
+  }
+
+  .landmark-card-container p {
+    font-size: 10px !important;
+    -webkit-line-clamp: 1 !important;
+    line-clamp: 1 !important;
+  }
+
+  .landmark-card-container .card-content {
+    padding: 8px !important;
+  }
+
+  /* Category badge smaller */
+  .landmark-card-container span[class*="rounded-full"] {
+    font-size: 8px !important;
+    padding: 2px 6px !important;
+    margin-bottom: 4px !important;
+  }
+
+  /* Stats row smaller */
+  .landmark-card-container .flex.items-center.gap-2 > div {
+    padding: 4px 6px !important;
+  }
+
+  .landmark-card-container .flex.items-center.gap-2 span {
+    font-size: 9px !important;
+  }
+
+  .landmark-card-container .flex.items-center.gap-2 svg {
+    width: 10px !important;
+    height: 10px !important;
+  }
+
+  .filter-bar-container {
+    bottom: 8px !important;
+    left: 8px !important;
+    right: auto !important;
+    max-width: calc(100vw - 260px) !important;
+    transform: none !important;
+  }
+
+  .filter-bar-container .filter-button {
+    padding: 5px 8px !important;
+    font-size: 11px !important;
+  }
+
+  /* Compass - smaller in landscape, stays on right */
+  .compass-container {
+    bottom: 8px !important;
+    right: 8px !important;
+  }
+
+  /* When landmark card is visible, compass shifts up above the card */
+  .compass-container.compass-shifted {
+    bottom: 140px !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+  
+  .compass-container button {
+    width: 36px !important;
+    height: 36px !important;
+  }
+  
+  .compass-container .compass-needle {
+    width: 20px !important;
+    height: 20px !important;
+  }
+  
+  .compass-container .compass-label {
+    font-size: 5px !important;
+  }
+
+  /* Recenter button - smaller in landscape */
+  .recenter-button {
+    bottom: 50px !important;
+  }
+  
+  .recenter-button > div {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  
+  .recenter-button svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  /* View mode toggle - smaller in landscape */
+  .view-mode-toggle {
+    padding: 2px !important;
+  }
+  
+  .view-mode-toggle button {
+    padding: 4px 8px !important;
+    font-size: 10px !important;
+  }
+  
+  .view-mode-toggle svg {
+    width: 12px !important;
+    height: 12px !important;
+  }
+}
+
+/* Safe area insets for notched devices */
+@supports (padding: max(0px)) {
+  .filter-bar-container {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  .landmark-card-container {
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
+}
+
+/* High DPI screens */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .landmark-marker,
+  .client-marker {
+    image-rendering: -webkit-optimize-contrast;
+  }
+}
+
+/* Mapbox Attribution - always at bottom right */
+.mapboxgl-ctrl-attrib {
+  position: fixed !important;
+  bottom: 8px !important;
+  right: 8px !important;
+  background: rgba(0, 0, 0, 0.5) !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-size: 10px !important;
+}
+
+.mapboxgl-ctrl-attrib a {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.mapboxgl-ctrl-attrib-button {
+  display: none !important;
+}

@@ -12,6 +12,7 @@ export default function ProjectClientBuilding({ projectId }) {
     const [project, setProject] = useState(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
     const mapContainerRef = useRef();
     const mapRef = useRef();
     const markerRef = useRef();
@@ -49,8 +50,9 @@ export default function ProjectClientBuilding({ projectId }) {
             }
         });
 
-        // Click to place marker
+        // Click to place marker (only when editing)
         map.on('click', (e) => {
+            if (!isEditing) return;
             const { lng, lat } = e.lngLat;
             addMarker([lng, lat]);
             setFormData(prev => ({
@@ -89,7 +91,7 @@ export default function ProjectClientBuilding({ projectId }) {
         el.style.cursor = 'pointer';
 
         // Add new marker
-        const marker = new mapboxgl.Marker(el, { draggable: true })
+        const marker = new mapboxgl.Marker(el, { draggable: isEditing })
             .setLngLat(coords)
             .addTo(mapRef.current);
 
@@ -108,7 +110,7 @@ export default function ProjectClientBuilding({ projectId }) {
 
     const fetchProject = async () => {
         try {
-            const response = await fetch(`/api/projects/${projectId}`);
+            const response = await fetch(`/api/projects/${projectId}`, { cache: 'no-store' });
             if (response.ok) {
                 const data = await response.json();
                 setProject(data);
@@ -184,6 +186,7 @@ export default function ProjectClientBuilding({ projectId }) {
             toast.error('Error updating client building');
         } finally {
             setSaving(false);
+            setIsEditing(false); // Exit edit mode after saving
         }
     };
 
@@ -242,10 +245,23 @@ export default function ProjectClientBuilding({ projectId }) {
     return (
         <div>
             <div className="mb-6">
-                <h3 className="text-base font-semibold text-gray-900">Client Building Location</h3>
-                <p className="text-sm text-gray-500 mt-1">
-                    Configure the client building coordinates, name, and description. This location is used as the starting point for landmark routes and distance calculations.
-                </p>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h3 className="text-base font-semibold text-gray-900">Client Building Location</h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                            Configure the client building coordinates, name, and description. This location is used as the starting point for landmark routes and distance calculations.
+                        </p>
+                    </div>
+                    {!isEditing && (
+                        <button
+                            onClick={() => setIsEditing(true)}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 font-medium text-sm transition-colors"
+                        >
+                            <Edit className="w-4 h-4" strokeWidth={2} />
+                            Edit
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -278,7 +294,9 @@ export default function ProjectClientBuilding({ projectId }) {
                                 value={formData.clientBuildingName}
                                 onChange={handleInputChange}
                                 placeholder="e.g., Headquarters, Main Office"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm"
+                                disabled={!isEditing}
+                                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm ${isEditing ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50 text-gray-600 cursor-not-allowed'
+                                    }`}
                             />
                         </div>
 
@@ -292,7 +310,9 @@ export default function ProjectClientBuilding({ projectId }) {
                                 onChange={handleInputChange}
                                 placeholder="Brief description of the client building"
                                 rows={3}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm resize-none"
+                                disabled={!isEditing}
+                                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm resize-none ${isEditing ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50 text-gray-600 cursor-not-allowed'
+                                    }`}
                             />
                         </div>
 
@@ -308,7 +328,9 @@ export default function ProjectClientBuilding({ projectId }) {
                                     value={formData.clientBuildingLat ?? ''}
                                     onChange={handleInputChange}
                                     placeholder="28.49"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm font-mono"
+                                    disabled={!isEditing}
+                                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm font-mono ${isEditing ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50 text-gray-600 cursor-not-allowed'
+                                        }`}
                                 />
                             </div>
                             <div>
@@ -322,7 +344,9 @@ export default function ProjectClientBuilding({ projectId }) {
                                     value={formData.clientBuildingLng ?? ''}
                                     onChange={handleInputChange}
                                     placeholder="77.08"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm font-mono"
+                                    disabled={!isEditing}
+                                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm font-mono ${isEditing ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50 text-gray-600 cursor-not-allowed'
+                                        }`}
                                 />
                             </div>
                         </div>
@@ -341,35 +365,54 @@ export default function ProjectClientBuilding({ projectId }) {
                             </div>
                         )}
 
-                        <div className="flex gap-3 pt-4">
-                            <button
-                                type="submit"
-                                disabled={saving}
-                                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 font-medium text-sm transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                            >
-                                {saving ? (
-                                    <>
-                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        Saving...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save className="w-4 h-4" strokeWidth={2} />
-                                        Save Changes
-                                    </>
-                                )}
-                            </button>
+                        {isEditing && (
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 font-medium text-sm transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                >
+                                    {saving ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save className="w-4 h-4" strokeWidth={2} />
+                                            Save Changes
+                                        </>
+                                    )}
+                                </button>
 
-                            {(formData.clientBuildingLat !== null || formData.clientBuildingLng !== null) && (
                                 <button
                                     type="button"
-                                    onClick={clearCoordinates}
+                                    onClick={() => {
+                                        setIsEditing(false);
+                                        // Reset form data to project data
+                                        setFormData({
+                                            clientBuildingLat: project.clientBuildingLat || null,
+                                            clientBuildingLng: project.clientBuildingLng || null,
+                                            clientBuildingName: project.clientBuildingName || '',
+                                            clientBuildingDescription: project.clientBuildingDescription || ''
+                                        });
+                                    }}
                                     className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-sm transition-colors"
                                 >
-                                    Clear
+                                    Cancel
                                 </button>
-                            )}
-                        </div>
+
+                                {(formData.clientBuildingLat !== null || formData.clientBuildingLng !== null) && (
+                                    <button
+                                        type="button"
+                                        onClick={clearCoordinates}
+                                        className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-sm transition-colors"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </form>
                 </div>
             </div>

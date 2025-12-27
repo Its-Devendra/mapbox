@@ -5,16 +5,41 @@
 
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
-// Create S3 client with credentials from environment
-const s3Client = new S3Client({
-    region: process.env.AWS_S3_REGION || process.env.REGION || 'us-east-1',
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || process.env.ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || process.env.SECRET_ACCESS_KEY,
-    },
-});
+// Lazy initialization to ensure env vars are loaded
+let s3Client = null;
 
-const BUCKET_NAME = process.env.AWS_S3_BUCKET || process.env.BUCKET_NAME;
+function getS3Client() {
+    if (!s3Client) {
+        const accessKeyId = process.env.AWS_ACCESS_KEY_ID || process.env.ACCESS_KEY_ID;
+        const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || process.env.SECRET_ACCESS_KEY;
+        const region = process.env.AWS_S3_REGION || process.env.REGION || 'us-east-1';
+
+        // Debug logging - remove in production after fix is verified
+        console.log('🔑 S3 Client Init:', {
+            accessKeyIdPrefix: accessKeyId ? accessKeyId.substring(0, 8) + '...' : 'MISSING',
+            hasSecretKey: !!secretAccessKey,
+            region,
+            bucket: process.env.AWS_S3_BUCKET || process.env.BUCKET_NAME
+        });
+
+        if (!accessKeyId || !secretAccessKey) {
+            throw new Error('AWS credentials not configured. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables.');
+        }
+
+        s3Client = new S3Client({
+            region,
+            credentials: {
+                accessKeyId,
+                secretAccessKey,
+            },
+        });
+    }
+    return s3Client;
+}
+
+function getBucketName() {
+    return process.env.AWS_S3_BUCKET || process.env.BUCKET_NAME;
+}
 const CLOUDFRONT_URL = process.env.CLOUDFRONT_URL;
 
 /**
@@ -26,25 +51,36 @@ const CLOUDFRONT_URL = process.env.CLOUDFRONT_URL;
  * @returns {Promise<{url: string, key: string}>} - The public URL and S3 key
  */
 export async function uploadToS3(fileBuffer, fileName, contentType, folder = 'landmarks') {
+    const client = getS3Client();
+    const bucketName = getBucketName();
+    const region = process.env.AWS_S3_REGION || process.env.REGION || 'us-east-1';
+
     // Sanitize filename and create unique key
     const timestamp = Date.now();
     const sanitizedName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
     const key = `${folder}/${timestamp}-${sanitizedName}`;
 
     const command = new PutObjectCommand({
-        Bucket: BUCKET_NAME,
+        Bucket: bucketName,
         Key: key,
         Body: fileBuffer,
         ContentType: contentType,
+        CacheControl: 'no-cache, must-revalidate, max-age=0',
         // ACL: 'public-read', // Uncomment if bucket allows public ACLs
+        Metadata: {
+            uploadedAt: timestamp.toString()
+        }
     });
 
-    await s3Client.send(command);
+    await client.send(command);
 
     // Return CloudFront URL if available, otherwise S3 URL
-    const url = CLOUDFRONT_URL 
+    // Add cache-busting timestamp to ensure instant updates
+    const baseUrl = CLOUDFRONT_URL
         ? `${CLOUDFRONT_URL.replace(/\/$/, '')}/${key}`
-        : `https://${BUCKET_NAME}.s3.${process.env.AWS_S3_REGION || process.env.REGION || 'us-east-1'}.amazonaws.com/${key}`;
+        : `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+
+    const url = `${baseUrl}?t=${timestamp}`;
 
     return { url, key };
 }
@@ -55,10 +91,14 @@ export async function uploadToS3(fileBuffer, fileName, contentType, folder = 'la
  * @returns {string} - The public URL
  */
 export function getS3Url(key) {
+    const bucketName = getBucketName();
+    const region = process.env.AWS_S3_REGION || process.env.REGION || 'us-east-1';
+
     if (CLOUDFRONT_URL) {
         return `${CLOUDFRONT_URL.replace(/\/$/, '')}/${key}`;
     }
-    return `https://${BUCKET_NAME}.s3.${process.env.AWS_S3_REGION || process.env.REGION || 'us-east-1'}.amazonaws.com/${key}`;
+    return `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
 }
 
-export { s3Client, BUCKET_NAME };
+// Export getter functions for backward compatibility
+export { getS3Client as s3Client, getBucketName as BUCKET_NAME };

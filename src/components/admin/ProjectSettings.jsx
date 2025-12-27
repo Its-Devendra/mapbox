@@ -2,13 +2,27 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { Plus, Edit, Trash2, Settings, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Settings, CheckCircle2, XCircle, MapPin, Eye, Crosshair, Map, Palette, ToggleRight } from 'lucide-react';
+import InteractiveMapPreview from './InteractiveMapPreview';
 
 export default function ProjectSettings({ projectId }) {
   const [settings, setSettings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingSetting, setEditingSetting] = useState(null);
+  const [showCameraPreview, setShowCameraPreview] = useState(false);
+  const [showBoundsPreview, setShowBoundsPreview] = useState(false);
+  const [showDistancePreview, setShowDistancePreview] = useState(false);
+  const [showZoomPreview, setShowZoomPreview] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState(null);
+  const [zoomTarget, setZoomTarget] = useState('defaultZoom');
+
+  // Project data for preview
+  const [projectData, setProjectData] = useState({
+    landmarks: [],
+    nearbyPlaces: [],
+    clientBuilding: null
+  });
 
   const [formData, setFormData] = useState({
     defaultCenterLat: 28.49,
@@ -18,19 +32,31 @@ export default function ProjectSettings({ projectId }) {
     maxZoom: 18,
     enableRotation: true,
     enablePitch: true,
+    enable3DBuildings: true,
+    buildings3DMinZoom: 15,
     routeLineColor: '#3b82f6',
     routeLineWidth: 4,
     initialAnimationDuration: 3.0,
     routeAnimationDuration: 1.0,
+    useDefaultCameraAfterLoad: false,
+    useMinZoomForInitialTransition: false,
+    defaultPitch: 70,
+    defaultBearing: -20,
     southWestLat: '',
     southWestLng: '',
     northEastLat: '',
     northEastLng: '',
+    maxPanDistanceKm: '',
+    panCenterLat: '',
+    panCenterLng: '',
+    autoFitBounds: false,
+    autoFitPadding: 50,
     isActive: false
   });
 
   useEffect(() => {
     fetchSettings();
+    fetchProjectData();
   }, [projectId]);
 
   const fetchSettings = async () => {
@@ -48,6 +74,28 @@ export default function ProjectSettings({ projectId }) {
     }
   };
 
+  const fetchProjectData = async () => {
+    try {
+      const response = await fetch(`/api/projects/${projectId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setProjectData({
+          landmarks: data.landmarks || [],
+          nearbyPlaces: data.nearByPlaces || [],
+          clientBuilding: data.clientBuildingLat && data.clientBuildingLng ? {
+            name: data.clientBuildingName,
+            coordinates: [data.clientBuildingLng, data.clientBuildingLat],
+            icon: data.clientBuildingIcon,
+            iconWidth: data.clientBuildingIconWidth,
+            iconHeight: data.clientBuildingIconHeight
+          } : null
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching project data:', error);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -62,10 +110,15 @@ export default function ProjectSettings({ projectId }) {
         body: JSON.stringify({
           ...formData,
           projectId: projectId,
-          southWestLat: formData.southWestLat === '' ? undefined : formData.southWestLat,
-          southWestLng: formData.southWestLng === '' ? undefined : formData.southWestLng,
-          northEastLat: formData.northEastLat === '' ? undefined : formData.northEastLat,
-          northEastLng: formData.northEastLng === '' ? undefined : formData.northEastLng
+          // Deprecated rectangular bounds - send null to clear
+          southWestLat: formData.southWestLat === '' ? null : formData.southWestLat,
+          southWestLng: formData.southWestLng === '' ? null : formData.southWestLng,
+          northEastLat: formData.northEastLat === '' ? null : formData.northEastLat,
+          northEastLng: formData.northEastLng === '' ? null : formData.northEastLng,
+          // Distance-based bounds - send null to clear (not undefined!)
+          maxPanDistanceKm: formData.maxPanDistanceKm === '' ? null : parseFloat(formData.maxPanDistanceKm),
+          panCenterLat: formData.panCenterLat === '' ? null : parseFloat(formData.panCenterLat),
+          panCenterLng: formData.panCenterLng === '' ? null : parseFloat(formData.panCenterLng)
         }),
       });
 
@@ -95,14 +148,25 @@ export default function ProjectSettings({ projectId }) {
       maxZoom: setting.maxZoom,
       enableRotation: setting.enableRotation,
       enablePitch: setting.enablePitch,
+      enable3DBuildings: setting.enable3DBuildings ?? true,
+      buildings3DMinZoom: setting.buildings3DMinZoom ?? 15,
       routeLineColor: setting.routeLineColor,
       routeLineWidth: setting.routeLineWidth,
       initialAnimationDuration: setting.initialAnimationDuration,
       routeAnimationDuration: setting.routeAnimationDuration,
+      useDefaultCameraAfterLoad: setting.useDefaultCameraAfterLoad || false,
+      useMinZoomForInitialTransition: setting.useMinZoomForInitialTransition || false,
+      defaultPitch: setting.defaultPitch || 70,
+      defaultBearing: setting.defaultBearing || -20,
       southWestLat: setting.southWestLat || '',
       southWestLng: setting.southWestLng || '',
       northEastLat: setting.northEastLat || '',
       northEastLng: setting.northEastLng || '',
+      maxPanDistanceKm: setting.maxPanDistanceKm || '',
+      panCenterLat: setting.panCenterLat || '',
+      panCenterLng: setting.panCenterLng || '',
+      autoFitBounds: setting.autoFitBounds || false,
+      autoFitPadding: setting.autoFitPadding || 50,
       isActive: setting.isActive
     });
     setShowModal(true);
@@ -136,14 +200,25 @@ export default function ProjectSettings({ projectId }) {
       maxZoom: 18,
       enableRotation: true,
       enablePitch: true,
+      enable3DBuildings: true,
+      buildings3DMinZoom: 15,
       routeLineColor: '#3b82f6',
       routeLineWidth: 4,
       initialAnimationDuration: 3.0,
       routeAnimationDuration: 1.0,
+      useDefaultCameraAfterLoad: false,
+      useMinZoomForInitialTransition: false,
+      defaultPitch: 70,
+      defaultBearing: -20,
       southWestLat: '',
       southWestLng: '',
       northEastLat: '',
       northEastLng: '',
+      maxPanDistanceKm: '',
+      panCenterLat: '',
+      panCenterLng: '',
+      autoFitBounds: false,
+      autoFitPadding: 50,
       isActive: false
     });
   };
@@ -154,7 +229,8 @@ export default function ProjectSettings({ projectId }) {
 
     if (type === 'checkbox') {
       parsedValue = checked;
-    } else if (type === 'number') {
+    } else if (type === 'number' || type === 'range') {
+      // Both number and range inputs return strings that need to be parsed
       parsedValue = value === '' ? '' : parseFloat(value);
     }
 
@@ -195,7 +271,7 @@ export default function ProjectSettings({ projectId }) {
       {settings.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {settings.map((setting) => (
-            <div key={setting.id} className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md hover:border-gray-200 transition-all">
+            <div key={setting.id} className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md hover:border-gray-200 transition-all">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
@@ -289,220 +365,577 @@ export default function ProjectSettings({ projectId }) {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">
-                {editingSetting ? 'Edit Map Settings' : 'Create Map Settings'}
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setShowModal(false); setEditingSetting(null); resetForm(); }}>
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+
+          {/* Modal Content */}
+          <div
+            className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between p-6 border-b border-gray-100">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {editingSetting ? 'Edit Map Settings' : 'Create Map Settings'}
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Configure how users interact with your map
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowModal(false);
+                  setEditingSetting(null);
+                  resetForm();
+                }}
+                className="p-2 -m-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <XCircle className="w-5 h-5" strokeWidth={2} />
+              </button>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Default Center Latitude</label>
-                  <input
-                    type="number"
-                    step="any"
-                    name="defaultCenterLat"
-                    value={formData.defaultCenterLat}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Default Center Longitude</label>
-                  <input
-                    type="number"
-                    step="any"
-                    name="defaultCenterLng"
-                    value={formData.defaultCenterLng}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm"
-                    required
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Default Zoom</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="22"
-                    name="defaultZoom"
-                    value={formData.defaultZoom}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Min Zoom</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="22"
-                    name="minZoom"
-                    value={formData.minZoom}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Max Zoom</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="22"
-                    name="maxZoom"
-                    value={formData.maxZoom}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Route Line Color</label>
-                  <div className="flex items-center space-x-3">
-                    <input
-                      type="color"
-                      name="routeLineColor"
-                      value={formData.routeLineColor}
-                      onChange={handleInputChange}
-                      className="h-10 w-16 rounded border border-gray-300"
-                    />
-                    <input
-                      type="text"
-                      name="routeLineColor"
-                      value={formData.routeLineColor}
-                      onChange={handleInputChange}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm font-mono"
-                    />
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+              <div className="p-6 space-y-6">
+                {/* Camera Position */}
+                <div className="space-y-4 p-5 bg-white rounded-xl border border-gray-100">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-gray-600" /> Starting Camera Position
+                    </h4>
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Route Line Width</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="20"
-                    name="routeLineWidth"
-                    value={formData.routeLineWidth}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm"
-                    required
-                  />
-                </div>
-              </div>
 
-              <div className="border-t border-gray-200 pt-4">
-                <h4 className="text-sm font-medium text-gray-900 mb-3">Map Boundaries (Optional)</h4>
-                <p className="text-xs text-gray-500 mb-4">Set the maximum bounds for the map. Users won't be able to pan outside this area. Leave empty for no bounds.</p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-3">
-                    <p className="text-xs font-medium text-gray-700">South-West Coordinate</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Latitude</label>
-                        <input
-                          type="number"
-                          step="any"
-                          name="southWestLat"
-                          value={formData.southWestLat}
-                          onChange={handleInputChange}
-                          placeholder="-90 to 90"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Longitude</label>
-                        <input
-                          type="number"
-                          step="any"
-                          name="southWestLng"
-                          value={formData.southWestLng}
-                          onChange={handleInputChange}
-                          placeholder="-180 to 180"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm"
-                        />
-                      </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Latitude</label>
+                      <input
+                        type="number"
+                        step="any"
+                        name="defaultCenterLat"
+                        value={formData.defaultCenterLat}
+                        onChange={handleInputChange}
+                        placeholder="e.g. 28.49"
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-transparent rounded-lg focus:bg-white focus:border-gray-300 focus:ring-0 text-sm font-mono transition-all"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Longitude</label>
+                      <input
+                        type="number"
+                        step="any"
+                        name="defaultCenterLng"
+                        value={formData.defaultCenterLng}
+                        onChange={handleInputChange}
+                        placeholder="e.g. 77.08"
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-transparent rounded-lg focus:bg-white focus:border-gray-300 focus:ring-0 text-sm font-mono transition-all"
+                        required
+                      />
                     </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <p className="text-xs font-medium text-gray-700">North-East Coordinate</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Latitude</label>
-                        <input
-                          type="number"
-                          step="any"
-                          name="northEastLat"
-                          value={formData.northEastLat}
-                          onChange={handleInputChange}
-                          placeholder="-90 to 90"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm"
+                  <p className="text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg">
+                    💡 Use the Camera Preview below to set this visually
+                  </p>
+                </div>
+
+                {/* Zoom Levels */}
+                <div className="space-y-4 p-5 bg-white rounded-xl border border-gray-100">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                      <Eye className="w-4 h-4 text-gray-600" /> Zoom Levels
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Min Zoom</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="22"
+                        step="any"
+                        name="minZoom"
+                        value={formData.minZoom}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-transparent rounded-lg focus:bg-white focus:border-gray-300 focus:ring-0 text-sm font-mono transition-all"
+                        required
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Animation Start + Limit</p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Default Zoom</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="22"
+                        step="any"
+                        name="defaultZoom"
+                        value={formData.defaultZoom}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-transparent rounded-lg focus:bg-white focus:border-gray-300 focus:ring-0 text-sm font-mono transition-all"
+                        required
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Animation Destination</p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Max Zoom</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="22"
+                        step="any"
+                        name="maxZoom"
+                        value={formData.maxZoom}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-transparent rounded-lg focus:bg-white focus:border-gray-300 focus:ring-0 text-sm font-mono transition-all"
+                        required
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Closest View Limit</p>
+                    </div>
+                  </div>
+
+                  {/* Initial Zoom Toggle */}
+                  <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors mt-4">
+                    <input
+                      type="checkbox"
+                      name="useMinZoomForInitialTransition"
+                      checked={formData.useMinZoomForInitialTransition}
+                      onChange={handleInputChange}
+                      className="h-4 w-4 text-gray-900 focus:ring-gray-500 border-gray-300 rounded"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-800">Start from Min Zoom</span>
+                      <p className="text-xs text-gray-500">When checked, initial animation starts from Min Zoom instead of globe view</p>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Zoom Preview */}
+                <div className="space-y-4 p-5 bg-white rounded-xl border border-gray-100">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                      <Map className="w-4 h-4 text-gray-600" /> Zoom Preview
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => setShowZoomPreview(!showZoomPreview)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showZoomPreview ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    >
+                      {showZoomPreview ? 'Hide Preview' : 'Show Preview'}
+                    </button>
+                  </div>
+
+                  {showZoomPreview && (
+                    <div className="space-y-4">
+                      <div className="rounded-xl overflow-hidden border border-gray-200">
+                        <InteractiveMapPreview
+                          mode="zoom"
+                          zoomSettings={{
+                            minZoom: parseFloat(formData.minZoom) || 1,
+                            maxZoom: parseFloat(formData.maxZoom) || 22,
+                            defaultZoom: parseFloat(formData.defaultZoom) || 12
+                          }}
+                          onChange={(data) => {
+                            if (data?.zoom !== undefined) {
+                              setPreviewZoom(data.zoom);
+                            }
+                          }}
+                          mapStyle="mapbox://styles/mapbox/streets-v12"
+                          clientBuilding={projectData.clientBuilding}
+                          landmarks={projectData.landmarks}
+                          nearbyPlaces={projectData.nearbyPlaces}
                         />
                       </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Longitude</label>
+
+                      <div className="flex flex-col gap-4 bg-gray-50 rounded-lg p-4 transition-all">
+                        {/* Target Selector */}
+                        <div className="flex p-1 bg-gray-200/50 rounded-lg">
+                          {[
+                            { id: 'minZoom', label: 'Min Zoom' },
+                            { id: 'defaultZoom', label: 'Default' },
+                            { id: 'maxZoom', label: 'Max Zoom' }
+                          ].map((target) => (
+                            <button
+                              key={target.id}
+                              type="button"
+                              onClick={() => setZoomTarget(target.id)}
+                              className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${zoomTarget === target.id
+                                ? 'bg-white text-gray-900 shadow-sm'
+                                : 'text-gray-600 hover:text-gray-900'
+                                }`}
+                            >
+                              {target.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm text-gray-600">
+                            Current Preview: <span className="font-mono font-semibold text-gray-900 text-lg">{previewZoom !== null ? previewZoom : parseFloat(formData.defaultZoom) || 12}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const zoomValue = previewZoom !== null ? previewZoom : parseFloat(formData.defaultZoom) || 12;
+                              setFormData(prev => ({ ...prev, [zoomTarget]: zoomValue }));
+                              toast.info(`Set ${zoomTarget === 'defaultZoom' ? 'Default' : zoomTarget === 'minZoom' ? 'Min' : 'Max'} Zoom to ${zoomValue}`);
+                            }}
+                            className="px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-gray-800 transition-colors shadow-sm active:translate-y-0.5"
+                          >
+                            Set as {zoomTarget === 'defaultZoom' ? 'Default' : zoomTarget === 'minZoom' ? 'Min' : 'Max'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Route Styling */}
+                <div className="space-y-4 p-5 bg-white rounded-xl border border-gray-100">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                      <Palette className="w-4 h-4 text-gray-600" /> Route Line Styling
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Color</label>
+                      <div className="flex items-center gap-3">
+                        <div className="relative flex-shrink-0">
+                          <input
+                            type="color"
+                            name="routeLineColor"
+                            value={formData.routeLineColor}
+                            onChange={handleInputChange}
+                            className="h-10 w-10 cursor-pointer opacity-0 absolute inset-0 z-10"
+                          />
+                          <div className="h-10 w-10 rounded-lg border-2 border-gray-200" style={{ backgroundColor: formData.routeLineColor }} />
+                        </div>
                         <input
-                          type="number"
-                          step="any"
-                          name="northEastLng"
-                          value={formData.northEastLng}
+                          type="text"
+                          name="routeLineColor"
+                          value={formData.routeLineColor}
                           onChange={handleInputChange}
-                          placeholder="-180 to 180"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm"
+                          className="flex-1 px-3 py-2.5 bg-gray-50 border border-transparent rounded-lg focus:bg-white focus:border-gray-300 focus:ring-0 text-sm font-mono transition-all"
                         />
                       </div>
                     </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Width</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="20"
+                        name="routeLineWidth"
+                        value={formData.routeLineWidth}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-transparent rounded-lg focus:bg-white focus:border-gray-300 focus:ring-0 text-sm font-mono transition-all"
+                        required
+                      />
+                      <p className="text-xs text-gray-400 mt-1">1-20 pixels</p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    name="enableRotation"
-                    checked={formData.enableRotation}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-gray-900 focus:ring-gray-900 border-gray-300 rounded cursor-pointer"
-                  />
-                  <label className="ml-2 text-sm text-gray-700 cursor-pointer">Enable map rotation</label>
+                {/* User Controls */}
+                <div className="space-y-4 p-5 bg-white rounded-xl border border-gray-100">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                      <ToggleRight className="w-4 h-4 text-gray-600" /> User Controls
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors">
+                      <input
+                        type="checkbox"
+                        name="enableRotation"
+                        checked={formData.enableRotation}
+                        onChange={handleInputChange}
+                        className="h-4 w-4 text-gray-900 focus:ring-gray-500 border-gray-300 rounded"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-800">Allow Rotation</span>
+                        <p className="text-xs text-gray-500">Right-click drag to rotate</p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors">
+                      <input
+                        type="checkbox"
+                        name="enablePitch"
+                        checked={formData.enablePitch}
+                        onChange={handleInputChange}
+                        className="h-4 w-4 text-gray-900 focus:ring-gray-500 border-gray-300 rounded"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-800">Allow Tilt (Pitch)</span>
+                        <p className="text-xs text-gray-500">3D perspective view</p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors">
+                      <input
+                        type="checkbox"
+                        name="enable3DBuildings"
+                        checked={formData.enable3DBuildings}
+                        onChange={handleInputChange}
+                        className="h-4 w-4 text-gray-900 focus:ring-gray-500 border-gray-300 rounded"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-800">Show 3D Buildings</span>
+                        <p className="text-xs text-gray-500">Extruded buildings when zoomed</p>
+                      </div>
+                    </label>
+
+                    {formData.enable3DBuildings && (
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">3D Min Zoom</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="22"
+                          name="buildings3DMinZoom"
+                          value={formData.buildings3DMinZoom}
+                          onChange={handleInputChange}
+                          className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg focus:border-gray-300 focus:ring-0 text-sm font-mono transition-all"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    name="enablePitch"
-                    checked={formData.enablePitch}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-gray-900 focus:ring-gray-900 border-gray-300 rounded cursor-pointer"
-                  />
-                  <label className="ml-2 text-sm text-gray-700 cursor-pointer">Enable map pitch/tilt</label>
+
+                {/* Camera Preview */}
+                <div className="space-y-4 p-5 bg-white rounded-xl border border-gray-100">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                      <Crosshair className="w-4 h-4 text-gray-600" /> Destination Camera
+                      <span className="text-xs font-normal text-gray-400">(After Animation)</span>
+                    </h4>
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="useDefaultCameraAfterLoad"
+                          checked={formData.useDefaultCameraAfterLoad}
+                          onChange={handleInputChange}
+                          className="h-4 w-4 text-gray-900 focus:ring-gray-500 border-gray-300 rounded"
+                        />
+                        <span className="text-xs text-gray-600">Custom camera</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowCameraPreview(!showCameraPreview)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showCameraPreview ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                      >
+                        {showCameraPreview ? 'Hide' : 'Preview'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {formData.useDefaultCameraAfterLoad && (
+                    <p className="text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg">
+                      Map will load at the camera position you set below (no intro animation)
+                    </p>
+                  )}
+
+                  {showCameraPreview && (
+                    <div className="rounded-xl overflow-hidden border border-gray-200">
+                      <InteractiveMapPreview
+                        mode="camera"
+                        value={{
+                          lat: formData.defaultCenterLat,
+                          lng: formData.defaultCenterLng,
+                          zoom: formData.defaultZoom,
+                          pitch: formData.defaultPitch,
+                          bearing: formData.defaultBearing
+                        }}
+                        onChange={(camera) => {
+                          console.log('📷 ProjectSettings received camera:', camera);
+                          setFormData(prev => ({
+                            ...prev,
+                            defaultCenterLat: camera.lat,
+                            defaultCenterLng: camera.lng,
+                            defaultZoom: camera.zoom,
+                            defaultPitch: camera.pitch,
+                            defaultBearing: camera.bearing
+                          }));
+                        }}
+                        mapStyle="mapbox://styles/mapbox/streets-v12"
+                        landmarks={projectData.landmarks}
+                        nearbyPlaces={projectData.nearbyPlaces}
+                        clientBuilding={projectData.clientBuilding}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Responsive Viewport (Auto-Fit Bounds) */}
+                <div className="space-y-4 p-5 bg-white rounded-xl border border-gray-100">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <div>
+                      <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                        <Eye className="w-4 h-4 text-gray-600" /> Responsive Viewport
+                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">NEW</span>
+                      </h4>
+                      <p className="text-xs text-gray-500 mt-1">Auto-fits all landmarks on screen for any device size</p>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="autoFitBounds"
+                        checked={formData.autoFitBounds}
+                        onChange={handleInputChange}
+                        className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Enable</span>
+                    </label>
+                  </div>
+
+                  {formData.autoFitBounds && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-4">
+                      <p className="text-xs text-gray-700">
+                        <strong>How it works:</strong> Instead of a fixed zoom level, the map will calculate the
+                        optimal zoom to show all landmarks on any screen size (mobile, tablet, desktop).
+                      </p>
+
+                      <div className="flex items-center justify-between gap-4">
+                        <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                          Padding around landmarks
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            name="autoFitPadding"
+                            min="10"
+                            max="150"
+                            value={formData.autoFitPadding}
+                            onChange={handleInputChange}
+                            className="w-28 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+                          />
+                          <span className="text-sm font-mono bg-white px-2 py-1 rounded border border-gray-200 min-w-[55px] text-center">
+                            {formData.autoFitPadding}px
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-gray-500 italic">
+                        💡 When enabled, the Default Zoom setting acts as a maximum zoom limit.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Navigation Bounds */}
+                <div className="space-y-4 p-5 bg-white rounded-xl border border-gray-100">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                      <Map className="w-4 h-4 text-gray-600" /> Navigation Bounds
+                      <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                    </h4>
+                  </div>
+
+                  <p className="text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg">
+                    Restrict how far users can pan from the center point. Leave empty for no restrictions.
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Max Pan Distance (km)</label>
+                      <input
+                        type="number"
+                        min="0.5"
+                        max="100"
+                        step="0.5"
+                        name="maxPanDistanceKm"
+                        value={formData.maxPanDistanceKm}
+                        onChange={handleInputChange}
+                        placeholder="e.g. 5 (leave empty for no limit)"
+                        className="w-full px-3 py-2.5 bg-gray-50 border border-transparent rounded-lg focus:bg-white focus:border-gray-300 focus:ring-0 text-sm font-mono transition-all"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Users cannot pan beyond this radius from the center</p>
+                    </div>
+                  </div>
+
+                  {formData.maxPanDistanceKm && (
+                    <div className="pt-3 border-t border-gray-100">
+                      <button
+                        type="button"
+                        onClick={() => setShowDistancePreview(!showDistancePreview)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showDistancePreview ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                      >
+                        {showDistancePreview ? 'Hide Preview' : 'Preview & Adjust Center'}
+                      </button>
+
+                      {showDistancePreview && (
+                        <div className="mt-4 rounded-xl overflow-hidden border border-gray-200">
+                          <InteractiveMapPreview
+                            mode="distance"
+                            distanceKm={parseFloat(formData.maxPanDistanceKm) || 5}
+                            panCenter={formData.panCenterLat && formData.panCenterLng ? {
+                              lat: parseFloat(formData.panCenterLat),
+                              lng: parseFloat(formData.panCenterLng)
+                            } : null}
+                            onChange={(data) => {
+                              if (data.panCenterLat !== undefined && data.panCenterLng !== undefined) {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  panCenterLat: data.panCenterLat,
+                                  panCenterLng: data.panCenterLng
+                                }));
+                              }
+                            }}
+                            mapStyle="mapbox://styles/mapbox/streets-v12"
+                            landmarks={projectData.landmarks}
+                            nearbyPlaces={projectData.nearbyPlaces}
+                            clientBuilding={projectData.clientBuilding}
+                          />
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormData(prev => ({
+                            ...prev,
+                            maxPanDistanceKm: '',
+                            panCenterLat: '',
+                            panCenterLng: ''
+                          }));
+                          setShowDistancePreview(false);
+                        }}
+                        className="mt-3 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                      >
+                        Clear Bounds
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Active Setting */}
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="isActive"
+                      checked={formData.isActive}
+                      onChange={handleInputChange}
+                      className="h-4 w-4 text-gray-900 focus:ring-gray-500 border-gray-300 rounded"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-800">Set as active configuration</span>
+                      <p className="text-xs text-gray-500">This will be used when the map loads</p>
+                    </div>
+                  </label>
                 </div>
               </div>
 
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="isActive"
-                  checked={formData.isActive}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 text-gray-900 focus:ring-gray-900 border-gray-300 rounded cursor-pointer"
-                />
-                <label className="ml-2 text-sm text-gray-700 cursor-pointer">Set as active settings</label>
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-4">
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-100 bg-gray-50/50">
                 <button
                   type="button"
                   onClick={() => {
@@ -510,13 +943,13 @@ export default function ProjectSettings({ projectId }) {
                     setEditingSetting(null);
                     resetForm();
                   }}
-                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-sm transition-colors cursor-pointer"
+                  className="px-5 py-2.5 text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 font-medium text-sm transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 font-medium text-sm transition-colors cursor-pointer"
+                  className="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-medium text-sm rounded-xl transition-all"
                 >
                   {editingSetting ? 'Update' : 'Create'}
                 </button>

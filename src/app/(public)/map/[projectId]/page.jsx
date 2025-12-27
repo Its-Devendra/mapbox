@@ -17,6 +17,7 @@ function MapPageContent() {
 
   const [project, setProject] = useState(null);
   const [projectTheme, setProjectTheme] = useState(null);
+  const [filterTheme, setFilterTheme] = useState(null);
   const [mapSettings, setMapSettings] = useState(null);
   const [landmarks, setLandmarks] = useState([]);
   const [nearbyPlaces, setNearbyPlaces] = useState([]);
@@ -63,20 +64,17 @@ function MapPageContent() {
       setError(null);
 
       try {
-        // Check cache first
+        // Check cache first (but always refresh settings for latest values)
         const cacheKey = `project-data-${projectId}`;
         const cached = apiResponseCache.get(cacheKey);
 
+        // Clear cache for fresh settings data (settings change frequently)
         if (cached) {
-          setProject(cached.project);
-          setProjectTheme(cached.theme);
-          setMapSettings(cached.settings);
-          setLandmarks(cached.landmarks);
-          setNearbyPlaces(cached.nearbyPlaces);
-          setCategories(cached.categories);
-          setLoading(false);
-          return;
+          console.log('🔄 Cache found, but refreshing for latest settings...');
+          apiResponseCache.delete(cacheKey);
         }
+
+        // Always fetch fresh data (removed early return from cache)
 
         // Parallel fetch with Promise.allSettled for graceful degradation
         const [
@@ -128,19 +126,62 @@ function MapPageContent() {
 
         // Handle themes (important but not critical)
         let activeTheme = null;
+        let activeFilterTheme = null;
         if (themesRes.status === 'fulfilled' && themesRes.value.ok) {
           const themesResponse = await themesRes.value.json();
           const themesData = Array.isArray(themesResponse) ? themesResponse : (themesResponse.items || themesResponse.themes || []);
           const theme = themesData.find(t => t.isActive && t.projectId === projectId);
           if (theme) {
+            // Landmark Theme (Standard fields + glass controls + nearby controls)
             activeTheme = {
               primary: theme.primary,
               secondary: theme.secondary,
-              tertiary: '#64748b',
-              quaternary: '#f1f5f9',
-              mapboxStyle: theme.mapboxStyle
+              tertiary: theme.tertiary || '#ffffff',
+              quaternary: theme.quaternary || '#f1f5f9',
+              mapboxStyle: theme.mapboxStyle,
+              // Landmark Glass Controls
+              landmarkGlassEnabled: theme.landmarkGlassEnabled ?? true,
+              landmarkGlassBlur: theme.landmarkGlassBlur ?? 50,
+              landmarkGlassSaturation: theme.landmarkGlassSaturation ?? 200,
+              landmarkGlassOpacity: theme.landmarkGlassOpacity ?? 25,
+              landmarkBorderOpacity: theme.landmarkBorderOpacity ?? 35,
+              primaryOpacity: theme.primaryOpacity ?? 100,
+              secondaryOpacity: theme.secondaryOpacity ?? 100,
+              tertiaryOpacity: theme.tertiaryOpacity ?? 100,
+              // Nearby Tooltip Glass Controls
+              nearbyGlassEnabled: theme.nearbyGlassEnabled ?? true,
+              nearbyGlassBlur: theme.nearbyGlassBlur ?? 50,
+              nearbyGlassSaturation: theme.nearbyGlassSaturation ?? 200,
+              nearbyGlassOpacity: theme.nearbyGlassOpacity ?? 25,
+              nearbyBorderOpacity: theme.nearbyBorderOpacity ?? 35,
+              nearbyPrimaryOpacity: theme.nearbyPrimaryOpacity ?? 100,
+              nearbySecondaryOpacity: theme.nearbySecondaryOpacity ?? 100,
+              nearbyTertiaryOpacity: theme.nearbyTertiaryOpacity ?? 100,
+              // Nearby Tooltip Colors
+              nearbyPrimary: theme.nearbyPrimary || '#ffffff',
+              nearbySecondary: theme.nearbySecondary || '#1e3a8a',
+              nearbyTertiary: theme.nearbyTertiary || '#3b82f6',
             };
+
+            // Filter Theme (Filter specific fields + glass controls)
+            activeFilterTheme = {
+              primary: theme.filterPrimary || theme.primary,
+              secondary: theme.filterSecondary || theme.secondary,
+              tertiary: theme.filterTertiary || theme.tertiary || '#ffffff',
+              quaternary: theme.filterQuaternary || theme.quaternary || '#f1f5f9',
+              // Filter Glass Controls
+              filterGlassEnabled: theme.filterGlassEnabled ?? true,
+              filterGlassBlur: theme.filterGlassBlur ?? 50,
+              filterGlassSaturation: theme.filterGlassSaturation ?? 200,
+              filterGlassOpacity: theme.filterGlassOpacity ?? 25,
+              filterBorderOpacity: theme.filterBorderOpacity ?? 35,
+              filterPrimaryOpacity: theme.filterPrimaryOpacity ?? 100,
+              filterSecondaryOpacity: theme.filterSecondaryOpacity ?? 100,
+              filterTertiaryOpacity: theme.filterTertiaryOpacity ?? 100,
+            };
+
             setProjectTheme(activeTheme);
+            setFilterTheme(activeFilterTheme);
           }
         } else {
           console.warn('Failed to load themes, using defaults');
@@ -151,10 +192,24 @@ function MapPageContent() {
         if (settingsRes.status === 'fulfilled' && settingsRes.value.ok) {
           const settingsResponse = await settingsRes.value.json();
           const settingsData = Array.isArray(settingsResponse) ? settingsResponse : (settingsResponse.items || settingsResponse.settings || []);
+          console.log('📋 All Map Settings:', settingsData);
           const activeSetting = settingsData.find(s => s.isActive && s.projectId === projectId);
           if (activeSetting) {
+            console.log('✅ Active Map Setting Found:', {
+              id: activeSetting.id,
+              zoom: activeSetting.defaultZoom,
+              center: [activeSetting.defaultCenterLng, activeSetting.defaultCenterLat],
+              useDefaultCamera: activeSetting.useDefaultCameraAfterLoad,
+              pitch: activeSetting.defaultPitch,
+              bearing: activeSetting.defaultBearing,
+              bounds: activeSetting.southWestLat ? 'Set' : 'None',
+              maxPanDistanceKm: activeSetting.maxPanDistanceKm || 'Not set',
+              panCenter: activeSetting.panCenterLat ? [activeSetting.panCenterLng, activeSetting.panCenterLat] : 'Using client building'
+            });
             settings = activeSetting;
             setMapSettings(activeSetting);
+          } else {
+            console.warn('⚠️ No active map setting found for project:', projectId);
           }
         } else {
           console.warn('Failed to load settings, using defaults');
@@ -223,6 +278,7 @@ function MapPageContent() {
         apiResponseCache.set(cacheKey, {
           project: projectData,
           theme: activeTheme,
+          filterTheme: activeFilterTheme,
           settings,
           landmarks: transformedLandmarks,
           nearbyPlaces: transformedNearbyPlaces,
@@ -254,10 +310,17 @@ function MapPageContent() {
   const filteredLandmarks = React.useMemo(() => {
     if (!landmarks.length) return [];
 
-    if (!activeFilter || activeFilter.length === 0 || (activeFilter.length === 1 && activeFilter[0] === 'All')) {
+    // HideAll: User explicitly clicked to hide all landmarks
+    if (activeFilter.includes('HideAll')) {
+      return [];
+    }
+
+    // Show all landmarks when no filter is active (default state)
+    if (!activeFilter || activeFilter.length === 0) {
       return landmarks;
     }
 
+    // Filter by selected categories
     const filtered = landmarks.filter((landmark) => {
       if (!landmark.category) return false;
       // Loose comparison just in case of formatting diffs
@@ -274,7 +337,13 @@ function MapPageContent() {
   const filteredNearbyPlaces = React.useMemo(() => {
     if (!nearbyPlaces.length) return [];
 
-    if (!activeFilter || activeFilter.length === 0 || (activeFilter.length === 1 && activeFilter[0] === 'All')) {
+    // HideAll: User explicitly clicked to hide all landmarks
+    if (activeFilter.includes('HideAll')) {
+      return [];
+    }
+
+    // Show all nearby places when no filter is active (default state)
+    if (!activeFilter || activeFilter.length === 0) {
       return nearbyPlaces;
     }
 
@@ -348,11 +417,22 @@ function MapPageContent() {
           mapSettings={mapSettings}
         />
 
-        {/* Project Logo */}
+        {/* Project Logo (Left) */}
         <ProjectLogo
           logo={project?.logo}
           width={project?.logoWidth}
           height={project?.logoHeight}
+          position="left"
+          theme={projectTheme}
+        />
+
+        {/* Secondary Logo (Right) */}
+        <ProjectLogo
+          logo={project?.secondaryLogo}
+          width={project?.secondaryLogoWidth}
+          height={project?.secondaryLogoHeight}
+          position="right"
+          theme={projectTheme}
         />
       </div>
 
@@ -361,7 +441,7 @@ function MapPageContent() {
         categories={categories}
         onFilterChange={setActiveFilter}
         activeFilter={activeFilter}
-        theme={projectTheme}
+        theme={filterTheme || projectTheme} // Fallback to projectTheme if filterTheme not set
       />
     </div>
   );

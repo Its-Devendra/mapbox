@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useRef } from 'react';
+import { bustCache } from '@/utils/cacheUtils';
 
-export default function LogoUploader({ label, currentLogo, onUpload, theme }) {
+export default function LogoUploader({ label, currentLogo, onUpload, onDimensionsExtracted, theme }) {
     const [preview, setPreview] = useState(currentLogo || null);
     const [error, setError] = useState(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -28,6 +29,20 @@ export default function LogoUploader({ label, currentLogo, onUpload, theme }) {
         const reader = new FileReader();
         reader.onload = (e) => {
             const content = e.target.result;
+
+            // Create an image to get dimensions
+            const img = new Image();
+            img.onload = () => {
+                // Call the dimensions callback if provided
+                if (onDimensionsExtracted) {
+                    onDimensionsExtracted({
+                        width: img.width,
+                        height: img.height
+                    });
+                }
+            };
+            img.src = content;
+
             setPreview(content);
             onUpload(content);
         };
@@ -88,8 +103,8 @@ export default function LogoUploader({ label, currentLogo, onUpload, theme }) {
                 onDragLeave={handleDragLeave}
                 onClick={() => fileInputRef.current?.click()}
                 className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${isDragging
-                        ? 'border-gray-400 bg-gray-50'
-                        : 'border-gray-200 bg-gray-50/50 hover:border-gray-300 hover:bg-gray-50'
+                    ? 'border-gray-400 bg-gray-50'
+                    : 'border-gray-200 bg-gray-50/50 hover:border-gray-300 hover:bg-gray-50'
                     }`}
             >
                 <input

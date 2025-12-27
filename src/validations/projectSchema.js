@@ -15,6 +15,9 @@ export const projectSchema = z.object({
     logo: z.string().nullable().optional(),
     logoWidth: z.number().int().min(10).max(500).optional(),
     logoHeight: z.number().int().min(10).max(500).optional(),
+    secondaryLogo: z.string().nullable().optional(),
+    secondaryLogoWidth: z.number().int().min(10).max(500).optional(),
+    secondaryLogoHeight: z.number().int().min(10).max(500).optional(),
     introAudio: z.string().nullable().optional(), // URL to S3 audio file
 });
 

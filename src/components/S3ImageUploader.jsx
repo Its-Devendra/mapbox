@@ -13,7 +13,7 @@ export default function S3ImageUploader({
     onUpload,
     folder = 'landmarks',
     accept = 'image/*',
-    maxSizeMB = 10
+    maxSizeMB = 50
 }) {
     const [preview, setPreview] = useState(currentImage);
     const [uploading, setUploading] = useState(false);

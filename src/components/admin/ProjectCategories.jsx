@@ -1,42 +1,30 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '@/context/ThemeContext';
 import SvgIconUploader from '@/components/SvgIconUploader';
+import AspectRatioSizeInput from '@/components/AspectRatioSizeInput';
 import FilterBar from '@/components/FilterBar';
 import { Button, Input, Modal, Card, Badge, Skeleton, EmptyState } from '@/components/ui';
 import useCRUD from '@/hooks/useCRUD';
 import useModal from '@/hooks/useModal';
-import { Plus, Edit, Trash2, Tag, CheckCircle2, XCircle, Sparkles } from 'lucide-react';
+import { Plus, Edit, Trash2, Tag, CheckCircle2, XCircle, Sparkles, Check } from 'lucide-react';
+import { PROFESSIONAL_ICONS, getDefaultIconForCategory } from '@/data/professionalIcons';
 
 const initialFormData = {
   name: '',
-  icon: '🏷️',
+  icon: null, // Will store selected icon ID or custom SVG
+  selectedIconId: 'location', // Default icon
   iconSvg: null,
-  isActive: true
+  isActive: true,
+  defaultIconWidth: 32,
+  defaultIconHeight: 32,
+  useCategoryDefaults: false
 };
-
-const EMOJI_OPTIONS = [
-  { value: '🏷️', label: '🏷️ Tag' },
-  { value: '🏢', label: '🏢 Office' },
-  { value: '🏪', label: '🏪 Shop' },
-  { value: '🍽️', label: '🍽️ Restaurant' },
-  { value: '🏨', label: '🏨 Hotel' },
-  { value: '⛽', label: '⛽ Gas Station' },
-  { value: '🏥', label: '🏥 Hospital' },
-  { value: '🏫', label: '🏫 School' },
-  { value: '🅿️', label: '🅿️ Parking' },
-  { value: '🏛️', label: '🏛️ Government' },
-  { value: '🏭', label: '🏭 Factory' },
-  { value: '🌳', label: '🌳 Park' },
-  { value: '⛪', label: '⛪ Church' },
-  { value: '🏦', label: '🏦 Bank' },
-  { value: '📚', label: '📚 Library' },
-];
 
 export default function ProjectCategories({ projectId }) {
   const { theme } = useTheme();
-  const [iconType, setIconType] = useState('emoji');
+  const [iconType, setIconType] = useState('preset'); // 'preset' or 'custom'
 
   // Data fetching
   const categories = useCRUD({
@@ -56,11 +44,23 @@ export default function ProjectCategories({ projectId }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    let iconValue;
+    if (iconType === 'custom') {
+      iconValue = modal.formData.iconSvg;
+    } else {
+      // Get the SVG from the selected preset icon
+      const selectedIcon = PROFESSIONAL_ICONS.find(i => i.id === modal.formData.selectedIconId);
+      iconValue = selectedIcon?.svg || PROFESSIONAL_ICONS[0].svg;
+    }
+
     const payload = {
       ...modal.formData,
-      icon: iconType === 'svg' ? modal.formData.iconSvg : modal.formData.icon,
-      iconSvg: iconType === 'svg' ? modal.formData.iconSvg : null,
+      icon: iconValue,
+      iconSvg: iconType === 'custom' ? modal.formData.iconSvg : null,
     };
+
+    // Remove temporary field
+    delete payload.selectedIconId;
 
     if (modal.isEditing) {
       await categories.update(modal.editingItem.id, payload);
@@ -69,34 +69,64 @@ export default function ProjectCategories({ projectId }) {
     }
 
     modal.close(true);
-    setIconType('emoji');
+    setIconType('preset');
   };
 
   // Handle edit
   const handleEdit = (category) => {
     const hasSvg = category.icon && typeof category.icon === 'string' &&
       (category.icon.trim().toLowerCase().startsWith('<svg') || category.icon.includes('<svg'));
-    setIconType(hasSvg ? 'svg' : 'emoji');
+
+    // Try to find matching preset icon
+    const matchingPreset = PROFESSIONAL_ICONS.find(i => i.svg === category.icon);
+    const hasPreset = !!matchingPreset;
+
+    setIconType(hasSvg && !hasPreset ? 'custom' : 'preset');
 
     modal.openEdit(category, (item) => ({
       name: item.name,
-      icon: hasSvg ? '🏷️' : (item.icon || '🏷️'),
-      iconSvg: hasSvg ? item.icon : null,
-      isActive: item.isActive
+      icon: item.icon,
+      selectedIconId: matchingPreset?.id || 'location',
+      iconSvg: hasSvg && !hasPreset ? item.icon : null,
+      isActive: item.isActive,
+      defaultIconWidth: item.defaultIconWidth || 32,
+      defaultIconHeight: item.defaultIconHeight || 32,
+      useCategoryDefaults: item.useCategoryDefaults || false
     }));
   };
 
   // Handle close
   const handleClose = () => {
     modal.close(true);
-    setIconType('emoji');
+    setIconType('preset');
+  };
+
+  // Auto-suggest icon when category name changes
+  const handleNameChange = useCallback((e) => {
+    modal.handleInputChange(e);
+    const name = e.target.value;
+    if (name && iconType === 'preset') {
+      const suggestedIcon = getDefaultIconForCategory(name);
+      if (suggestedIcon) {
+        modal.updateField('selectedIconId', suggestedIcon.id);
+      }
+    }
+  }, [modal, iconType]);
+
+  // Get current icon SVG for preview
+  const getCurrentIconSvg = () => {
+    if (iconType === 'custom') {
+      return modal.formData.iconSvg || '<svg></svg>';
+    }
+    const selectedIcon = PROFESSIONAL_ICONS.find(i => i.id === modal.formData.selectedIconId);
+    return selectedIcon?.svg || PROFESSIONAL_ICONS[0].svg;
   };
 
   // Preview category object
   const previewCategory = {
     id: 'preview',
     name: modal.formData.name || 'Category Name',
-    icon: iconType === 'svg' ? (modal.formData.iconSvg || '<svg></svg>') : modal.formData.icon
+    icon: getCurrentIconSvg()
   };
 
   // Loading state
@@ -116,7 +146,7 @@ export default function ProjectCategories({ projectId }) {
           <h3 className="text-base font-semibold text-gray-900">Categories</h3>
           <p className="text-sm text-gray-500 mt-1">Organize landmarks into categories</p>
         </div>
-        <Button icon={Plus} onClick={() => { setIconType('emoji'); modal.openCreate(); }}>
+        <Button icon={Plus} onClick={() => { setIconType('preset'); modal.openCreate(); }}>
           New Category
         </Button>
       </div>
@@ -154,7 +184,7 @@ export default function ProjectCategories({ projectId }) {
                         </Badge>
                       )}
                       <span className="text-xs text-gray-500">
-                        {category.landmarks?.length || 0} landmarks
+                        {(category._count?.landmarks || 0) + (category._count?.nearByPlaces || 0)} items
                       </span>
                     </div>
                   </div>
@@ -183,7 +213,7 @@ export default function ProjectCategories({ projectId }) {
           title="No categories yet"
           description="Create categories to organize your landmarks"
           action={
-            <Button icon={Plus} onClick={() => { setIconType('emoji'); modal.openCreate(); }}>
+            <Button icon={Plus} onClick={() => { setIconType('preset'); modal.openCreate(); }}>
               Create Category
             </Button>
           }
@@ -206,7 +236,7 @@ export default function ProjectCategories({ projectId }) {
                 label="Category Name"
                 name="name"
                 value={modal.formData.name}
-                onChange={modal.handleInputChange}
+                onChange={handleNameChange}
                 placeholder="Enter category name"
                 required
               />
@@ -219,54 +249,106 @@ export default function ProjectCategories({ projectId }) {
                   <button
                     type="button"
                     onClick={() => {
-                      setIconType('emoji');
+                      setIconType('preset');
                       modal.updateField('iconSvg', null);
                     }}
-                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${iconType === 'emoji'
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${iconType === 'preset'
                       ? 'bg-white text-black shadow-sm'
                       : 'text-gray-500 hover:text-gray-900'
                       }`}
                   >
-                    Emoji
+                    Preset Icons
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      setIconType('svg');
-                      modal.updateField('icon', '🏷️');
+                      setIconType('custom');
                     }}
-                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${iconType === 'svg'
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${iconType === 'custom'
                       ? 'bg-white text-black shadow-sm'
                       : 'text-gray-500 hover:text-gray-900'
                       }`}
                   >
-                    Upload SVG
+                    Custom SVG
                   </button>
                 </div>
 
-                {/* Emoji Selector */}
-                {iconType === 'emoji' && (
-                  <select
-                    name="icon"
-                    value={modal.formData.icon}
-                    onChange={modal.handleInputChange}
-                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-gray-300 text-sm cursor-pointer transition-all"
-                  >
-                    {EMOJI_OPTIONS.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                {/* Preset Icon Grid */}
+                {iconType === 'preset' && (
+                  <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-100">
+                    {PROFESSIONAL_ICONS.map(icon => (
+                      <button
+                        key={icon.id}
+                        type="button"
+                        onClick={() => modal.updateField('selectedIconId', icon.id)}
+                        className={`relative p-2.5 rounded-lg transition-all cursor-pointer group ${modal.formData.selectedIconId === icon.id
+                          ? 'bg-black text-white shadow-md'
+                          : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 hover:border-gray-300'
+                          }`}
+                        title={icon.name}
+                      >
+                        <div
+                          className="w-6 h-6 mx-auto [&>svg]:w-full [&>svg]:h-full"
+                          dangerouslySetInnerHTML={{ __html: icon.svg }}
+                        />
+                        {modal.formData.selectedIconId === icon.id && (
+                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                            <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+                          </div>
+                        )}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 )}
 
-                {/* SVG Uploader */}
-                {iconType === 'svg' && (
+                {/* Custom SVG Uploader */}
+                {iconType === 'custom' && (
                   <SvgIconUploader
                     label=""
                     currentIcon={modal.formData.iconSvg}
                     onUpload={(svgContent) => modal.updateField('iconSvg', svgContent)}
+                    onDimensionsExtracted={(dimensions) => {
+                      modal.updateField('defaultIconWidth', dimensions.width);
+                      modal.updateField('defaultIconHeight', dimensions.height);
+                    }}
                     theme={theme}
                   />
                 )}
+              </div>
+
+              {/* Default Icon Size */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Default Icon Size for Items</label>
+                <p className="text-xs text-gray-500 mb-3">
+                  Set default icon size for all landmarks and nearby places in this category
+                </p>
+                <AspectRatioSizeInput
+                  width={modal.formData.defaultIconWidth}
+                  height={modal.formData.defaultIconHeight}
+                  widthName="defaultIconWidth"
+                  heightName="defaultIconHeight"
+                  onWidthChange={modal.handleInputChange}
+                  onHeightChange={modal.handleInputChange}
+                  widthLabel="Width (px)"
+                  heightLabel="Height (px)"
+                  min={10}
+                  max={200}
+                />
+              </div>
+
+              {/* Force Category Defaults Checkbox */}
+              <div className="flex items-center p-3 rounded-xl bg-blue-50/50 border border-blue-100">
+                <input
+                  type="checkbox"
+                  name="useCategoryDefaults"
+                  checked={modal.formData.useCategoryDefaults}
+                  onChange={modal.handleInputChange}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                />
+                <div className="ml-3">
+                  <label className="text-sm font-medium text-gray-700 cursor-pointer">Force category defaults for all items</label>
+                  <p className="text-xs text-gray-500 mt-0.5">When enabled, all items in this category will use the category default sizes, ignoring individual item sizes</p>
+                </div>
               </div>
 
               <div className="flex items-center p-3 rounded-xl bg-gray-50/50 border border-gray-100">

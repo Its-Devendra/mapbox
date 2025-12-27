@@ -104,15 +104,15 @@ export function validateCoordinates(lng, lat) {
 export function createSVGImage(svgString, width = 32, height = 32) {
   return new Promise((resolve, reject) => {
     const sanitized = sanitizeSVG(svgString);
-    
+
     if (!sanitized) {
       reject(new Error('Invalid or malicious SVG content'));
       return;
     }
 
     const img = new Image(width, height);
-    const svgBlob = new Blob([sanitized], { 
-      type: 'image/svg+xml;charset=utf-8' 
+    const svgBlob = new Blob([sanitized], {
+      type: 'image/svg+xml;charset=utf-8'
     });
     const url = URL.createObjectURL(svgBlob);
 
@@ -208,8 +208,8 @@ export function formatDuration(seconds) {
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
 
-  return remainingMinutes > 0 
-    ? `${hours}h ${remainingMinutes}m` 
+  return remainingMinutes > 0
+    ? `${hours}h ${remainingMinutes}m`
     : `${hours}h`;
 }
 
@@ -221,13 +221,13 @@ export function formatDuration(seconds) {
  */
 export function debounce(func, wait = 300) {
   let timeout;
-  
+
   return function executedFunction(...args) {
     const later = () => {
       clearTimeout(timeout);
       func(...args);
     };
-    
+
     clearTimeout(timeout);
     timeout = setTimeout(later, wait);
   };
@@ -241,7 +241,7 @@ export function debounce(func, wait = 300) {
  */
 export function throttle(func, limit = 100) {
   let inThrottle;
-  
+
   return function executedFunction(...args) {
     if (!inThrottle) {
       func(...args);
@@ -258,7 +258,7 @@ export function throttle(func, limit = 100) {
  * @returns {string} Cache key
  */
 export function generateCacheKey(prefix, ...params) {
-  return `${prefix}:${params.map(p => 
+  return `${prefix}:${params.map(p =>
     typeof p === 'object' ? JSON.stringify(p) : String(p)
   ).join(':')}`;
 }
@@ -271,7 +271,7 @@ export function generateCacheKey(prefix, ...params) {
  * @returns {Promise} Result of the function
  */
 export async function retryWithBackoff(
-  fn, 
+  fn,
   maxAttempts = MAPBOX_CONFIG.RETRY_ATTEMPTS,
   baseDelay = MAPBOX_CONFIG.RETRY_DELAY
 ) {
@@ -282,7 +282,7 @@ export async function retryWithBackoff(
       if (attempt === maxAttempts) {
         throw error;
       }
-      
+
       // Exponential backoff: 1s, 2s, 4s, etc.
       const delay = baseDelay * Math.pow(2, attempt - 1);
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -296,7 +296,7 @@ export async function retryWithBackoff(
  * @returns {Promise} Promise that rejects after timeout
  */
 export function createTimeout(ms) {
-  return new Promise((_, reject) => 
+  return new Promise((_, reject) =>
     setTimeout(() => reject(new Error('Request timeout')), ms)
   );
 }
@@ -382,6 +382,30 @@ export function groupMarkersByProximity(markers, threshold = 0.01) {
   });
 
   return groups;
+}
+
+/**
+ * Get icon size with hierarchical fallback
+ * Priority: 
+ * - If category.useCategoryDefaults is true: Category default → Global default (32px)
+ * - Otherwise: Individual size → Category default → Global default (32px)
+ * @param {Object} item - Landmark or nearby place object
+ * @param {Object} category - Category object (optional)
+ * @returns {Object} Object with width and height properties
+ */
+export function getIconSize(item, category = null) {
+  // If category forces defaults, ignore individual sizes
+  if (category?.useCategoryDefaults) {
+    const width = category?.defaultIconWidth ?? 32;
+    const height = category?.defaultIconHeight ?? 32;
+    return { width, height };
+  }
+
+  // Otherwise use normal hierarchy: individual → category → global
+  const width = item?.iconWidth ?? category?.defaultIconWidth ?? 32;
+  const height = item?.iconHeight ?? category?.defaultIconHeight ?? 32;
+
+  return { width, height };
 }
 
 /**

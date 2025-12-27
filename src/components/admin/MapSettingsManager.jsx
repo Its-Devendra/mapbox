@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTheme } from '@/context/ThemeContext';
+import InteractiveMapPreview from './InteractiveMapPreview';
 
 export default function MapSettingsManager() {
   const { theme } = useTheme();
@@ -11,6 +12,8 @@ export default function MapSettingsManager() {
   const [showModal, setShowModal] = useState(false);
   const [editingSetting, setEditingSetting] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showCameraPreview, setShowCameraPreview] = useState(false);
+  const [showBoundsPreview, setShowBoundsPreview] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -25,6 +28,15 @@ export default function MapSettingsManager() {
     routeLineWidth: 4,
     initialAnimationDuration: 3.0,
     routeAnimationDuration: 1.0,
+    useDefaultCameraAfterLoad: false,
+    defaultPitch: 70,
+    defaultBearing: -20,
+    southWestLat: null,
+    southWestLng: null,
+    northEastLat: null,
+    northEastLng: null,
+    autoFitBounds: false,
+    autoFitPadding: 50,
     projectId: '',
     isActive: false
   });
@@ -126,6 +138,15 @@ export default function MapSettingsManager() {
       routeLineWidth: setting.routeLineWidth,
       initialAnimationDuration: setting.initialAnimationDuration,
       routeAnimationDuration: setting.routeAnimationDuration,
+      useDefaultCameraAfterLoad: setting.useDefaultCameraAfterLoad || false,
+      defaultPitch: setting.defaultPitch || 70,
+      defaultBearing: setting.defaultBearing || -20,
+      southWestLat: setting.southWestLat || null,
+      southWestLng: setting.southWestLng || null,
+      northEastLat: setting.northEastLat || null,
+      northEastLng: setting.northEastLng || null,
+      autoFitBounds: setting.autoFitBounds || false,
+      autoFitPadding: setting.autoFitPadding || 50,
       projectId: setting.projectId,
       isActive: setting.isActive
     });
@@ -211,9 +232,8 @@ export default function MapSettingsManager() {
                 <p className="text-sm text-gray-600 mt-1">Project: {getProjectName(setting.projectId)}</p>
 
                 <div className="flex items-center mt-3">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    setting.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                  }`}>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${setting.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
                     {setting.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </div>
@@ -479,7 +499,172 @@ export default function MapSettingsManager() {
                 </div>
               </div>
 
-              <div className="flex items-center">
+              {/* Interactive Camera Preview Section */}
+              <div className="border-t pt-4 mt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold text-gray-900">Default Camera Position</h4>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="useDefaultCameraAfterLoad"
+                      checked={formData.useDefaultCameraAfterLoad}
+                      onChange={handleInputChange}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mr-2"
+                    />
+                    <span className="text-sm text-gray-700">Use default camera after load</span>
+                  </label>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                  <p className="text-xs text-gray-700">
+                    <strong>When disabled (default):</strong> Intro transition (globe → building) plays if configured.<br />
+                    <strong>When enabled:</strong> Map flies directly to this camera position on load.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowCameraPreview(!showCameraPreview)}
+                  className="mb-3 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 font-medium transition-colors flex items-center space-x-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <span>{showCameraPreview ? 'Hide' : 'Open'} Camera Preview</span>
+                </button>
+
+                {showCameraPreview && (
+                  <div className="mb-4">
+                    <InteractiveMapPreview
+                      mode="camera"
+                      value={{
+                        lat: formData.defaultCenterLat,
+                        lng: formData.defaultCenterLng,
+                        zoom: formData.defaultZoom,
+                        pitch: formData.defaultPitch,
+                        bearing: formData.defaultBearing
+                      }}
+                      onChange={(camera) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          defaultCenterLat: camera.lat,
+                          defaultCenterLng: camera.lng,
+                          defaultZoom: camera.zoom,
+                          defaultPitch: camera.pitch,
+                          defaultBearing: camera.bearing
+                        }));
+                      }}
+                      mapStyle={formData.mapStyle || 'mapbox://styles/mapbox/dark-v11'}
+                    />
+                  </div>
+                )}
+
+                {/* Auto-Fit Bounds Section */}
+                <div className="border-t border-dashed border-gray-300 pt-4 mt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h4 className="font-semibold text-gray-900">Responsive Viewport (Auto-Fit)</h4>
+                      <p className="text-xs text-gray-500 mt-1">Automatically fits all landmarks on screen for any device size</p>
+                    </div>
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="autoFitBounds"
+                        checked={formData.autoFitBounds}
+                        onChange={handleInputChange}
+                        className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded mr-2"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Enable</span>
+                    </label>
+                  </div>
+
+                  {formData.autoFitBounds && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <p className="text-xs text-gray-700 mb-3">
+                        <strong>How it works:</strong> Instead of a fixed zoom level, the map will calculate the
+                        optimal zoom to show all landmarks on any screen size (mobile, tablet, desktop).
+                      </p>
+
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-700">
+                          Padding around landmarks
+                        </label>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="range"
+                            name="autoFitPadding"
+                            min="10"
+                            max="150"
+                            value={formData.autoFitPadding}
+                            onChange={handleInputChange}
+                            className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                          <span className="text-sm font-mono bg-white px-2 py-1 rounded border min-w-[50px] text-center">
+                            {formData.autoFitPadding}px
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Interactive Bounds Preview Section */}
+              <div className="border-t pt-4 mt-4">
+                <h4 className="font-semibold text-gray-900 mb-3">Map Bounds (Optional)</h4>
+                <p className="text-xs text-gray-600 mb-3">
+                  Restrict where users can navigate. Leave empty for no restrictions.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setShowBoundsPreview(!showBoundsPreview)}
+                  className="mb-3 px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 font-medium transition-colors flex items-center space-x-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                  <span>{showBoundsPreview ? 'Hide' : 'Open'} Bounds Editor</span>
+                </button>
+
+                {showBoundsPreview && (
+                  <div className="mb-4">
+                    <InteractiveMapPreview
+                      mode="bounds"
+                      value={{
+                        southWest: formData.southWestLat && formData.southWestLng
+                          ? [formData.southWestLng, formData.southWestLat]
+                          : null,
+                        northEast: formData.northEastLat && formData.northEastLng
+                          ? [formData.northEastLng, formData.northEastLat]
+                          : null
+                      }}
+                      onChange={(bounds) => {
+                        if (bounds && bounds.southWest && bounds.northEast) {
+                          setFormData(prev => ({
+                            ...prev,
+                            southWestLat: bounds.southWest[1],
+                            southWestLng: bounds.southWest[0],
+                            northEastLat: bounds.northEast[1],
+                            northEastLng: bounds.northEast[0]
+                          }));
+                        } else {
+                          setFormData(prev => ({
+                            ...prev,
+                            southWestLat: null,
+                            southWestLng: null,
+                            northEastLat: null,
+                            northEastLng: null
+                          }));
+                        }
+                      }}
+                      mapStyle={formData.mapStyle || 'mapbox://styles/mapbox/dark-v11'}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center border-t pt-4 mt-4">
                 <input
                   type="checkbox"
                   name="isActive"

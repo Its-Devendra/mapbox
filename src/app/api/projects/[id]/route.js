@@ -16,7 +16,7 @@ import { projectSchema } from "@/validations/projectSchema";
 export async function GET(request, { params }) {
   try {
     const { id } = await params;
-    
+
     if (!id) {
       return NextResponse.json(
         { error: 'Project ID is required' },
@@ -25,7 +25,7 @@ export async function GET(request, { params }) {
     }
 
     const project = await getProjectById(id);
-    
+
     if (!project) {
       return NextResponse.json(
         { error: 'Project not found' },
@@ -36,7 +36,7 @@ export async function GET(request, { params }) {
     // Set cache headers
     const response = NextResponse.json(project);
     response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=60');
-    
+
     return response;
   } catch (error) {
     console.error('Error in GET /api/projects/[id]:', error);
@@ -55,12 +55,15 @@ export async function PUT(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    
+
     // Validate partial update
     const parsed = projectSchema.partial().parse(body);
     const project = await updateProject(id, parsed);
-    
-    return NextResponse.json(project);
+
+    // Return with no-cache headers to ensure fresh data
+    const response = NextResponse.json(project);
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return response;
   } catch (error) {
     console.error('Error in PUT /api/projects/[id]:', error);
     return NextResponse.json(
@@ -78,7 +81,7 @@ export async function DELETE(request, { params }) {
   try {
     const { id } = await params;
     await deleteProject(id);
-    
+
     return NextResponse.json({ success: true, message: 'Project deleted successfully' });
   } catch (error) {
     console.error('Error in DELETE /api/projects/[id]:', error);
