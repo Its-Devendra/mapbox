@@ -193,9 +193,67 @@ const ChatInterface = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
+    // Audio Management
+    const stopAudio = () => {
+        if (audioContextRef.current) {
+            audioContextRef.current.pause();
+            audioContextRef.current.currentTime = 0;
+            audioContextRef.current = null;
+        }
+        setIsPlaying(false);
+    };
+
+    const playInlineAudio = (base64Audio, contentType) => {
+        stopAudio();
+        if (!base64Audio) return;
+
+        try {
+            const audioUrl = `data:${contentType};base64,${base64Audio}`;
+            const audio = new Audio(audioUrl);
+            audioContextRef.current = audio;
+
+            audio.onended = () => setIsPlaying(false);
+
+            audio.play().then(() => {
+                setIsPlaying(true);
+            }).catch(e => {
+                console.warn("Audio autoplay blocked:", e);
+                setIsPlaying(false);
+            });
+        } catch (e) {
+            console.error("Error playing inline audio:", e);
+        }
+    };
+
+    const playStreamAudio = (url) => {
+        stopAudio();
+        if (!url) return;
+
+        // Note: For full streaming support (SSE), we would use EventSource here as per guide.
+        // For now, if the URL is a direct stream info, we might need a specific client.
+        // Assuming audio_stream_url could be a direct media source or SSE endpoint.
+        // Given the guide's SSE example:
+        console.log("Starting audio stream from:", url);
+
+        try {
+            const eventSource = new EventSource(url);
+            // Implementation would track chunks and play them using Web Audio API buffer
+            // For this implementation step, we'll log it as "Ready" but rely on inline audio as primary 
+            // per the guide's recommendation.
+
+            // Cleanup function would be needed for EventSource
+            return eventSource;
+        } catch (e) {
+            console.error("Error setting up audio stream:", e);
+        }
+    };
+
     const handleSendMessage = async (textOverride = null) => {
         const text = textOverride || inputValue.trim();
         if (!text || isLoading) return;
+
+        // Stop any playing audio when user sends a new message
+        stopAudio();
 
         const userMsg = { role: "user", content: text, id: Date.now().toString() };
         setMessages(prev => [...prev, userMsg]);
@@ -212,7 +270,7 @@ const ChatInterface = () => {
                     history: history,
                     language_code: selectedLanguage,
                     map_type: selectedMapId,
-                    project_id: "shalimar-evara", // Ensure this matches backend expectation
+                    project_id: "shalimar-evara",
                     current_slug: pathname,
                     user_id: localStorage.getItem("chat_user_id") || "guest",
                     session_id: localStorage.getItem("chat_session_id") || `session_${Date.now()}`
@@ -221,19 +279,16 @@ const ChatInterface = () => {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-
                 if (response.status === 429) {
                     const retryAfter = errorData.retry_after || 60;
                     throw new QuotaExceededError("Usage limit exceeded. Please try again later.", retryAfter);
                 }
-
-                // Use backend error message if available
                 const backendMessage = errorData.message || errorData.detail || errorData.error;
                 throw new Error(backendMessage || `API Error: ${response.status}`);
             }
 
             const data = await response.json();
-            console.log("Chat API Response:", data); // DEBUG: Inspection
+            console.log("Chat API Response:", data);
 
             const assistantMsg = {
                 role: "assistant",
@@ -247,31 +302,45 @@ const ChatInterface = () => {
                 setHistory(normalizeHistory(data.history));
             }
 
+            // 1. Handle Navigation
+            if (data.navigation_target) {
+                console.log("Navigating to:", data.navigation_target);
+                router.push(data.navigation_target);
+            }
+
+            // 2. Handle External URLs
+            if (data.external_url) {
+                console.log("Opening external URL:", data.external_url);
+                window.open(data.external_url, '_blank');
+            }
+
+            // 3. Handle Location Highlighting
             if (data.highlighted_locations) {
                 handleHighlightLocations(data.highlighted_locations);
             }
 
-            if (data.audio_stream_url) {
-                handleAudioStream(data.audio_stream_url);
+            // 4. Handle Unit Highlighting
+            if (data.highlighted_units) {
+                handleHighlightUnits(data.highlighted_units);
+            }
+
+            // 5. Handle Audio (Priority: Inline > Stream)
+            if (data.audio_content && data.audio_content_type) {
+                playInlineAudio(data.audio_content, data.audio_content_type);
+            } else if (data.audio_stream_url) {
+                // Fallback to basic logging/handling for stream if inline not present
+                playStreamAudio(data.audio_stream_url);
             }
 
         } catch (err) {
             console.error("Chat Error:", err);
             let errorMessage = "Sorry, I encountered an error. Please try again.";
-            let isRetryable = true;
 
             if (err instanceof QuotaExceededError) {
                 errorMessage = "You've reached the request limit. Please wait a moment.";
-                isRetryable = false;
             } else if (err.message.includes("401") || err.message.includes("403")) {
                 errorMessage = "Authentication failed. Please refresh the page.";
-                isRetryable = false;
-            } else if (err.message.includes("503") || err.message.includes("504")) {
-                errorMessage = "The service is currently unavailable. Please check back later.";
-            } else if (err.name === 'TypeError' && err.message.includes('fetch')) {
-                errorMessage = "Network error. Please check your internet connection.";
             } else if (err.message) {
-                // Use specific error message but keep it user friendly if possible
                 errorMessage = `Error: ${err.message}`;
             }
 
@@ -289,47 +358,30 @@ const ChatInterface = () => {
 
     const handleHighlightLocations = (locations) => {
         if (!locations || locations.length === 0) return;
-
-        // Dispatch general event with ALL locations for batch processing (filtering/bounding box)
         const batchEvent = new CustomEvent('CHAT_HIGHLIGHT_LOCATION', {
             detail: {
                 all_locations: locations,
-                // If the user asked "Show me schools", we might infer we want to filter by the type of the first result
                 location_type: locations[0]?.location_type
             }
         });
         window.dispatchEvent(batchEvent);
-
-        // NOTE: We don't need to dispatch individual events if the batch handler covers the "fit bounds" logic.
-        // However, if we want to "highlight" (tooltip) the SPECIFIC one mentioned, we can still do so.
-        // But usually, if it's a list, we just show them all.
-        // If it's a single item list, the batch handler handles it too.
     };
 
-    const handleAudioStream = (url) => {
-        // Basic Audio Stream implementation 
-        // Note: Full SSE Audio streaming might require more complex buffer management.
-        // Here we attempt a direct stream or fetch.
-        try {
-            // If the URL is suitable for direct playback (e.g. mp3 stream), use Audio()
-            // But the guide mentions SSE. 
-            // We'll trust the guide's hint about Web Audio API + SSE.
-            // For now, implementing a placeholder that logs the URL or uses basic Audio if possible.
-            console.log("Audio Stream URL received:", url);
-
-            // Simplest attempt:
-            // const audio = new Audio(url);
-            // audio.play();
-        } catch (e) {
-            console.error("Audio playback error:", e);
-        }
+    const handleHighlightUnits = (units) => {
+        if (!units || units.length === 0) return;
+        console.log("Highlighting units:", units);
+        const unitEvent = new CustomEvent('CHAT_HIGHLIGHT_UNIT', {
+            detail: { units }
+        });
+        window.dispatchEvent(unitEvent);
     };
+
 
     const startVoiceInput = () => {
         if (typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             const recognition = new SpeechRecognition();
-            recognition.lang = 'en-IN'; // English (India)
+            recognition.lang = selectedLanguage || 'en-IN';
             recognition.continuous = false;
             recognition.interimResults = false;
 
