@@ -1686,6 +1686,54 @@ export default function MapContainer({
   }, [theme.mapboxStyle, themeLoading, add3DBuildings]);
 
   /**
+   * Listen for Chat Highlight Events
+   */
+  useEffect(() => {
+    // Helper to find place by ID or Title
+    const findPlace = (identifier) => {
+      if (!identifier) return null;
+      const idStr = String(identifier).toLowerCase();
+      return nearbyPlaces.find(p =>
+        String(p.id) === idStr ||
+        p.title?.toLowerCase() === idStr ||
+        p.title?.toLowerCase().includes(idStr)
+      );
+    };
+
+    const handleChatHighlight = (event) => {
+      const { location_name, svg_id } = event.detail || {};
+      const query = location_name || svg_id; // Try name first
+
+      if (!query) return;
+
+      console.log("Chat asked to highlight:", query);
+      const place = findPlace(query);
+
+      if (place && mapRef.current) {
+        // Construct a fake event object that handleNearbyPlaceHoverRaw expects
+        const fakeEvent = {
+          features: [{
+            properties: { id: place.id }
+          }]
+        };
+        handleNearbyPlaceHoverRaw(fakeEvent);
+
+        // Also fly to it
+        mapRef.current.flyTo({
+          center: place.coordinates,
+          zoom: 16,
+          essential: true
+        });
+      }
+    };
+
+    window.addEventListener('CHAT_HIGHLIGHT_LOCATION', handleChatHighlight);
+    return () => {
+      window.removeEventListener('CHAT_HIGHLIGHT_LOCATION', handleChatHighlight);
+    };
+  }, [nearbyPlaces, handleNearbyPlaceHoverRaw]);
+
+  /**
    * Handle View Mode Switching
    * NOTE: Skip on initial load - the initial flyTo handles the first animation
    */

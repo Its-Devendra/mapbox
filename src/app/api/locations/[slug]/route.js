@@ -78,14 +78,19 @@ export async function GET(request, { params }) {
 
 /**
  * POST /api/locations/[slug]
- * Proxy/forward request directly to localhost:8000
+ * Aggregate data from localhost:3000 and POST to localhost:8000
  *
- * localhost:8000 will handle:
- * - Fetching data from localhost:3000 APIs (/api/landmarks, /api/nearby)
- * - Aggregating and processing the data
- * - Calculating distance/time using Mapbox
+ * Steps:
+ * 1. Fetch and aggregate data from localhost:3000 APIs (/api/landmarks, /api/nearby)
+ * 2. Calculate distance/time using Mapbox Directions API
+ * 3. POST the aggregated data to localhost:8000/api/locations/[slug]
  *
- * Request Body: Forwarded as-is to localhost:8000
+ * Request Body:
+ * {
+ *   projectId: "project-id-string" // Optional: will use slug if not provided
+ *   batchSize: 10, // Optional: batch size for processing (default: 10)
+ *   profile: "driving" // Optional: Mapbox travel profile (default: "driving")
+ * }
  *
  * Response: Response from localhost:8000 API
  */
@@ -101,28 +106,134 @@ export async function POST(request, { params }) {
       );
     }
 
-    // Convert slug from hyphen to underscore (e.g., shalimar-evara -> shalimar_evara)
-    const externalSlug = slug.replace(/-/g, "_");
-    const externalApiUrl = `http://localhost:8000/api/locations/${externalSlug}`;
+    // Step 1: Get project info and aggregated locations from localhost:3000
+    const project = await getProjectBySlug(slug);
+    if (!project) {
+      throw new Error(`Project with slug "${slug}" not found`);
+    }
 
-    console.log(`Proxying POST request to ${externalApiUrl}`);
-
-    // Forward the request directly to localhost:8000
-    const externalResponse = await fetch(externalApiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
+    console.log(`Aggregating locations for ${slug} from localhost:3000...`);
+    const locations = await getLocationsForSlug(slug, {
+      batchSize: body.batchSize || 10,
+      profile: body.profile || "driving",
     });
 
-    if (!externalResponse.ok) {
-      const errorText = await externalResponse.text();
-      console.error(
-        `Error from localhost:8000: ${externalResponse.status} - ${errorText}`
+    console.log(
+      `Aggregated ${locations.length} locations, posting to localhost:8000...`
+    );
+
+    // Step 2: POST the aggregated data to localhost:8000
+    // Try both slug formats (with hyphens and with underscores)
+    const externalSlugUnderscore = slug.replace(/-/g, "_");
+    const externalApiUrl = `http://localhost:8000/api/locations/${slug}`;
+    const externalApiUrlAlt = `http://localhost:8000/api/locations/${externalSlugUnderscore}`;
+
+    console.log(`POSTing ${locations.length} locations to localhost:8000...`);
+    console.log(`Trying URL: ${externalApiUrl}`);
+    console.log(`Alternative URL: ${externalApiUrlAlt}`);
+    
+    // Prepare request body - include project_id in case external API needs it
+    const requestBody = {
+      project_id: slug, // Include project_id in body
+      locations: locations, // Array of locations
+    };
+
+    // POST the aggregated data to localhost:8000
+    // Try with original slug first, then with underscore format
+    let externalResponse;
+    let lastError = null;
+
+    // Try original slug format - try with locations array first
+    try {
+      externalResponse = await fetch(externalApiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(locations), // Try direct array first
+      });
+
+      if (externalResponse.ok) {
+        console.log(`✅ Successfully posted to ${externalApiUrl}`);
+      } else {
+        const errorText = await externalResponse.text();
+        console.log(
+          `⚠️  First attempt failed (${externalResponse.status}): ${errorText}`
+        );
+        lastError = { status: externalResponse.status, message: errorText };
+      }
+    } catch (fetchError) {
+      console.log(`⚠️  First attempt error: ${fetchError.message}`);
+      lastError = fetchError;
+    }
+
+    // If first attempt failed, try with underscore format
+    if (!externalResponse || !externalResponse.ok) {
+      console.log(
+        `Trying alternative URL with underscore format: ${externalApiUrlAlt}`
       );
-      throw new Error(
-        `External API error: ${externalResponse.status} - ${errorText}`
+      try {
+        // Try with underscore format - also try with request body format
+        externalResponse = await fetch(externalApiUrlAlt, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(locations), // Try direct array
+        });
+        
+        // If still fails, try with request body format
+        if (!externalResponse.ok) {
+          console.log(`Trying with request body format...`);
+          const responseWithBody = await fetch(externalApiUrlAlt, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(requestBody), // Try with project_id wrapper
+          });
+          
+          if (responseWithBody.ok) {
+            externalResponse = responseWithBody;
+            console.log(`✅ Success with request body format`);
+          }
+        }
+
+        if (externalResponse.ok) {
+          console.log(`✅ Successfully posted to ${externalApiUrlAlt}`);
+        } else {
+          const errorText = await externalResponse.text();
+          console.log(
+            `⚠️  Second attempt failed (${externalResponse.status}): ${errorText}`
+          );
+          lastError = { status: externalResponse.status, message: errorText };
+        }
+      } catch (fetchError) {
+        console.log(`⚠️  Second attempt error: ${fetchError.message}`);
+        lastError = fetchError;
+      }
+    }
+
+    // Check if we got a successful response
+    if (!externalResponse || !externalResponse.ok) {
+      const errorMessage = lastError?.message || 
+        (lastError?.status ? `Status ${lastError.status}: ${lastError.message}` : 'Unknown error');
+      
+      console.error(
+        `Error from localhost:8000: ${errorMessage}`
+      );
+      
+      // Return a more helpful error message
+      return NextResponse.json(
+        {
+          error: `Failed to post to external API: ${errorMessage}`,
+          details: {
+            triedUrls: [externalApiUrl, externalApiUrlAlt],
+            locationsCount: locations.length,
+            suggestion: "Make sure the project exists in the external API or the API accepts creating new projects"
+          }
+        },
+        { status: 502 } // Bad Gateway - external API issue
       );
     }
 
