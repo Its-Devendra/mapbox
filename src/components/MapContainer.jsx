@@ -17,6 +17,7 @@ import { bustCache } from '@/utils/cacheUtils';
 import { useMapboxDirections } from "@/hooks/useMapboxDirections";
 import { MAPBOX_CONFIG, SOURCE_IDS, LAYER_IDS } from "@/constants/mapConfig";
 import useCinematicTour from "@/hooks/useCinematicTour";
+import { useCameraSync, useLandmarkSync, useRouteSync, useViewModeSync } from "@/hooks/useSyncHooks";
 
 // Mapbox access token
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
@@ -156,6 +157,8 @@ export default function MapContainer({
   const clearRouteRef = useRef(null);
   const cleanupRef = useRef(null);
   const add3DBuildingsRef = useRef(null);
+  const syncRouteRef = useRef(null); // Ref to access syncRoute from callbacks
+  const getDirectionsRef = useRef(null); // Ref to access getDirections from callbacks
 
   // Intro State
   const [showIntroButton, setShowIntroButton] = useState(false); // Show button if autoplay blocks
@@ -178,6 +181,56 @@ export default function MapContainer({
 
   // Cinematic Tour Hook
   const { startTour, stopTour, smoothFlyTo, isTourActive, currentStep, totalSteps } = useCinematicTour();
+
+  // ===== SYNC HOOKS =====
+  // These hooks handle real-time synchronization with other connected viewers
+
+  // Camera sync - throttled for performance
+  const { syncCamera } = useCameraSync(mapRef);
+
+  // Landmark sync - handle remote landmark selection
+  const handleRemoteLandmarkSelect = useCallback((landmark) => {
+    setSelectedLandmark(landmark);
+    setShowLandmarkCard(true);
+    // Use ref to call getDirections (defined later)
+    if (clientBuilding && getDirectionsRef.current) {
+      getDirectionsRef.current(landmark);
+    }
+  }, [clientBuilding]);
+
+  const handleRemoteLandmarkDeselect = useCallback(() => {
+    setSelectedLandmark(null);
+    setShowLandmarkCard(false);
+  }, []);
+
+  const { syncSelect: syncLandmarkSelect, syncDeselect: syncLandmarkDeselect } = useLandmarkSync({
+    landmarks,
+    onSelect: handleRemoteLandmarkSelect,
+    onDeselect: handleRemoteLandmarkDeselect,
+  });
+
+  // Route sync - handle remote route clear
+  const handleRemoteRouteClear = useCallback(() => {
+    if (clearRouteRef.current) {
+      clearRouteRef.current();
+    }
+  }, []);
+
+  const { syncClear: syncRouteClear } = useRouteSync({
+    onClear: handleRemoteRouteClear,
+  });
+
+  // View mode sync
+  const handleRemoteViewModeChange = useCallback((mode) => {
+    setViewMode(mode);
+  }, []);
+
+  const { syncViewMode } = useViewModeSync({
+    onModeChange: handleRemoteViewModeChange,
+  });
+
+  // Update refs for use in callbacks defined before hooks
+  syncRouteRef.current = syncRouteClear;
 
   /**
    * Get map settings with fallbacks
@@ -557,6 +610,9 @@ export default function MapContainer({
     // Deselect landmark
     setSelectedLandmark(null);
     setShowLandmarkCard(false);
+
+    // Sync route clear to other screens
+    syncRouteRef.current?.(null, "clear");
   }, [getMapConfig, calculateAllMarkersBounds, stopTour]); // Added stopTour dependency
 
   /**
@@ -1012,6 +1068,9 @@ export default function MapContainer({
       isCreatingRouteRef.current = false;
     }
   }, [clientBuilding, mapSettings]);
+
+  // Update ref for use in callbacks defined before getDirections
+  getDirectionsRef.current = getDirections;
 
   /**
    * Handle nearby place hover (raw function without debounce)
@@ -1657,6 +1716,28 @@ export default function MapContainer({
     mapRef.current.on('click', mapClickHandler);
     eventHandlersRef.current.push({ event: 'click', handler: mapClickHandler });
 
+    // Sync camera position when user finishes panning/zooming
+    // The camera sync hook handles throttling and cooldown internally
+    let initialAnimationComplete = false;
+    setTimeout(() => { initialAnimationComplete = true; }, 6000); // Wait for initial animation
+
+    const cameraSyncHandler = () => {
+      if (!mapRef.current) return;
+      // Don't sync during initial load animation
+      if (!initialAnimationComplete) return;
+
+      const center = mapRef.current.getCenter();
+      syncCamera({
+        center: [center.lng, center.lat],
+        zoom: mapRef.current.getZoom(),
+        pitch: mapRef.current.getPitch(),
+        bearing: mapRef.current.getBearing()
+      });
+    };
+
+    mapRef.current.on('moveend', cameraSyncHandler);
+    eventHandlersRef.current.push({ event: 'moveend', handler: cameraSyncHandler });
+
     return () => {
       cleanupRef.current?.();
       if (mapRef.current) {
@@ -1823,6 +1904,8 @@ export default function MapContainer({
               if (clientBuilding) {
                 getDirections(landmark);
               }
+              // Sync landmark selection to other screens
+              syncLandmarkSelect(landmarkId);
             }
           };
 
@@ -2434,7 +2517,7 @@ export default function MapContainer({
         }}
       >
         <button
-          onClick={() => setViewMode('tilted')}
+          onClick={() => { setViewMode('tilted'); syncViewMode('tilted'); }}
           className="px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 cursor-pointer"
           style={{
             backgroundColor: viewMode === 'tilted' ? (theme.filterPrimary || theme.primary) : 'transparent',
@@ -2448,7 +2531,7 @@ export default function MapContainer({
           3D Tilted
         </button>
         <button
-          onClick={() => setViewMode('top')}
+          onClick={() => { setViewMode('top'); syncViewMode('top'); }}
           className="px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 cursor-pointer"
           style={{
             backgroundColor: viewMode === 'top' ? (theme.filterPrimary || theme.primary) : 'transparent',

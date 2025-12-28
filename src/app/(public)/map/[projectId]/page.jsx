@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import MapContainer from '@/components/MapContainer';
 import ProjectLogo from '@/components/ProjectLogo';
@@ -9,6 +9,8 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { validateAndTransformMarker, fetchWithTimeout, retryWithBackoff } from '@/utils/mapUtils';
 import { apiResponseCache } from '@/utils/cache';
 import { MAPBOX_CONFIG, ERROR_MESSAGES } from '@/constants/mapConfig';
+import { SyncProvider } from '@/context/SyncContext';
+import { useFilterSync } from '@/hooks/useSyncHooks';
 
 function MapPageContent() {
   const params = useParams();
@@ -26,6 +28,17 @@ function MapPageContent() {
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
   const [activeFilter, setActiveFilter] = useState([]);
+
+  // Filter sync - updates activeFilter when remote changes occur
+  const { syncFilters } = useFilterSync({
+    onFilterChange: setActiveFilter,
+  });
+
+  // Wrapper to sync filter changes to other screens
+  const handleFilterChange = useCallback((newFilter) => {
+    setActiveFilter(newFilter);
+    syncFilters(newFilter);
+  }, [syncFilters]);
 
   // Client building from project configuration or fallback to settings
   const CLIENT_BUILDING = React.useMemo(() => {
@@ -439,7 +452,7 @@ function MapPageContent() {
       {/* Filter Bar */}
       <FilterBar
         categories={categories}
-        onFilterChange={setActiveFilter}
+        onFilterChange={handleFilterChange}
         activeFilter={activeFilter}
         theme={filterTheme || projectTheme} // Fallback to projectTheme if filterTheme not set
       />
@@ -447,15 +460,23 @@ function MapPageContent() {
   );
 }
 
-// Wrap with Error Boundary
+// Wrap with Error Boundary and SyncProvider
 export default function MapPage() {
+  const params = useParams();
+  const projectId = params.projectId;
+
+  // Room ID for socket sync - all viewers of same project will be in same room
+  const roomId = projectId ? `mapbox-${projectId}` : null;
+
   return (
     <ErrorBoundary
       title="Map Loading Error"
       message="Failed to load the map. This might be due to a network issue or invalid project data."
       showHomeButton={true}
     >
-      <MapPageContent />
+      <SyncProvider roomId={roomId} roomName={`Map: ${projectId}`}>
+        <MapPageContent />
+      </SyncProvider>
     </ErrorBoundary>
   );
 }
