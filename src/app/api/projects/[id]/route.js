@@ -33,9 +33,9 @@ export async function GET(request, { params }) {
       );
     }
 
-    // Set cache headers
+    // Disable caching - always fresh data
     const response = NextResponse.json(project);
-    response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=60');
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
 
     return response;
   } catch (error) {

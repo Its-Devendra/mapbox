@@ -29,7 +29,7 @@ const ProjectClientBuilding = lazy(() => import('@/components/admin/ProjectClien
 // Tab loading fallback
 function TabSkeleton() {
   return (
-    <div className="space-y-6 animate-pulse">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <Skeleton height="1.25rem" width="150px" rounded="md" />

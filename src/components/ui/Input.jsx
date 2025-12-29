@@ -51,6 +51,12 @@ const Input = forwardRef(({
                 <input
                     ref={ref}
                     type={inputType}
+                    onWheel={(e) => {
+                        // Prevent scroll from changing number input values
+                        if (type === 'number') {
+                            e.target.blur();
+                        }
+                    }}
                     className={`
             w-full h-10 px-3 py-2
             bg-white border rounded-xl
@@ -98,8 +104,8 @@ const Input = forwardRef(({
             {/* Hint/Error/Success text */}
             {(hint || error || success) && (
                 <p className={`text-xs ${error ? 'text-red-600' :
-                        success ? 'text-green-600' :
-                            'text-gray-500'
+                    success ? 'text-green-600' :
+                        'text-gray-500'
                     }`}>
                     {error || success || hint}
                 </p>

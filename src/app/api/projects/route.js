@@ -34,7 +34,7 @@ import { projectSchema } from "@/validations/projectSchema";
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    
+
     // Parse pagination parameters
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')));
@@ -49,10 +49,10 @@ export async function GET(request) {
       isActive,
     });
 
-    // Set cache headers for CDN caching
+    // Disable caching - always fresh data
     const response = NextResponse.json(result);
-    response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=30');
-    
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+
     return response;
   } catch (error) {
     console.error('Error in GET /api/projects:', error);
@@ -72,7 +72,7 @@ export async function POST(request) {
     const body = await request.json();
     const parsed = projectSchema.parse(body);
     const project = await createProject(parsed);
-    
+
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
     console.error('Error in POST /api/projects:', error);

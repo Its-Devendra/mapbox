@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useTheme } from '@/context/ThemeContext';
 import SvgIconUploader from '@/components/SvgIconUploader';
 import AspectRatioSizeInput from '@/components/AspectRatioSizeInput';
@@ -9,7 +9,13 @@ import { Button, Input, Select, Modal, Card, Badge, Skeleton, EmptyState } from 
 import useCRUD from '@/hooks/useCRUD';
 import useSearch from '@/hooks/useSearch';
 import useModal from '@/hooks/useModal';
-import { Plus, Edit, Trash2, Navigation, Search, Upload } from 'lucide-react';
+import { Plus, Edit, Trash2, Navigation, Search, Upload, Eye, Crosshair } from 'lucide-react';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
+
+mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
+  process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ||
+  "pk.eyJ1IjoiZGV2Yml0czA5IiwiYSI6ImNtYzkyZTR2dDE0MDAyaXMzdXRndjJ0M2EifQ.Jhhx-1tf_NzrZNjGX8wp_w";
 
 const initialFormData = {
   title: '',
@@ -153,7 +159,7 @@ export default function ProjectNearBy({ projectId }) {
                   <div className="flex-1 min-w-0">
                     <h4 className="font-semibold text-gray-900 text-sm mb-1">{place.title}</h4>
                     <div className="flex items-center gap-3 text-xs text-gray-500">
-                      <span>{place.latitude.toFixed(6)}, {place.longitude.toFixed(6)}</span>
+                      <span>{place.latitude}, {place.longitude}</span>
                       <Badge variant="default" size="xs">
                         {getCategoryName(place.categoryId)}
                       </Badge>
@@ -315,7 +321,7 @@ export default function ProjectNearBy({ projectId }) {
           </div>
 
           {/* Preview Section */}
-          <NearbyPreview formData={modal.formData} getCategoryName={getCategoryName} />
+          <NearbyPreview formData={modal.formData} updateField={modal.updateField} getCategoryName={getCategoryName} />
         </div>
       </Modal>
 
@@ -337,101 +343,145 @@ export default function ProjectNearBy({ projectId }) {
 /**
  * Live Preview Component - Extracted for cleanliness
  */
-function NearbyPreview({ formData, getCategoryName }) {
+function NearbyPreview({ formData, updateField, getCategoryName }) {
+  const mapContainerRef = useRef(null);
+  const mapRef = useRef(null);
+  const markerRef = useRef(null);
+
+  // Initialize map
+  useEffect(() => {
+    if (mapContainerRef.current && !mapRef.current && mapboxgl.accessToken) {
+      try {
+        mapRef.current = new mapboxgl.Map({
+          container: mapContainerRef.current,
+          style: 'mapbox://styles/mapbox/streets-v12',
+          center: [formData.longitude, formData.latitude],
+          zoom: 14,
+        });
+
+        // Add marker
+        markerRef.current = new mapboxgl.Marker({
+          color: formData.color || '#3b82f6',
+          draggable: true
+        })
+          .setLngLat([formData.longitude, formData.latitude])
+          .addTo(mapRef.current);
+
+        // Update coordinates on marker drag
+        markerRef.current.on('dragend', () => {
+          const lngLat = markerRef.current.getLngLat();
+          updateField('latitude', lngLat.lat);
+          updateField('longitude', lngLat.lng);
+        });
+
+        // Click on map to move marker
+        mapRef.current.on('click', (e) => {
+          markerRef.current.setLngLat([e.lngLat.lng, e.lngLat.lat]);
+          updateField('latitude', e.lngLat.lat);
+          updateField('longitude', e.lngLat.lng);
+        });
+      } catch (e) {
+        console.error('Failed to initialize map:', e);
+      }
+    }
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, []);
+
+  // Update marker when coordinates change from inputs
+  useEffect(() => {
+    if (markerRef.current && mapRef.current) {
+      markerRef.current.setLngLat([formData.longitude, formData.latitude]);
+      mapRef.current.flyTo({
+        center: [formData.longitude, formData.latitude],
+        duration: 500
+      });
+    }
+  }, [formData.latitude, formData.longitude]);
+
+  // Update marker color when color changes
+  useEffect(() => {
+    if (markerRef.current && mapRef.current) {
+      // Remove old marker and create new one with updated color
+      const lngLat = markerRef.current.getLngLat();
+      markerRef.current.remove();
+
+      markerRef.current = new mapboxgl.Marker({
+        color: formData.color || '#3b82f6',
+        draggable: true
+      })
+        .setLngLat(lngLat)
+        .addTo(mapRef.current);
+
+      // Re-attach drag handler
+      markerRef.current.on('dragend', () => {
+        const newLngLat = markerRef.current.getLngLat();
+        updateField('latitude', newLngLat.lat);
+        updateField('longitude', newLngLat.lng);
+      });
+    }
+  }, [formData.color]);
+
+  // Center map on current location
+  const handleCenterOnLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          updateField('latitude', latitude);
+          updateField('longitude', longitude);
+          if (mapRef.current) {
+            mapRef.current.flyTo({ center: [longitude, latitude], zoom: 16 });
+          }
+          if (markerRef.current) {
+            markerRef.current.setLngLat([longitude, latitude]);
+          }
+        },
+        (error) => {
+          console.error('Geolocation error:', error);
+        }
+      );
+    }
+  };
+
   return (
-    <div className="w-full lg:w-80 bg-gray-50 p-6 flex flex-col relative overflow-hidden">
-      <style jsx>{`
-        @keyframes cursorMove {
-          0% { transform: translate(100px, 100px); opacity: 0; }
-          20% { transform: translate(100px, 100px); opacity: 1; }
-          40% { transform: translate(0, 0); opacity: 1; }
-          80% { transform: translate(0, 0); opacity: 1; }
-          90% { transform: translate(100px, 100px); opacity: 1; }
-          100% { transform: translate(100px, 100px); opacity: 0; }
-        }
-        @keyframes tooltipFade {
-          0%, 40% { opacity: 0; transform: translateY(10px) scale(0.95); }
-          50%, 80% { opacity: 1; transform: translateY(0) scale(1); }
-          90%, 100% { opacity: 0; transform: translateY(10px) scale(0.95); }
-        }
-        .animate-cursor { animation: cursorMove 4s infinite ease-in-out; }
-        .animate-tooltip { animation: tooltipFade 4s infinite ease-in-out; }
-      `}</style>
-
-      <h4 className="text-sm font-semibold text-gray-900 mb-4 z-10 relative">Live Preview</h4>
-
-      <div className="flex-1 flex items-center justify-center relative">
-        {/* Mini Map Background */}
-        <div className="absolute inset-0 opacity-10"
-          style={{
-            backgroundImage: 'radial-gradient(#000 1px, transparent 1px)',
-            backgroundSize: '20px 20px'
-          }}
-        />
-
-        {/* Center Marker */}
-        <div className="relative z-0">
-          <div className="w-12 h-12 rounded-full bg-white shadow-lg flex items-center justify-center border-2 border-gray-100">
-            {formData.icon ? (
-              <div dangerouslySetInnerHTML={{ __html: formData.icon }} className="w-6 h-6 [&>svg]:w-full [&>svg]:h-full" />
-            ) : (
-              <Navigation className="w-6 h-6 text-gray-400" strokeWidth={2} />
-            )}
-          </div>
-
-          {/* Pulsing Effect */}
-          <div className="absolute inset-0 rounded-full animate-ping opacity-20 bg-gray-400 delay-75" />
-
-          {/* Animated Tooltip */}
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 animate-tooltip origin-bottom z-20">
-            <div className="bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 overflow-visible min-w-[200px] relative">
-              <div
-                className="h-1.5 w-full rounded-t-lg transition-colors duration-300"
-                style={{ backgroundColor: formData.color || '#3b82f6' }}
-              />
-              <div className="p-3">
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <h3 className="font-bold text-sm text-gray-900 leading-tight">
-                    {formData.title || 'Place Title'}
-                  </h3>
-                  <span
-                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider transition-colors duration-300"
-                    style={{
-                      color: formData.color || '#3b82f6',
-                      backgroundColor: `${formData.color || '#3b82f6'}15`
-                    }}
-                  >
-                    {getCategoryName(formData.categoryId) || 'CATEGORY'}
-                  </span>
-                </div>
-                <div className="mt-2 text-xs text-gray-500 flex flex-col gap-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded text-[10px]">
-                      <span>📍</span> 1.2 km
-                    </div>
-                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded text-[10px]">
-                      <span>🚗</span> 5 min
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* Tooltip Arrow */}
-              <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-gray-100 rotate-45" />
-            </div>
-          </div>
-        </div>
-
-        {/* Animated Cursor */}
-        <div className="absolute z-20 animate-cursor pointer-events-none">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-md">
-            <path d="M5.65376 12.3673H5.46026L5.31717 12.4976L0.500002 16.8829L0.500002 1.19179L11.7841 12.3673H5.65376Z" fill="black" stroke="white" strokeWidth="1" />
-          </svg>
-        </div>
+    <div className="w-full lg:w-1/2 bg-gray-100 relative min-h-[400px] overflow-hidden">
+      {/* Map Header */}
+      <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-sm rounded-full px-4 py-2 shadow-sm border border-gray-200/50">
+        <span className="text-xs font-semibold text-gray-900 flex items-center gap-2">
+          <Eye className="w-3.5 h-3.5 text-gray-600" /> Pick Location
+        </span>
       </div>
 
-      <p className="text-xs text-gray-400 text-center mt-4 z-10 relative">
-        Hover animation preview
-      </p>
+      {/* Center on location button */}
+      <button
+        type="button"
+        onClick={handleCenterOnLocation}
+        className="absolute top-4 right-4 z-20 bg-white/90 backdrop-blur-sm rounded-full p-2.5 shadow-sm border border-gray-200/50 hover:bg-white transition-colors cursor-pointer"
+        title="Use my location"
+      >
+        <Crosshair className="w-4 h-4 text-gray-700" />
+      </button>
+
+      {/* Map Container */}
+      <div ref={mapContainerRef} className="w-full h-full overflow-hidden" />
+
+      {/* Coordinates Display */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm border border-gray-200/50">
+        <span className="text-xs font-mono text-gray-600">
+          {formData.latitude}, {formData.longitude}
+        </span>
+      </div>
+
+      {/* Instructions */}
+      <div className="absolute bottom-4 right-4 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full">
+        Click or drag marker to set location
+      </div>
     </div>
   );
 }

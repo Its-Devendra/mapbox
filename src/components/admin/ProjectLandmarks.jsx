@@ -293,7 +293,7 @@ export default function ProjectLandmarks({ projectId }) {
                   <div className="flex-1 min-w-0">
                     <h4 className="font-semibold text-gray-900 text-sm mb-1">{landmark.title}</h4>
                     <div className="flex items-center gap-3 text-xs text-gray-500">
-                      <span>{landmark.latitude.toFixed(6)}, {landmark.longitude.toFixed(6)}</span>
+                      <span>{landmark.latitude}, {landmark.longitude}</span>
                       <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs font-medium">
                         {getCategoryName(landmark.categoryId)}
                       </span>

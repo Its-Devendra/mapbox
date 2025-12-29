@@ -95,28 +95,28 @@ export default function ProjectOverview({ projectId }) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white p-6 rounded-2xl border border-gray-100">
                         <div className="flex items-center gap-2 mb-4">
-                            <div className="w-4 h-4 bg-gray-200 rounded animate-pulse" />
-                            <div className="h-4 w-28 bg-gray-200 rounded animate-pulse" />
+                            <div className="w-4 h-4 bg-gray-200 rounded" />
+                            <div className="h-4 w-28 bg-gray-200 rounded" />
                         </div>
                         <div className="space-y-4">
                             {[1, 2, 3].map(i => (
                                 <div key={i} className="flex justify-between py-2 border-b border-gray-50">
-                                    <div className="h-4 w-20 bg-gray-100 rounded animate-pulse" />
-                                    <div className="h-4 w-16 bg-gray-100 rounded animate-pulse" />
+                                    <div className="h-4 w-20 bg-gray-100 rounded" />
+                                    <div className="h-4 w-16 bg-gray-100 rounded" />
                                 </div>
                             ))}
                         </div>
                     </div>
                     <div className="bg-white p-6 rounded-2xl border border-gray-100">
                         <div className="flex items-center gap-2 mb-4">
-                            <div className="w-4 h-4 bg-gray-200 rounded animate-pulse" />
-                            <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
+                            <div className="w-4 h-4 bg-gray-200 rounded" />
+                            <div className="h-4 w-20 bg-gray-200 rounded" />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             {[1, 2, 3, 4].map(i => (
                                 <div key={i} className="p-3 bg-gray-50 rounded-xl">
-                                    <div className="h-8 w-12 bg-gray-200 rounded animate-pulse mb-2" />
-                                    <div className="h-3 w-16 bg-gray-100 rounded animate-pulse" />
+                                    <div className="h-8 w-12 bg-gray-200 rounded mb-2" />
+                                    <div className="h-3 w-16 bg-gray-100 rounded" />
                                 </div>
                             ))}
                         </div>
@@ -127,10 +127,10 @@ export default function ProjectOverview({ projectId }) {
                 <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                     <div className="p-4 border-b border-gray-100 flex justify-between items-center">
                         <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-gray-200 rounded animate-pulse" />
-                            <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+                            <div className="w-4 h-4 bg-gray-200 rounded" />
+                            <div className="h-4 w-32 bg-gray-200 rounded" />
                         </div>
-                        <div className="h-3 w-24 bg-gray-100 rounded animate-pulse" />
+                        <div className="h-3 w-24 bg-gray-100 rounded" />
                     </div>
                     <div className="h-[600px] bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center">
                         <div className="text-center">

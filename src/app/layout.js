@@ -3,6 +3,7 @@ import "./globals.css";
 import 'react-toastify/dist/ReactToastify.css';
 import { ToastContainer } from 'react-toastify';
 import ChatContainer from "@/components/chat/ChatContainer";
+import NumberInputScrollFix from "@/components/NumberInputScrollFix";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,6 +29,7 @@ export default function RootLayout({ children }) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <NumberInputScrollFix />
         {children}
         <ToastContainer
           position="bottom-right"
@@ -45,3 +47,4 @@ export default function RootLayout({ children }) {
     </html>
   );
 }
+

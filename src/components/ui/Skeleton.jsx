@@ -3,7 +3,7 @@
 /**
  * Skeleton Component - Enterprise Design System
  * 
- * Loading placeholder with shimmer animation
+ * Loading placeholder with YouTube-style shimmer animation
  */
 export default function Skeleton({
     width,
@@ -29,13 +29,21 @@ export default function Skeleton({
     return (
         <div
             className={`
-        bg-gray-200 animate-pulse
+        relative overflow-hidden bg-gray-200
         ${roundedStyles[rounded]}
         ${className}
       `.replace(/\s+/g, ' ').trim()}
             style={style}
             {...props}
-        />
+        >
+            {/* Shimmer overlay */}
+            <div
+                className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite]"
+                style={{
+                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
+                }}
+            />
+        </div>
     );
 }
 
