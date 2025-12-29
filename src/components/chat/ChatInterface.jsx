@@ -559,16 +559,6 @@ const ChatInterface = () => {
           <div className="chat-header-title">Location Assistant</div>
           <div className="chat-header-subtitle">Ask me about nearby places</div>
         </div>
-        <button
-          onClick={clearChatHistory}
-          className="ml-auto text-white/80 hover:text-white"
-        >
-          <Trash2 size={16} />
-        </button>
-      </div>
-
-      <div className="language-selector-container">
-        <label className="language-label">Language:</label>
         <select
           className="language-dropdown"
           value={selectedLanguage}
@@ -580,6 +570,13 @@ const ChatInterface = () => {
             </option>
           ))}
         </select>
+        <button
+          onClick={clearChatHistory}
+          className="ml-auto text-white/80 hover:text-white"
+          title="Clear chat history"
+        >
+          <Trash2 size={14} />
+        </button>
       </div>
 
       <div className="chat-messages">
@@ -620,14 +617,15 @@ const ChatInterface = () => {
           disabled={isLoading}
           title="Voice Input"
         >
-          <Mic size={18} />
+          <Mic size={16} />
         </button>
         <button
           className="icon-button send-button"
           onClick={() => handleSendMessage()}
           disabled={!inputValue.trim() || isLoading}
+          title="Send message"
         >
-          <Send size={18} />
+          <Send size={16} />
         </button>
       </div>
     </div>
