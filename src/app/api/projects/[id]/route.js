@@ -58,6 +58,7 @@ export async function PUT(request, { params }) {
 
     // Validate partial update
     const parsed = projectSchema.partial().parse(body);
+
     const project = await updateProject(id, parsed);
 
     // Return with no-cache headers to ensure fresh data

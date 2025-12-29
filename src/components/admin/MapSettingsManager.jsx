@@ -37,6 +37,7 @@ export default function MapSettingsManager() {
     northEastLng: null,
     autoFitBounds: false,
     autoFitPadding: 50,
+    enableCinematicJourney: false,
     projectId: '',
     isActive: false
   });
@@ -147,6 +148,8 @@ export default function MapSettingsManager() {
       northEastLng: setting.northEastLng || null,
       autoFitBounds: setting.autoFitBounds || false,
       autoFitPadding: setting.autoFitPadding || 50,
+      autoFitPadding: setting.autoFitPadding || 50,
+      enableCinematicJourney: setting.enableCinematicJourney ?? false,
       projectId: setting.projectId,
       isActive: setting.isActive
     });
@@ -428,6 +431,49 @@ export default function MapSettingsManager() {
                 </div>
               </div>
 
+
+              {/* Feature Toggles */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="enableRotation"
+                    checked={formData.enableRotation}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <label className="ml-2 text-sm text-gray-700">
+                    Enable map rotation
+                  </label>
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="enablePitch"
+                    checked={formData.enablePitch}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <label className="ml-2 text-sm text-gray-700">
+                    Enable map pitch/tilt
+                  </label>
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="enableCinematicJourney"
+                    checked={formData.enableCinematicJourney}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <label className="ml-2 text-sm text-gray-700">
+                    Enable Start Journey
+                  </label>
+                </div>
+              </div>
+
               {/* Route Styling */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -695,6 +741,8 @@ export default function MapSettingsManager() {
                       routeLineWidth: 4,
                       initialAnimationDuration: 3.0,
                       routeAnimationDuration: 1.0,
+                      routeAnimationDuration: 1.0,
+                      enableCinematicJourney: false,
                       projectId: '',
                       isActive: false
                     });

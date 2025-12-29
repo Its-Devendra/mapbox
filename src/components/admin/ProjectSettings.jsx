@@ -51,6 +51,8 @@ export default function ProjectSettings({ projectId }) {
     panCenterLng: '',
     autoFitBounds: false,
     autoFitPadding: 50,
+    autoFitPadding: 50,
+    enableCinematicJourney: false,
     isActive: false
   });
 
@@ -167,6 +169,9 @@ export default function ProjectSettings({ projectId }) {
       panCenterLng: setting.panCenterLng || '',
       autoFitBounds: setting.autoFitBounds || false,
       autoFitPadding: setting.autoFitPadding || 50,
+      autoFitBounds: setting.autoFitBounds || false,
+      autoFitPadding: setting.autoFitPadding || 50,
+      enableCinematicJourney: setting.enableCinematicJourney ?? false,
       isActive: setting.isActive
     });
     setShowModal(true);
@@ -219,6 +224,9 @@ export default function ProjectSettings({ projectId }) {
       panCenterLng: '',
       autoFitBounds: false,
       autoFitPadding: 50,
+      autoFitBounds: false,
+      autoFitPadding: 50,
+      enableCinematicJourney: false,
       isActive: false
     });
   };
@@ -706,6 +714,20 @@ export default function ProjectSettings({ projectId }) {
                         />
                       </div>
                     )}
+
+                    <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors">
+                      <input
+                        type="checkbox"
+                        name="enableCinematicJourney"
+                        checked={formData.enableCinematicJourney}
+                        onChange={handleInputChange}
+                        className="h-4 w-4 text-gray-900 focus:ring-gray-500 border-gray-300 rounded"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-800">Show Start Journey</span>
+                        <p className="text-xs text-gray-500">Toggle visibility of the Start Journey button</p>
+                      </div>
+                    </label>
                   </div>
                 </div>
 

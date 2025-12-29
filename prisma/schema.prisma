@@ -26,6 +26,9 @@ model Project {
   logo String? @db.Text // Project logo (Base64 or URL)
   logoWidth Int? @default(120) // Width of the logo in pixels
   logoHeight Int? @default(40) // Height of the logo in pixels
+  logoPadding Int? @default(0) // Padding inside the logo container (0-20px)
+  logoBorderRadius String? @default("none") // Border radius: none, sm, md, lg, full
+  logoBackgroundColor String? // Custom background color for the logo container
   secondaryLogo String? @db.Text // Secondary logo (Base64 or URL)
   secondaryLogoWidth Int? @default(120) // Width of secondary logo in pixels
   secondaryLogoHeight Int? @default(40) // Height of secondary logo in pixels
@@ -173,6 +176,9 @@ model MapSetting {
   autoFitBounds           Boolean @default(false)  // If true, auto-calculate zoom to fit all landmarks
   autoFitPadding          Int     @default(50)     // Padding in pixels around the fitted bounds
   
+  // Cinematic Journey Toggle
+  enableCinematicJourney  Boolean @default(false)   // Toggle "Start Journey" button visibility
+
   isActive                Boolean @default(false)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt

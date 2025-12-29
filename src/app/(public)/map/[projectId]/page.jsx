@@ -303,6 +303,43 @@ function MapPageContent() {
     setRetryCount(prev => prev + 1);
   };
 
+  // Helper to convert hex to rgba
+  const hexToRgba = (hex, alpha) => {
+    if (!hex) return `rgba(37, 99, 235, ${alpha})`;
+
+    let c = hex.substring(1).split('');
+    if (c.length === 3) {
+      c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+    }
+    c = '0x' + c.join('');
+
+    return 'rgba(' + [(c >> 16) & 255, (c >> 8) & 255, c & 255].join(',') + ',' + alpha + ')';
+  };
+
+  // Sync theme color with Chatbot (which is global in layout)
+  useEffect(() => {
+    if (projectTheme || filterTheme) {
+      const theme = filterTheme || projectTheme;
+      const primaryColor = theme.filterPrimary || theme.primary;
+
+      console.log('🎨 Chatbot Theme Sync:', { primaryColor, theme });
+
+      if (primaryColor) {
+        document.documentElement.style.setProperty('--chat-primary-color', primaryColor);
+        document.documentElement.style.setProperty('--chat-primary-shadow-color', hexToRgba(primaryColor, 0.4));
+        document.documentElement.style.setProperty('--chat-primary-shadow-hover-color', hexToRgba(primaryColor, 0.5));
+      }
+    }
+
+    return () => {
+      // Optional: Reset or leave it if navigation between projects preserves state?
+      // Better to clear it to fallback to default blue if leaving map.
+      document.documentElement.style.removeProperty('--chat-primary-color');
+      document.documentElement.style.removeProperty('--chat-primary-shadow-color');
+      document.documentElement.style.removeProperty('--chat-primary-shadow-hover-color');
+    };
+  }, [projectTheme, filterTheme]);
+
   // Derive unique category names from categories
   const categoryNames = [...new Set(categories.map((cat) => cat.name))];
 
@@ -422,6 +459,9 @@ function MapPageContent() {
           logo={project?.logo}
           width={project?.logoWidth}
           height={project?.logoHeight}
+          padding={project?.logoPadding}
+          borderRadius={project?.logoBorderRadius}
+          backgroundColor={project?.logoBackgroundColor}
           position="left"
           theme={projectTheme}
         />

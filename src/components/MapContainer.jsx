@@ -88,6 +88,7 @@ export default function MapContainer({
   clientBuilding = null,
   project = null,
   introAudio = null,
+  landmarkAudio = null, // New prop for landmark arrival sound
   projectTheme = null,
   mapSettings = null,
   interactive = true
@@ -143,6 +144,7 @@ export default function MapContainer({
   const isCreatingRouteRef = useRef(false); // Track when route is being created
   const routeGenerationRef = useRef(0); // Generation counter to track route creation attempts
   const audioRef = useRef(null); // Audio reference
+  const landmarkAudioRef = useRef(null); // Ref for landmark audio
   const introPlayedRef = useRef(false); // Track if intro has played
   const initialZoomDoneRef = useRef(false); // Track if initial zoom is done
 
@@ -168,6 +170,15 @@ export default function MapContainer({
   useEffect(() => {
     introAudioRef.current = introAudio;
   }, [introAudio]);
+
+  // Update landmarkAudioRef when prop changes
+  useEffect(() => {
+    if (landmarkAudio) {
+      landmarkAudioRef.current = new Audio(landmarkAudio);
+    } else {
+      landmarkAudioRef.current = null;
+    }
+  }, [landmarkAudio]);
 
   // State
   const [selectedLandmark, setSelectedLandmark] = useState(null);
@@ -270,6 +281,19 @@ export default function MapContainer({
 
         setShowIntroButton(false); // Hide button if it was shown
 
+        // Ensure metadata is loaded to get duration
+        if (!audio.duration) {
+          await new Promise(r => audio.addEventListener('loadedmetadata', r, { once: true }));
+        }
+
+        // Calculate duration based on audio
+        // Use a reasonable minimum (e.g. 3000ms) just in case audio is very short or duration fails
+        let animationDuration = 3000;
+        if (audio.duration && Number.isFinite(audio.duration)) {
+          animationDuration = audio.duration * 1000;
+          console.log(`🎵 Syncing animation to audio duration: ${animationDuration}ms`);
+        }
+
         // Fly to client building
         if (clientBuilding && clientBuilding.coordinates) {
           if (!mapRef.current) return;
@@ -280,29 +304,18 @@ export default function MapContainer({
             zoom: mapSettings?.defaultZoom ?? 17.5,
             pitch: mapSettings?.defaultPitch ?? 70,
             bearing: mapSettings?.defaultBearing ?? 45,
-            duration: 3000,
+            duration: animationDuration,
             essential: true
           });
         }
 
-        // On audio end, start tour or zoom back out
+        // On audio end, reset camera instead of starting tour
         audio.onended = () => {
-          if (landmarks && landmarks.length > 0 && clientBuilding) {
-            // Pass configured camera preview settings for the tour outro
-            const outroSettings = {
-              center: [
-                mapSettings?.defaultCenterLng ?? clientBuilding?.coordinates?.[0],
-                mapSettings?.defaultCenterLat ?? clientBuilding?.coordinates?.[1]
-              ],
-              zoom: mapSettings?.defaultZoom ?? 14,
-              pitch: 0, // 2D Top mode default
-              bearing: mapSettings?.defaultBearing ?? 0
-            };
-            startTour(mapRef.current, clientBuilding, landmarks, outroSettings);
-          } else {
-            resetCamera();
-          }
+          // Reset camera to default settings (from map settings)
+          console.log('Intro audio finished. Resetting camera to default.');
+          resetCamera();
         };
+
 
       } catch (err) {
         console.warn('Autoplay blocked:', err.message);
@@ -331,18 +344,25 @@ export default function MapContainer({
       setShowIntroButton(false);
       console.log('🎵 Manually started audio');
 
+      let animationDuration = 4000; // Default fallback
+      if (audioRef.current.duration && Number.isFinite(audioRef.current.duration)) {
+        animationDuration = audioRef.current.duration * 1000;
+        console.log(`🎵 Manual Sync: Animation duration set to ${animationDuration}ms`);
+      }
+
       if (clientBuilding && clientBuilding.coordinates) {
         mapRef.current.flyTo({
           center: clientBuilding.coordinates,
           zoom: 17.5,
           pitch: 70,
           bearing: 45,
-          duration: 4000,
+          duration: animationDuration,
           essential: true
         });
       }
 
       audioRef.current.onended = () => {
+        console.log('Intro audio finished (Manual). Resetting camera.');
         resetCamera();
       };
     }).catch(e => console.error('Manual play failed', e));
@@ -951,7 +971,7 @@ export default function MapContainer({
           animationFrameRef.current = requestAnimationFrame(animate);
         };
 
-        // Always animate the route drawing
+        // ALWAYS animate the route drawing
         animateRoute();
 
         // LOGIC BRANCH BASED ON VIEW MODE
@@ -971,6 +991,16 @@ export default function MapContainer({
             duration: zoomDuration, // Synced with route animation
             essential: true
           });
+
+          // Play sound after animation
+          setTimeout(() => {
+            if (routeGenerationRef.current === currentGeneration && landmarkAudioRef.current) {
+              landmarkAudioRef.current.currentTime = 0;
+              landmarkAudioRef.current.play().catch(e => console.warn("Audio play failed", e));
+            }
+          }, zoomDuration);
+
+
         } else {
           // TILTED VIEW: Cinematic Flight Sequence
           isFlyingRef.current = true; // Mark flight as active
@@ -988,6 +1018,12 @@ export default function MapContainer({
             pitch: 55,       // Dramatic but clear angle
             bearing: bearingToLandmark  // Arrive facing the landmark
           }, 5000);  // 5 seconds: Professional pacing
+
+          // Play sound upon arrival (after flight)
+          if (routeGenerationRef.current === currentGeneration && landmarkAudioRef.current) {
+            landmarkAudioRef.current.currentTime = 0;
+            landmarkAudioRef.current.play().catch(e => console.warn("Audio play failed", e));
+          }
 
           // 2. Hold shot - let viewer appreciate the landmark
           // This is crucial for premium feel - never rush past content
@@ -1525,34 +1561,68 @@ export default function MapContainer({
         durationMs
       });
 
-      initialAnimationTimeoutRef.current = setTimeout(() => {
-        if (!mapRef.current) return;
-        // In 2D Top mode (default), pitch is 0 but bearing is applied
-        const initialPitch = viewModeRef.current === 'tilted' ? config.defaultPitch : 0;
+      if (!introAudio) {
+        initialAnimationTimeoutRef.current = setTimeout(() => {
+          if (!mapRef.current) return;
+          // In 2D Top mode (default), pitch is 0. We enforce this to avoid "tilted" entry if viewMode is accidentally set.
+          const initialPitch = 0;
 
-        // Check if auto-fit bounds is enabled
-        if (config.autoFitBounds) {
-          const markersBounds = calculateAllMarkersBounds();
-          if (markersBounds) {
-            console.log('🎯 INITIAL_ANIMATION: Using fitBounds (autoFitBounds enabled)', {
-              bounds: markersBounds,
-              padding: config.autoFitPadding,
+          console.log('🐞 DEBUG INITIAL ANIMATION:', {
+            viewMode: viewModeRef.current,
+            initialPitch,
+            defaultPitch: config.defaultPitch,
+            isTilted: viewModeRef.current === 'tilted'
+          });
+
+          // Check if auto-fit bounds is enabled
+          if (config.autoFitBounds) {
+            const markersBounds = calculateAllMarkersBounds();
+            if (markersBounds) {
+              console.log('🎯 INITIAL_ANIMATION: Using fitBounds (autoFitBounds enabled)', {
+                bounds: markersBounds,
+                padding: config.autoFitPadding,
+                pitch: initialPitch,
+                bearing: config.defaultBearing,
+                viewMode: viewModeRef.current
+              });
+
+              mapRef.current.fitBounds(markersBounds, {
+                padding: config.autoFitPadding,
+                pitch: initialPitch,
+                bearing: config.defaultBearing ?? 0,
+                duration: durationMs,
+                essential: true,
+                maxZoom: config.defaultZoom // Don't zoom in more than defaultZoom
+              });
+            } else {
+              // Fallback to flyTo if no markers found
+              console.log('🎯 INITIAL_ANIMATION: No markers found, using flyTo fallback');
+              mapRef.current.flyTo({
+                center: targetCenter,
+                zoom: config.defaultZoom,
+                pitch: initialPitch,
+                bearing: config.defaultBearing ?? 0,
+                duration: durationMs,
+                essential: true
+              });
+            }
+          } else {
+            // Original behavior: flyTo with fixed zoom
+            console.log('🎯 INITIAL_ANIMATION: Flying to camera position:', {
+              center: targetCenter,
+              zoom: config.defaultZoom,
               pitch: initialPitch,
               bearing: config.defaultBearing,
-              viewMode: viewModeRef.current
+              viewMode: viewModeRef.current,
+              rawMapSettings: {
+                defaultCenterLat: mapSettings?.defaultCenterLat,
+                defaultCenterLng: mapSettings?.defaultCenterLng,
+                defaultZoom: mapSettings?.defaultZoom,
+                defaultPitch: mapSettings?.defaultPitch,
+                defaultBearing: mapSettings?.defaultBearing
+              }
             });
 
-            mapRef.current.fitBounds(markersBounds, {
-              padding: config.autoFitPadding,
-              pitch: initialPitch,
-              bearing: config.defaultBearing ?? 0,
-              duration: durationMs,
-              essential: true,
-              maxZoom: config.defaultZoom // Don't zoom in more than defaultZoom
-            });
-          } else {
-            // Fallback to flyTo if no markers found
-            console.log('🎯 INITIAL_ANIMATION: No markers found, using flyTo fallback');
             mapRef.current.flyTo({
               center: targetCenter,
               zoom: config.defaultZoom,
@@ -1562,55 +1632,35 @@ export default function MapContainer({
               essential: true
             });
           }
-        } else {
-          // Original behavior: flyTo with fixed zoom
-          console.log('🎯 INITIAL_ANIMATION: Flying to camera position:', {
-            center: targetCenter,
-            zoom: config.defaultZoom,
-            pitch: initialPitch,
-            bearing: config.defaultBearing,
-            viewMode: viewModeRef.current,
-            rawMapSettings: {
-              defaultCenterLat: mapSettings?.defaultCenterLat,
-              defaultCenterLng: mapSettings?.defaultCenterLng,
-              defaultZoom: mapSettings?.defaultZoom,
-              defaultPitch: mapSettings?.defaultPitch,
-              defaultBearing: mapSettings?.defaultBearing
+
+          // Debug: Log actual position after animation completes
+          mapRef.current.once('moveend', () => {
+            if (!mapRef.current) return;
+            const finalCenter = mapRef.current.getCenter();
+            console.log('🏁 INITIAL_ANIMATION COMPLETE: Actual final camera position:', {
+              center: [finalCenter.lng, finalCenter.lat],
+              zoom: mapRef.current.getZoom(),
+              pitch: mapRef.current.getPitch(),
+              bearing: mapRef.current.getBearing()
+            });
+
+            // Apply the real minZoom constraint AFTER animation completes
+            // This allows globe view start (zoom 0) but prevents users from zooming out past minZoom
+            if (!useMinZoomStart && config.minZoom > 0) {
+              console.log('🔒 Applying minZoom constraint after animation:', config.minZoom);
+              mapRef.current.setMinZoom(config.minZoom);
             }
           });
 
-          mapRef.current.flyTo({
-            center: targetCenter,
-            zoom: config.defaultZoom,
-            pitch: initialPitch,
-            bearing: config.defaultBearing ?? 0,
-            duration: durationMs,
-            essential: true
-          });
-        }
-
-        // Debug: Log actual position after animation completes
-        mapRef.current.once('moveend', () => {
-          if (!mapRef.current) return;
-          const finalCenter = mapRef.current.getCenter();
-          console.log('🏁 INITIAL_ANIMATION COMPLETE: Actual final camera position:', {
-            center: [finalCenter.lng, finalCenter.lat],
-            zoom: mapRef.current.getZoom(),
-            pitch: mapRef.current.getPitch(),
-            bearing: mapRef.current.getBearing()
-          });
-
-          // Apply the real minZoom constraint AFTER animation completes
-          // This allows globe view start (zoom 0) but prevents users from zooming out past minZoom
-          if (!useMinZoomStart && config.minZoom > 0) {
-            console.log('🔒 Applying minZoom constraint after animation:', config.minZoom);
-            mapRef.current.setMinZoom(config.minZoom);
-          }
-        });
-
-        // Setup distance-based pan restriction after animation
-        boundsSetupTimeoutRef.current = setTimeout(setupDistanceBounds, durationMs + 500);
-      }, 500);
+          // Setup distance-based pan restriction after animation
+          boundsSetupTimeoutRef.current = setTimeout(setupDistanceBounds, durationMs + 500);
+        }, 500);
+      } else {
+        console.log('Skipping standard initial animation because introAudio is present. Waiting for playSequence.');
+        // We might want to apply minZoom constraint here immediately or wait?
+        // If we don't, the user is stuck at zoom 0/minZoom until they start intro.
+        // That's probably intended (Globe View).
+      }
 
     });
 
@@ -2304,8 +2354,8 @@ export default function MapContainer({
           }
 
           const clientHoverPopup = new mapboxgl.Popup({
-            closeButton: false,
-            closeOnClick: false,
+            closeButton: true,
+            closeOnClick: true,
             className: 'client-building-tippy',
             anchor: 'bottom',
             offset: [0, -50]
@@ -2322,20 +2372,27 @@ export default function MapContainer({
             tooltipContent = `<div class="bg-white rounded-lg shadow-xl p-3 px-4 border border-gray-100"><span class="font-bold text-gray-800 text-sm whitespace-nowrap">${clientBuilding.name}</span></div>`;
           }
 
-          const clientClickHandler = () => {
-            if (project?.clientBuildingUrl) {
-              window.open(project.clientBuildingUrl, '_blank', 'noopener,noreferrer');
-            }
+          const clientClickHandler = (e) => {
+            // Stop propagation to prevent map click from immediately closing it if closeOnClick is true
+            e?.originalEvent?.stopPropagation();
+
+            // Show popup on click
+            clientHoverPopup.setLngLat(clientBuilding.coordinates).setHTML(tooltipContent).addTo(mapRef.current);
+
+            // Note: URL opening logic removed in favor of showing popup (per user request)
+            // if (project?.clientBuildingUrl) {
+            //   window.open(project.clientBuildingUrl, '_blank', 'noopener,noreferrer');
+            // }
           };
 
           const clientEnterHandler = () => {
             mapRef.current.getCanvas().style.cursor = 'pointer';
-            clientHoverPopup.setLngLat(clientBuilding.coordinates).setHTML(tooltipContent).addTo(mapRef.current);
+            // Hover behavior removed
           };
 
           const clientLeaveHandler = () => {
             mapRef.current.getCanvas().style.cursor = '';
-            clientHoverPopup.remove();
+            // Leave behavior removed
           };
 
           ['click', 'mouseenter', 'mouseleave'].forEach(evt => {
@@ -2607,7 +2664,7 @@ export default function MapContainer({
       {isTourActive && (
         <div className="absolute top-24 right-6 z-40 flex flex-col items-end gap-2 animate-fade-in">
           <div className="bg-black/60 backdrop-blur-md text-white px-5 py-3 rounded-xl border border-white/10 shadow-2xl">
-            <div className="text-[10px] text-gray-300 uppercase tracking-[0.2em] mb-1 font-medium">Cinematic Tour</div>
+
             <div className="flex items-center gap-2">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
@@ -2629,48 +2686,90 @@ export default function MapContainer({
         </div>
       )}
 
-      {/* View Mode Toggle - Uses filter glass theme controls */}
-      <div
-        className="view-mode-toggle absolute top-2 right-2 sm:top-4 sm:right-4 z-40 flex rounded-lg p-1 border shadow-lg"
-        style={{
-          backgroundColor: theme.filterGlassEnabled !== false
-            ? `${theme.filterTertiary || theme.tertiary || '#ffffff'}${Math.round((theme.filterGlassOpacity ?? 25) * 2.55).toString(16).padStart(2, '0')}`
-            : `${theme.filterTertiary || theme.tertiary || '#ffffff'}${Math.round((theme.filterTertiaryOpacity ?? 100) * 2.55).toString(16).padStart(2, '0')}`,
-          borderColor: `${theme.filterTertiary || theme.tertiary || '#ffffff'}${Math.round((theme.filterBorderOpacity ?? 35) * 2.55).toString(16).padStart(2, '0')}`,
-          ...(theme.filterGlassEnabled !== false && {
-            backdropFilter: `blur(${theme.filterGlassBlur ?? 50}px) saturate(${theme.filterGlassSaturation ?? 200}%)`,
-            WebkitBackdropFilter: `blur(${theme.filterGlassBlur ?? 50}px) saturate(${theme.filterGlassSaturation ?? 200}%)`,
-          }),
-        }}
-      >
-        <button
-          onClick={() => setViewMode('tilted')}
-          className="px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 cursor-pointer"
+      {/* Top Right Controls Container */}
+      <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-40 flex flex-col items-end gap-3 pointer-events-none">
+
+        {/* View Mode Toggle - Uses filter glass theme controls */}
+        <div
+          className="view-mode-toggle flex rounded-lg p-1 border shadow-lg pointer-events-auto transition-all duration-300"
           style={{
-            backgroundColor: viewMode === 'tilted' ? (theme.filterPrimary || theme.primary) : 'transparent',
-            color: viewMode === 'tilted' ? (theme.filterSecondary || theme.secondary) : 'rgba(255,255,255,0.7)',
-            boxShadow: viewMode === 'tilted' ? '0 2px 10px rgba(0, 0, 0, 0.15)' : 'none',
+            backgroundColor: theme.filterGlassEnabled !== false
+              ? `${theme.filterTertiary || theme.tertiary || '#ffffff'}${Math.round((theme.filterGlassOpacity ?? 25) * 2.55).toString(16).padStart(2, '0')}`
+              : `${theme.filterTertiary || theme.tertiary || '#ffffff'}${Math.round((theme.filterTertiaryOpacity ?? 100) * 2.55).toString(16).padStart(2, '0')}`,
+            borderColor: `${theme.filterTertiary || theme.tertiary || '#ffffff'}${Math.round((theme.filterBorderOpacity ?? 35) * 2.55).toString(16).padStart(2, '0')}`,
+            ...(theme.filterGlassEnabled !== false && {
+              backdropFilter: `blur(${theme.filterGlassBlur ?? 50}px) saturate(${theme.filterGlassSaturation ?? 200}%)`,
+              WebkitBackdropFilter: `blur(${theme.filterGlassBlur ?? 50}px) saturate(${theme.filterGlassSaturation ?? 200}%)`,
+            }),
           }}
         >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-          </svg>
-          3D Tilted
-        </button>
-        <button
-          onClick={() => setViewMode('top')}
-          className="px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 cursor-pointer"
-          style={{
-            backgroundColor: viewMode === 'top' ? (theme.filterPrimary || theme.primary) : 'transparent',
-            color: viewMode === 'top' ? (theme.filterSecondary || theme.secondary) : 'rgba(255,255,255,0.7)',
-            boxShadow: viewMode === 'top' ? '0 2px 10px rgba(0, 0, 0, 0.15)' : 'none',
-          }}
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-          </svg>
-          2D Top
-        </button>
+          <button
+            onClick={() => setViewMode('tilted')}
+            className="px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 cursor-pointer"
+            style={{
+              backgroundColor: viewMode === 'tilted' ? (theme.filterPrimary || theme.primary) : 'transparent',
+              color: viewMode === 'tilted' ? (theme.filterSecondary || theme.secondary) : 'rgba(255,255,255,0.7)',
+              boxShadow: viewMode === 'tilted' ? '0 2px 10px rgba(0, 0, 0, 0.15)' : 'none',
+            }}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            3D Tilted
+          </button>
+          <button
+            onClick={() => setViewMode('top')}
+            className="px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 cursor-pointer"
+            style={{
+              backgroundColor: viewMode === 'top' ? (theme.filterPrimary || theme.primary) : 'transparent',
+              color: viewMode === 'top' ? (theme.filterSecondary || theme.secondary) : 'rgba(255,255,255,0.7)',
+              boxShadow: viewMode === 'top' ? '0 2px 10px rgba(0, 0, 0, 0.15)' : 'none',
+            }}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
+            2D Top
+          </button>
+        </div>
+
+        {/* Start Journey Button - Redesigned & Relocated */}
+        {!isTourActive && !showLandmarkCard && landmarks.length > 0 && !!mapSettings?.enableCinematicJourney && (
+          <button
+            onClick={() => {
+              const config = getMapConfig();
+              const outroSettings = {
+                center: config.center,
+                zoom: config.defaultZoom,
+                pitch: viewMode === 'tilted' ? config.defaultPitch : 0,
+                bearing: config.defaultBearing ?? 0
+              };
+              startTour(mapRef.current, clientBuilding, landmarks, outroSettings);
+            }}
+            className="px-4 py-2 rounded-lg border shadow-lg font-bold text-xs uppercase tracking-wider transition-all duration-300 hover:scale-105 pointer-events-auto flex items-center gap-2"
+            style={{
+              backgroundColor: theme.filterGlassEnabled !== false
+                ? `${theme.filterTertiary || theme.tertiary || '#ffffff'}${Math.round((theme.filterGlassOpacity ?? 25) * 2.55).toString(16).padStart(2, '0')}`
+                : `${theme.filterTertiary || theme.tertiary || '#ffffff'}${Math.round((theme.filterTertiaryOpacity ?? 100) * 2.55).toString(16).padStart(2, '0')}`,
+              borderColor: `${theme.filterTertiary || theme.tertiary || '#ffffff'}${Math.round((theme.filterBorderOpacity ?? 35) * 2.55).toString(16).padStart(2, '0')}`,
+              color: theme.filterSecondary || theme.secondary || '#ffffff',
+              ...(theme.filterGlassEnabled !== false && {
+                backdropFilter: `blur(${theme.filterGlassBlur ?? 50}px) saturate(${theme.filterGlassSaturation ?? 200}%)`,
+                WebkitBackdropFilter: `blur(${theme.filterGlassBlur ?? 50}px) saturate(${theme.filterGlassSaturation ?? 200}%)`,
+              }),
+            }}
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: theme.filterPrimary || theme.primary }}></span>
+              <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: theme.filterPrimary || theme.primary }}></span>
+            </span>
+            Start Journey
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Intro Button Overlay */}
@@ -2780,6 +2879,8 @@ export default function MapContainer({
           </button>
         );
       })()}
+
+
 
       <LandmarkCard
         landmark={selectedLandmark}

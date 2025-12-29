@@ -7,6 +7,7 @@ import { useTheme } from '@/context/ThemeContext';
 import SvgIconUploader from '@/components/SvgIconUploader';
 import AudioUploader from '@/components/AudioUploader';
 import LogoUploader from '@/components/LogoUploader';
+import ProjectLogo from '@/components/ProjectLogo';
 import AspectRatioSizeInput from '@/components/AspectRatioSizeInput';
 import { ArrowLeft, Save } from 'lucide-react';
 
@@ -22,7 +23,11 @@ export default function EditProjectPage() {
     isActive: true,
     logo: null,
     logoWidth: 120,
+    logoWidth: 120,
     logoHeight: 40,
+    logoPadding: 0,
+    logoBorderRadius: 'none',
+    logoBackgroundColor: '',
     secondaryLogo: null,
     secondaryLogoWidth: 120,
     secondaryLogoHeight: 40,
@@ -49,7 +54,11 @@ export default function EditProjectPage() {
           isActive: project.isActive,
           logo: project.logo || null,
           logoWidth: project.logoWidth || 120,
+          logoWidth: project.logoWidth || 120,
           logoHeight: project.logoHeight || 40,
+          logoPadding: project.logoPadding || 0,
+          logoBorderRadius: project.logoBorderRadius || 'none',
+          logoBackgroundColor: project.logoBackgroundColor || '',
           secondaryLogo: project.secondaryLogo || null,
           secondaryLogoWidth: project.secondaryLogoWidth || 120,
           secondaryLogoHeight: project.secondaryLogoHeight || 40,
@@ -221,6 +230,97 @@ export default function EditProjectPage() {
                     widthLabel="Logo Width (px)"
                     heightLabel="Logo Height (px)"
                   />
+                </div>
+              )}
+
+              {formData.logo && (
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Logo Padding ({formData.logoPadding}px)
+                    </label>
+                    <input
+                      type="range"
+                      name="logoPadding"
+                      min="0"
+                      max="20"
+                      step="1"
+                      value={formData.logoPadding}
+                      onChange={handleInputChange}
+                      className="w-full accent-black cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Border Radius
+                    </label>
+                    <select
+                      name="logoBorderRadius"
+                      value={formData.logoBorderRadius}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
+                    >
+                      <option value="none">None</option>
+                      <option value="sm">Small</option>
+                      <option value="md">Medium</option>
+                      <option value="lg">Large</option>
+                      <option value="full">Full</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {formData.logo && (
+                <div className="mt-6">
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                    Background Color (Optional)
+                  </label>
+                  <div className="flex gap-3 items-center">
+                    <input
+                      type="color"
+                      name="logoBackgroundColor"
+                      value={formData.logoBackgroundColor || '#ffffff'}
+                      onChange={handleInputChange}
+                      className="h-10 w-20 p-1 bg-white border border-gray-200 rounded-lg cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        name="logoBackgroundColor"
+                        value={formData.logoBackgroundColor || ''}
+                        onChange={handleInputChange}
+                        placeholder="#ffffff or transparent"
+                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Leave empty for default glass effect.
+                  </p>
+                </div>
+              )}
+
+              {formData.logo && (
+                <div className="mt-8 p-6 bg-gray-900 rounded-xl border border-gray-800">
+                  <h4 className="text-xs font-medium text-gray-400 mb-4 uppercase tracking-wider">Live Preview</h4>
+                  <div className="relative w-full h-40 bg-gray-800/50 rounded-lg border border-gray-700 flex items-center justify-center overflow-hidden">
+                    {/* Grid Pattern Background to show transparency */}
+                    <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(#4b5563 1px, transparent 1px)', backgroundSize: '10px 10px' }}></div>
+
+                    <ProjectLogo
+                      logo={formData.logo}
+                      width={formData.logoWidth}
+                      height={formData.logoHeight}
+                      padding={formData.logoPadding}
+                      borderRadius={formData.logoBorderRadius}
+                      backgroundColor={formData.logoBackgroundColor}
+                      isPreview={true}
+                      theme={theme}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-3 text-center">
+                    This is how the logo will appear on the map.
+                  </p>
                 </div>
               )}
             </div>

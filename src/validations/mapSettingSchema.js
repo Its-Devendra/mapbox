@@ -31,6 +31,7 @@ export const mapSettingSchema = z.object({
   // Auto-fit bounds - automatically zoom to show all landmarks
   autoFitBounds: z.boolean().optional(),
   autoFitPadding: z.number().min(0).max(200).optional(),
+  enableCinematicJourney: z.boolean().optional(),
   isActive: z.boolean().optional(),
 });
 
