@@ -91,7 +91,10 @@ export default function MapContainer({
   introAudio = null,
   projectTheme = null,
   mapSettings = null,
-  interactive = true
+  interactive = true,
+  syncedCamera = null,  // Camera from receiver (for controller sync)
+  isReceiver = false,   // Whether this device is the receiver
+  onCameraReady = null  // Callback when camera position is ready (for receiver to broadcast)
 }) {
   // Default theme
   const [theme, setTheme] = useState({
@@ -231,6 +234,71 @@ export default function MapContainer({
 
   // Update refs for use in callbacks defined before hooks
   syncRouteRef.current = syncRouteClear;
+
+  // Apply synced camera when it arrives from receiver (for controller mode)
+  // This runs separately from initial animation to handle late-arriving camera data
+  const syncedCameraAppliedRef = useRef(false);
+  const prevSyncedCameraRef = useRef(null);
+
+  useEffect(() => {
+    // Track if syncedCamera actually changed
+    const cameraChanged = JSON.stringify(syncedCamera) !== JSON.stringify(prevSyncedCameraRef.current);
+    prevSyncedCameraRef.current = syncedCamera;
+
+    console.log('🎯 Synced camera effect triggered:', {
+      syncedCamera,
+      isMapLoaded,
+      mapExists: !!mapRef.current,
+      alreadyApplied: syncedCameraAppliedRef.current,
+      cameraChanged
+    });
+
+    // Only apply if we have valid syncedCamera
+    if (!syncedCamera || !syncedCamera.center || !syncedCamera.zoom) {
+      console.log('🎯 Skipping - no valid syncedCamera');
+      return;
+    }
+    if (!mapRef.current) {
+      console.log('🎯 Skipping - map not ready');
+      return;
+    }
+    // Don't require isMapLoaded - map might be ready before the 'load' event
+    if (!mapRef.current.loaded || !mapRef.current.loaded()) {
+      console.log('🎯 Skipping - map not fully loaded, will retry...');
+      // Retry after a short delay
+      const retryTimeout = setTimeout(() => {
+        if (mapRef.current && mapRef.current.loaded && mapRef.current.loaded() && syncedCamera && !syncedCameraAppliedRef.current) {
+          console.log('🎯 RETRY: APPLYING SYNCED CAMERA:', syncedCamera);
+          syncedCameraAppliedRef.current = true;
+          mapRef.current.flyTo({
+            center: syncedCamera.center,
+            zoom: syncedCamera.zoom,
+            pitch: syncedCamera.pitch ?? 0,
+            bearing: syncedCamera.bearing ?? 0,
+            duration: 1500,
+            essential: true
+          });
+        }
+      }, 1000);
+      return () => clearTimeout(retryTimeout);
+    }
+    if (syncedCameraAppliedRef.current && !cameraChanged) {
+      console.log('🎯 Skipping - already applied and no change');
+      return;
+    }
+
+    console.log('🎯 APPLYING SYNCED CAMERA NOW:', syncedCamera);
+    syncedCameraAppliedRef.current = true;
+
+    mapRef.current.flyTo({
+      center: syncedCamera.center,
+      zoom: syncedCamera.zoom,
+      pitch: syncedCamera.pitch ?? 0,
+      bearing: syncedCamera.bearing ?? 0,
+      duration: 1500,
+      essential: true
+    });
+  }, [syncedCamera, isMapLoaded]);
 
   /**
    * Get map settings with fallbacks
@@ -1572,11 +1640,40 @@ export default function MapContainer({
         zoom: config.defaultZoom,
         pitch: config.defaultPitch,
         bearing: config.defaultBearing,
-        durationMs
+        durationMs,
+        syncedCamera: syncedCamera // Show if we have synced camera
       });
 
       initialAnimationTimeoutRef.current = setTimeout(() => {
         if (!mapRef.current) return;
+
+        // SYNCED CAMERA MODE: If we received camera from receiver (controller mode),
+        // use that exact camera position instead of our own initial animation
+        if (syncedCamera && syncedCamera.center && syncedCamera.zoom) {
+          console.log('🎯 SYNCED CAMERA: Using camera from receiver instead of initial animation', syncedCamera);
+          mapRef.current.flyTo({
+            center: syncedCamera.center,
+            zoom: syncedCamera.zoom,
+            pitch: syncedCamera.pitch ?? 0,
+            bearing: syncedCamera.bearing ?? 0,
+            duration: 1000, // Quick transition to synced position
+            essential: true
+          });
+
+          // Apply minZoom after animation
+          mapRef.current.once('moveend', () => {
+            if (!mapRef.current) return;
+            if (config.minZoom > 0) {
+              mapRef.current.setMinZoom(config.minZoom);
+            }
+            // Setup distance bounds
+            if (config.maxPanDistanceKm && config.maxPanDistanceKm > 0) {
+              setupDistanceBounds();
+            }
+          });
+          return; // Skip the rest of normal animation
+        }
+
         // In 2D Top mode (default), pitch is 0 but bearing is applied
         const initialPitch = viewModeRef.current === 'tilted' ? config.defaultPitch : 0;
 
@@ -1649,6 +1746,18 @@ export default function MapContainer({
             pitch: mapRef.current.getPitch(),
             bearing: mapRef.current.getBearing()
           });
+
+          // If this is the receiver, notify parent of camera position for sync
+          if (isReceiver && onCameraReady) {
+            const camera = {
+              center: [finalCenter.lng, finalCenter.lat],
+              zoom: mapRef.current.getZoom(),
+              pitch: mapRef.current.getPitch(),
+              bearing: mapRef.current.getBearing()
+            };
+            console.log('📡 Receiver broadcasting camera position:', camera);
+            onCameraReady(camera);
+          }
 
           // Apply the real minZoom constraint AFTER animation completes
           // This allows globe view start (zoom 0) but prevents users from zooming out past minZoom

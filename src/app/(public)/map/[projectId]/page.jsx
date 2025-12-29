@@ -1,21 +1,30 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import MapContainer from '@/components/MapContainer';
 import ProjectLogo from '@/components/ProjectLogo';
 import FilterBar from '@/components/FilterBar';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import AspectRatioContainer from '@/components/AspectRatioContainer';
 import { validateAndTransformMarker, fetchWithTimeout, retryWithBackoff } from '@/utils/mapUtils';
 import { apiResponseCache } from '@/utils/cache';
 import { MAPBOX_CONFIG, ERROR_MESSAGES } from '@/constants/mapConfig';
 import { SyncProvider } from '@/context/SyncContext';
 import { useFilterSync } from '@/hooks/useSyncHooks';
+import { useAspectRatioSync } from '@/hooks/useAspectRatioSync';
 
 function MapPageContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const projectId = params.projectId;
+
+  // Determine role from URL query param: ?role=receiver or ?role=controller
+  const role = searchParams.get('role');
+  const isReceiver = role === 'receiver';
+  const isController = role === 'controller';
+  const mapWrapperRef = useRef(null);
 
   const [project, setProject] = useState(null);
   const [projectTheme, setProjectTheme] = useState(null);
@@ -34,11 +43,47 @@ function MapPageContent() {
     onFilterChange: setActiveFilter,
   });
 
+  // Aspect ratio sync - receiver broadcasts, controller receives
+  const { broadcastAspectRatio, broadcastWithCamera, receivedAspectRatio, receivedCamera } = useAspectRatioSync({
+    isReceiver,
+  });
+
   // Wrapper to sync filter changes to other screens
   const handleFilterChange = useCallback((newFilter) => {
     setActiveFilter(newFilter);
     syncFilters(newFilter);
   }, [syncFilters]);
+
+  // Receiver: Broadcast aspect ratio when map wrapper dimensions are known
+  useEffect(() => {
+    if (!isReceiver || !mapWrapperRef.current) return;
+
+    const broadcastDimensions = () => {
+      const { offsetWidth, offsetHeight } = mapWrapperRef.current;
+      if (offsetWidth > 0 && offsetHeight > 0) {
+        broadcastAspectRatio(offsetWidth, offsetHeight);
+      }
+    };
+
+    // Broadcast on mount
+    broadcastDimensions();
+
+    // Re-broadcast on resize
+    const resizeObserver = new ResizeObserver(broadcastDimensions);
+    resizeObserver.observe(mapWrapperRef.current);
+
+    return () => resizeObserver.disconnect();
+  }, [isReceiver, broadcastAspectRatio, loading]);
+
+  // Callback for receiver to broadcast camera after initial animation
+  const handleCameraReady = useCallback((camera) => {
+    if (!isReceiver || !mapWrapperRef.current) return;
+    const { offsetWidth, offsetHeight } = mapWrapperRef.current;
+    if (offsetWidth > 0 && offsetHeight > 0) {
+      console.log('📡 Page: Broadcasting viewport with camera:', camera);
+      broadcastWithCamera(offsetWidth, offsetHeight, camera);
+    }
+  }, [isReceiver, broadcastWithCamera]);
 
   // Client building from project configuration or fallback to settings
   const CLIENT_BUILDING = React.useMemo(() => {
@@ -416,37 +461,81 @@ function MapPageContent() {
     );
   }
 
+  // Calculate target aspect ratio for controllers
+  const targetAspectRatio = receivedAspectRatio?.ratio || null;
+
+  // Debug logging for aspect ratio sync
+  console.log('🎯 Aspect Ratio Debug:', {
+    role,
+    isReceiver,
+    isController,
+    receivedAspectRatio,
+    receivedCamera,
+    targetAspectRatio,
+    shouldApply: isController && !!targetAspectRatio
+  });
+
+  // Visible debug overlay for controller (remove after testing)
+  const debugOverlay = isController && (
+    <div style={{
+      position: 'fixed',
+      top: 10,
+      left: 10,
+      background: 'rgba(0,0,0,0.8)',
+      color: 'lime',
+      padding: '10px',
+      fontSize: '12px',
+      zIndex: 9999,
+      borderRadius: '5px',
+      maxWidth: '300px'
+    }}>
+      <div>📐 Ratio: {receivedAspectRatio?.ratio?.toFixed(2) || 'null'}</div>
+      <div>📍 Camera: {receivedCamera ? `z${receivedCamera.zoom?.toFixed(1)}` : 'null'}</div>
+      <div>🎯 Target: {targetAspectRatio?.toFixed(2) || 'null'}</div>
+    </div>
+  );
+
   return (
     <div className="flex flex-grow h-screen">
-      {/* Main map area */}
-      <div className="flex-1 relative">
-        <MapContainer
-          landmarks={filteredLandmarks}
-          nearbyPlaces={filteredNearbyPlaces}
-          clientBuilding={CLIENT_BUILDING}
-          project={project}
-          introAudio={project.introAudio}
-          projectTheme={projectTheme}
-          mapSettings={mapSettings}
-        />
+      {debugOverlay}
+      {/* Main map area - wrapped with aspect ratio container for controllers */}
+      <div className="flex-1 relative" ref={mapWrapperRef}>
+        <AspectRatioContainer
+          targetAspectRatio={targetAspectRatio}
+          enabled={isController && !!targetAspectRatio}
+          backgroundColor="#1a1a2e"
+        >
+          <MapContainer
+            landmarks={filteredLandmarks}
+            nearbyPlaces={filteredNearbyPlaces}
+            clientBuilding={CLIENT_BUILDING}
+            project={project}
+            introAudio={project.introAudio}
+            projectTheme={projectTheme}
+            mapSettings={mapSettings}
+            syncedCamera={isController ? receivedCamera : null}
+            isReceiver={isReceiver}
+            onCameraReady={isReceiver ? handleCameraReady : null}
+          />
 
-        {/* Project Logo (Left) */}
-        <ProjectLogo
-          logo={project?.logo}
-          width={project?.logoWidth}
-          height={project?.logoHeight}
-          position="left"
-          theme={projectTheme}
-        />
+          {/* Project Logo (Left) */}
+          <ProjectLogo
+            logo={project?.logo}
+            width={project?.logoWidth}
+            height={project?.logoHeight}
+            position="left"
+            theme={projectTheme}
+          />
 
-        {/* Secondary Logo (Right) */}
-        <ProjectLogo
-          logo={project?.secondaryLogo}
-          width={project?.secondaryLogoWidth}
-          height={project?.secondaryLogoHeight}
-          position="right"
-          theme={projectTheme}
-        />
+          {/* Secondary Logo (Right) */}
+          <ProjectLogo
+            logo={project?.secondaryLogo}
+            width={project?.secondaryLogoWidth}
+            height={project?.secondaryLogoHeight}
+            position="right"
+            theme={projectTheme}
+          />
+        </AspectRatioContainer>
       </div>
 
       {/* Filter Bar */}

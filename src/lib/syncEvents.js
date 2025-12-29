@@ -25,6 +25,9 @@ export const SYNC_EVENTS = {
 
     // View mode events
     VIEW_MODE: 'view:mode',
+
+    // Aspect ratio sync (receiver broadcasts to controllers)
+    ASPECT_RATIO: 'aspect:ratio',
 };
 
 // Event priority levels (for future use in event queuing)

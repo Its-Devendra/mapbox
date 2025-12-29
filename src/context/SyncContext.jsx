@@ -148,7 +148,8 @@ export function SyncProvider({ children, roomId, roomName = "Mapbox Room" }) {
             return;
         }
 
-        if (isInInitialLoad()) {
+        // Allow ASPECT_RATIO events during initial load (they're essential for controllers)
+        if (isInInitialLoad() && event !== SYNC_EVENTS.ASPECT_RATIO) {
             console.log("⏭️ Skip send - initial load period");
             return;
         }
@@ -204,8 +205,8 @@ export function SyncProvider({ children, roomId, roomName = "Mapbox Room" }) {
                 return;
             }
 
-            // Skip during initial load
-            if (isInInitialLoad()) {
+            // Skip during initial load (except ASPECT_RATIO - controllers need this immediately)
+            if (isInInitialLoad() && data.event !== SYNC_EVENTS.ASPECT_RATIO) {
                 console.log("⏭️ Skip receive - initial load");
                 return;
             }
