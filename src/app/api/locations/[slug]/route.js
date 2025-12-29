@@ -27,14 +27,13 @@ async function getLocationsForSlug(slug, options = {}) {
  * GET /api/locations/[slug]
  * Get aggregated locations for a project
  *
- * Fetches data from:
- * - /api/landmarks?projectId=...
- * - /api/nearby?projectId=...
+ * Fetches data from database:
+ * - Landmarks for the project
+ * - Nearby places for the project
  *
  * Calculates distance/time using Mapbox Directions API
  *
  * Query Parameters:
- * - projectId: Optional (will use slug if not provided)
  * - batchSize: Optional batch size (default: 10)
  * - profile: Optional Mapbox travel profile (default: "driving")
  *
@@ -78,21 +77,20 @@ export async function GET(request, { params }) {
 
 /**
  * POST /api/locations/[slug]
- * Aggregate data from localhost:3000 and POST to localhost:8000
+ * Aggregate data and POST directly to external API
  *
  * Steps:
- * 1. Fetch and aggregate data from localhost:3000 APIs (/api/landmarks, /api/nearby)
+ * 1. Fetch and aggregate data from database (landmarks + nearby places)
  * 2. Calculate distance/time using Mapbox Directions API
- * 3. POST the aggregated data to localhost:8000/api/locations/[slug]
+ * 3. POST the aggregated data directly to https://api.floorselector.convrse.ai/api/locations/[slug]/bulk
  *
  * Request Body:
  * {
- *   projectId: "project-id-string" // Optional: will use slug if not provided
  *   batchSize: 10, // Optional: batch size for processing (default: 10)
  *   profile: "driving" // Optional: Mapbox travel profile (default: "driving")
  * }
  *
- * Response: Response from localhost:8000 API
+ * Response: Response from external API
  */
 export async function POST(request, { params }) {
   try {
@@ -106,138 +104,86 @@ export async function POST(request, { params }) {
       );
     }
 
-    // Step 1: Get project info and aggregated locations from localhost:3000
+    // Get project info and aggregate locations from database
     const project = await getProjectBySlug(slug);
     if (!project) {
       throw new Error(`Project with slug "${slug}" not found`);
     }
 
-    console.log(`Aggregating locations for ${slug} from localhost:3000...`);
+    console.log(`Aggregating locations for ${slug}...`);
     const locations = await getLocationsForSlug(slug, {
       batchSize: body.batchSize || 10,
       profile: body.profile || "driving",
     });
 
     console.log(
-      `Aggregated ${locations.length} locations, posting to localhost:8000...`
+      `Aggregated ${locations.length} locations, posting to external API...`
     );
 
-    // Step 2: POST the aggregated data to localhost:8000
-    // Try both slug formats (with hyphens and with underscores)
-    const externalSlugUnderscore = slug.replace(/-/g, "_");
-    const externalApiUrl = `http://localhost:8000/api/locations/${slug}`;
-    const externalApiUrlAlt = `http://localhost:8000/api/locations/${externalSlugUnderscore}`;
+    // POST the aggregated data directly to external API using bulk endpoint
+    const externalApiUrl = `https://api.floorselector.convrse.ai/api/locations/${slug}/bulk`;
 
-    console.log(`POSTing ${locations.length} locations to localhost:8000...`);
-    console.log(`Trying URL: ${externalApiUrl}`);
-    console.log(`Alternative URL: ${externalApiUrlAlt}`);
-    
-    // Prepare request body - include project_id in case external API needs it
-    const requestBody = {
-      project_id: slug, // Include project_id in body
-      locations: locations, // Array of locations
-    };
+    console.log(
+      `POSTing ${locations.length} locations to ${externalApiUrl}...`
+    );
 
-    // POST the aggregated data to localhost:8000
-    // Try with original slug first, then with underscore format
-    let externalResponse;
-    let lastError = null;
+    const M3M_AUTH_TOKEN =
+      process.env.M3M_AUTH_TOKEN || "X9k#2mP$vL7nQ!wZ3tR&8jF@h4Z%yP32qX7vS";
 
-    // Try original slug format - try with locations array first
-    try {
-      externalResponse = await fetch(externalApiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(locations), // Try direct array first
-      });
+    const externalResponse = await fetch(externalApiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${M3M_AUTH_TOKEN}`,
+      },
+      body: JSON.stringify({
+        locations: locations,
+      }),
+    });
 
-      if (externalResponse.ok) {
-        console.log(`✅ Successfully posted to ${externalApiUrl}`);
-      } else {
-        const errorText = await externalResponse.text();
-        console.log(
-          `⚠️  First attempt failed (${externalResponse.status}): ${errorText}`
-        );
-        lastError = { status: externalResponse.status, message: errorText };
-      }
-    } catch (fetchError) {
-      console.log(`⚠️  First attempt error: ${fetchError.message}`);
-      lastError = fetchError;
-    }
+    if (!externalResponse.ok) {
+      let errorMessage;
+      const contentType = externalResponse.headers.get("content-type");
 
-    // If first attempt failed, try with underscore format
-    if (!externalResponse || !externalResponse.ok) {
-      console.log(
-        `Trying alternative URL with underscore format: ${externalApiUrlAlt}`
-      );
       try {
-        // Try with underscore format - also try with request body format
-        externalResponse = await fetch(externalApiUrlAlt, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(locations), // Try direct array
-        });
-        
-        // If still fails, try with request body format
-        if (!externalResponse.ok) {
-          console.log(`Trying with request body format...`);
-          const responseWithBody = await fetch(externalApiUrlAlt, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(requestBody), // Try with project_id wrapper
-          });
-          
-          if (responseWithBody.ok) {
-            externalResponse = responseWithBody;
-            console.log(`✅ Success with request body format`);
-          }
-        }
-
-        if (externalResponse.ok) {
-          console.log(`✅ Successfully posted to ${externalApiUrlAlt}`);
+        if (contentType?.includes("application/json")) {
+          const errorData = await externalResponse.json();
+          errorMessage =
+            errorData.msg ||
+            errorData.message ||
+            errorData.error ||
+            JSON.stringify(errorData);
         } else {
-          const errorText = await externalResponse.text();
-          console.log(
-            `⚠️  Second attempt failed (${externalResponse.status}): ${errorText}`
-          );
-          lastError = { status: externalResponse.status, message: errorText };
+          errorMessage = await externalResponse.text();
         }
-      } catch (fetchError) {
-        console.log(`⚠️  Second attempt error: ${fetchError.message}`);
-        lastError = fetchError;
+      } catch (parseError) {
+        errorMessage = `HTTP ${externalResponse.status} ${externalResponse.statusText}`;
       }
-    }
 
-    // Check if we got a successful response
-    if (!externalResponse || !externalResponse.ok) {
-      const errorMessage = lastError?.message || 
-        (lastError?.status ? `Status ${lastError.status}: ${lastError.message}` : 'Unknown error');
-      
       console.error(
-        `Error from localhost:8000: ${errorMessage}`
+        `Error from external API (${externalResponse.status}): ${errorMessage}`
       );
-      
-      // Return a more helpful error message
+
       return NextResponse.json(
         {
           error: `Failed to post to external API: ${errorMessage}`,
           details: {
-            triedUrls: [externalApiUrl, externalApiUrlAlt],
+            url: externalApiUrl,
+            status: externalResponse.status,
             locationsCount: locations.length,
-            suggestion: "Make sure the project exists in the external API or the API accepts creating new projects"
-          }
+            suggestion:
+              "Make sure the project exists in the external API or the API accepts creating new projects",
+          },
         },
-        { status: 502 } // Bad Gateway - external API issue
+        { status: externalResponse.status || 502 }
       );
     }
 
     const externalData = await externalResponse.json();
+
+    console.log(
+      `✅ Successfully posted ${locations.length} locations to ${externalApiUrl}`
+    );
 
     return NextResponse.json(externalData, {
       status: externalResponse.status,
@@ -252,7 +198,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
 
-    // Check if it's a connection error to localhost:8000
+    // Check if it's a connection error to external API
     if (
       error.code === "ECONNREFUSED" ||
       error.message?.includes("fetch failed")
@@ -260,14 +206,14 @@ export async function POST(request, { params }) {
       return NextResponse.json(
         {
           error:
-            "Failed to connect to external API at localhost:8000. Make sure the server is running.",
+            "Failed to connect to external API. Please check your network connection.",
         },
         { status: 503 }
       );
     }
 
     return NextResponse.json(
-      { error: error.message || "Failed to proxy request to localhost:8000" },
+      { error: error.message || "Failed to post data to external API" },
       { status: 500 }
     );
   }

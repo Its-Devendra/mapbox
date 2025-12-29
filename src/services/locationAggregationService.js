@@ -19,7 +19,6 @@ function transformLandmark(landmark, projectSlug, distanceTime) {
   const categoryName = landmark.category?.name || 'landmark';
   
   return {
-    _id: landmark.id,
     project_id: projectSlug,
     name: landmark.title,
     category: categoryName.toLowerCase(),
@@ -28,9 +27,6 @@ function transformLandmark(landmark, projectSlug, distanceTime) {
     distance: distanceTime.distance,
     time: distanceTime.time,
     is_active: true,
-    __v: 0,
-    createdAt: landmark.createdAt.toISOString(),
-    updatedAt: landmark.updatedAt.toISOString(),
   };
 }
 
@@ -45,7 +41,6 @@ function transformNearbyPlace(place, projectSlug, distanceTime) {
   const categoryName = place.category?.name || 'nearby';
   
   return {
-    _id: place.id,
     project_id: projectSlug,
     name: place.title,
     category: categoryName.toLowerCase(),
@@ -54,9 +49,6 @@ function transformNearbyPlace(place, projectSlug, distanceTime) {
     distance: distanceTime.distance,
     time: distanceTime.time,
     is_active: true,
-    __v: 0,
-    createdAt: place.createdAt.toISOString(),
-    updatedAt: place.updatedAt.toISOString(),
   };
 }
 
