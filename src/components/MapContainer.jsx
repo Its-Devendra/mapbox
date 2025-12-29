@@ -114,6 +114,9 @@ export default function MapContainer({
   });
   const [themeLoading, setThemeLoading] = useState(true);
 
+  // Filter State exposed to Chat
+  const [externalCategoryFilter, setExternalCategoryFilter] = useState(null); // 'educations', 'hospitals', etc.
+
   // Update theme when projectTheme changes
   useEffect(() => {
     if (projectTheme) {
@@ -379,6 +382,11 @@ export default function MapContainer({
       LAYER_IDS.NEARBY_PLACES,
       LAYER_IDS.LANDMARKS,
       LAYER_IDS.CLIENT_BUILDING,
+      'client-building-glow',
+      'client-building-core',
+      'client-building-pulse-1',
+      'client-building-pulse-2',
+      'client-building-pulse-3',
       LAYER_IDS.BUILDINGS_3D
     ];
 
@@ -1380,7 +1388,8 @@ export default function MapContainer({
       pitch: 0, // Start flat, animate to tilted during transition
       bearing: 0, // Start neutral, animate to final bearing during transition
       dragRotate: config.dragRotate,
-      pitchWithRotate: config.pitchWithRotate
+      pitchWithRotate: config.pitchWithRotate,
+      attributionControl: false // Hide Mapbox attribution control
       // DO NOT apply maxBounds here - apply AFTER animation completes to prevent freeze
     });
 
@@ -1684,6 +1693,206 @@ export default function MapContainer({
       });
     }
   }, [theme.mapboxStyle, themeLoading, add3DBuildings]);
+
+  /**
+   * Listen for Chat Highlight Events
+   */
+  useEffect(() => {
+    // Helper to find place by ID or Title
+    // Helper to find place by ID or Title with fuzzy matching
+    const findPlace = (identifier) => {
+      if (!identifier) return null;
+
+      const rawQuery = String(identifier).toLowerCase();
+      // Create a "clean" query (alphanumeric only) to handle spacing differences (e.g. "Indira Nagar" vs "Indiranagar")
+      const cleanQuery = rawQuery.replace(/[^a-z0-9]/g, '');
+
+      const isMatch = (item) => {
+        if (!item) return false;
+
+        const rawId = String(item.id).toLowerCase();
+        const rawTitle = (item.title || item.name || '').toLowerCase();
+        const cleanTitle = rawTitle.replace(/[^a-z0-9]/g, '');
+
+        // 1. Exact ID
+        if (rawId === rawQuery) return true;
+
+        // 2. Direct string containment (bidirectional)
+        // "Indira Nagar Metro".includes("Indira Nagar") -> true
+        // "Indira Nagar".includes("Indira Nagar Metro") -> matches backend specificity? 
+        // Usually we want: does the Item Title contain the Query? OR does the Query contain the Item Title?
+        if (rawTitle.includes(rawQuery)) return true;
+        if (rawQuery.includes(rawTitle)) return true;
+        // 3. Fuzzy matching (clean strings)
+        if (cleanTitle && cleanQuery) {
+          if (cleanTitle.includes(cleanQuery)) return true;
+          if (cleanQuery.includes(cleanTitle)) return true;
+        }
+
+        return false;
+      };
+
+      console.log(`findPlace Debug: Searching for "${rawQuery}" (clean: "${cleanQuery}")`);
+
+      // 1. Try Landmarks first
+      const landmark = landmarks.find(isMatch);
+      if (landmark) {
+        console.log("findPlace: Found Landmark match:", landmark.title);
+        return { ...landmark, type: 'landmark' };
+      }
+
+      // 2. Try User Project/Client Building
+      if (clientBuilding) {
+        // Reuse the match logic or specific keywords
+        if (isMatch(clientBuilding) || rawQuery.includes('client') || rawQuery.includes('project')) {
+          console.log("findPlace: Found Client Building match");
+          return { ...clientBuilding, type: 'client' };
+        }
+      }
+
+      // 3. Try Nearby Places
+      const place = nearbyPlaces.find(isMatch);
+      if (place) {
+        console.log("findPlace: Found Nearby Place match:", place.title);
+        return { ...place, type: 'nearby' };
+      }
+
+      console.log("findPlace: No match found. Available Nearby Places sample:", nearbyPlaces.slice(0, 3).map(p => p.title));
+
+      return null;
+    };
+
+    const handleChatHighlight = (event) => {
+      const { location_name, svg_id, location_type, force_filter, all_locations } = event.detail || {};
+
+      // 1. Handle Categorical Filtering (e.g. "Here are the SCHOOLS")
+      if (all_locations && all_locations.length > 1) {
+        // If we received a batch of locations, infer the category to filter by
+        // The backend sends 'location_type' like 'educations' in the first item usually
+        const commonType = all_locations[0]?.location_type;
+
+        if (commonType) {
+          console.log("Chat: Applying filter for category:", commonType);
+          setExternalCategoryFilter(commonType);
+
+          // Clear filter after some time? Or let user clear it?
+          // For now, let's auto-clear if they search for something else later.
+        }
+      } else if (location_type && force_filter) {
+        setExternalCategoryFilter(location_type);
+      } else if (!all_locations) {
+        // If single highlight and no explicit filter instruction, maybe clear filter?
+        // setExternalCategoryFilter(null); 
+        // Better to keep it if they are drilling down? 
+        // Actually, if they ask for "Amity", we should probably show everything again OR just Amity.
+        // Let's reset filter on specific single location search to ensure it is visible 
+        // (unless it belongs to current filter? Too complex. Resetting is safer).
+        setExternalCategoryFilter(null);
+      }
+
+      // 3. Single Highlight Logic (Fallback or Specific)
+      // Use name first, then fallback to parts of svg_id if needed, or just standard ID
+      let query = location_name || svg_id;
+
+      // Handle single item in batch array as a direct highlight
+      if (!query && all_locations && all_locations.length === 1) {
+        query = all_locations[0].location_name || all_locations[0].svg_id;
+        console.log("Chat: Unpacked single location from batch:", query);
+      }
+
+      // 2. Handle Batched Highlights (if multiple)
+      // Only if we have MORE than 1 location (otherwise treat as single highlight below)
+      if (all_locations && all_locations.length > 1) {
+        console.log("Chat: Batch handling", all_locations.length, "locations");
+
+        // Collect Coordinates for FitBounds
+        const coords = [];
+        all_locations.forEach(loc => {
+          const item = findPlace(loc.location_name || loc.svg_id);
+          if (item) coords.push(item.coordinates);
+        });
+
+        if (coords.length > 0 && mapRef.current) {
+          const bounds = new mapboxgl.LngLatBounds();
+          coords.forEach(c => bounds.extend(c));
+
+          mapRef.current.fitBounds(bounds, {
+            padding: 100,
+            maxZoom: 15,
+            essential: true
+          });
+          return; // Skip single highlight logic if we did a batch fit
+        }
+      }
+
+      if (!query) return;
+
+      console.log("Chat asked to highlight:", query);
+      const item = findPlace(query);
+
+      if (!item) {
+        console.warn("Could not find place for query:", query);
+        // Fallback: If event has lat/lng, use it!
+        if (event.detail.latitude && event.detail.longitude) {
+          const lat = parseFloat(event.detail.latitude);
+          const lng = parseFloat(event.detail.longitude);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            console.log("Using provided coordinates for fallback marker");
+            // Fly there
+            mapRef.current.flyTo({ center: [lng, lat], zoom: 16, essential: true });
+            // Create temp marker
+            new mapboxgl.Marker({ color: 'red' })
+              .setLngLat([lng, lat])
+              .setPopup(new mapboxgl.Popup().setHTML(`<b>${event.detail.location_name}</b><br>${event.detail.distance || ''}`))
+              .addTo(mapRef.current);
+            return;
+          }
+        }
+
+        toast.info(`Location "${query}" not found in current map view.`);
+        return;
+      }
+
+      if (item.type === 'landmark') {
+        console.log("Highlighting Landmark:", item.title);
+        setSelectedLandmark(item);
+        setShowLandmarkCard(true);
+        if (clientBuilding) {
+          getDirections(item);
+        }
+      } else if (item.type === 'client') {
+        // Just fly to client building
+        mapRef.current.flyTo({
+          center: item.coordinates,
+          zoom: 17,
+          pitch: 60,
+          essential: true
+        });
+      } else {
+        // Nearby Place Logic
+        console.log("Highlighting Nearby Place:", item.title);
+        if (mapRef.current) {
+          const fakeEvent = {
+            features: [{
+              properties: { id: item.id }
+            }]
+          };
+          handleNearbyPlaceHoverRaw(fakeEvent);
+
+          mapRef.current.flyTo({
+            center: item.coordinates,
+            zoom: 16,
+            essential: true
+          });
+        }
+      }
+    };
+
+    window.addEventListener('CHAT_HIGHLIGHT_LOCATION', handleChatHighlight);
+    return () => {
+      window.removeEventListener('CHAT_HIGHLIGHT_LOCATION', handleChatHighlight);
+    };
+  }, [nearbyPlaces, landmarks, clientBuilding, handleNearbyPlaceHoverRaw, getDirections]);
 
   /**
    * Handle View Mode Switching
@@ -2013,17 +2222,6 @@ export default function MapContainer({
               }
             });
           });
-
-          // Start Pulse Animation if not already running
-          // (The animation loop in original code seems to handle its own requestAnimationFrame, 
-          // but we should ensure it's not duplicated. The existing one was inside updateMarkers, 
-          // so it might have been stacking up if not careful. 
-          // We'll trust the cleanup wasn't called so the old loop might still be running? 
-          // Actually, `cleanup` clears animation frame. But updateMarkers doesn't call cleanup anymore.
-          // We need a stable animation loop reference.
-          // For now, let's keep the pulse animation logic adjacent to layer creation so it starts once.
-
-          // ... Pulse Animation Logic Re-inserted for Safety/Consistency in this block ...
           const animatePremiumPulse = (timestamp) => {
             if (!mapRef.current || !mapRef.current.getLayer('client-building-pulse-1')) return;
             const safeTime = (timestamp || performance.now());
@@ -2072,10 +2270,6 @@ export default function MapContainer({
               //   }
               // }
             } catch (e) { }
-
-            // Store in a ref so we can cancel if needed, though mostly it runs forever until unmount
-            // We don't have a specific ref for this pulse loop in the original code beyond generic animationFrameRef
-            // Let's use a local requestAnimationFrame to keep it self-contained or hook into global.
             requestAnimationFrame(animatePremiumPulse);
           };
           requestAnimationFrame(animatePremiumPulse);
@@ -2109,7 +2303,6 @@ export default function MapContainer({
             });
           }
 
-          // Client Building Events
           const clientHoverPopup = new mapboxgl.Popup({
             closeButton: false,
             closeOnClick: false,
@@ -2154,21 +2347,11 @@ export default function MapContainer({
               mapRef.current.on(evt, 'client-building-glow', evt === 'click' ? clientClickHandler : clientEnterHandler);
             }
           });
-
-          // We skip pushing to eventHandlersRef for now to avoid duplication complexity in this refactor, 
-          // assuming component mount/unmount handles full cleanup via the main cleanup() function.
         }
       }
-
-      // ─────────────────────────────────────────────────────────────
-      // 4. HTML MARKERS UPDATE (Full Rebuild)
-      // ─────────────────────────────────────────────────────────────
-      // We still rebuild HTML markers as they are DOM nodes.
-      // 1. Remove old markers
       markersRef.current.forEach(marker => marker.remove());
       markersRef.current = [];
 
-      // 2. Add Landmark HTML Markers (for those without icons)
       landmarks.forEach((landmark) => {
         if (!landmark.icon) {
           const marker = new mapboxgl.Marker()
@@ -2189,6 +2372,33 @@ export default function MapContainer({
 
       // 3. Add Nearby HTML Markers (for those without icons)
       nearbyPlaces.forEach((place) => {
+        // Filter Check
+        if (externalCategoryFilter) {
+          const filterKey = String(externalCategoryFilter).toLowerCase().replace(/s$/, ''); // e.g. 'education'
+          const placeCat = (place.categoryName || place.category || '').toLowerCase(); // e.g. 'high school'
+
+          // Map backend filter keys to list of valid keywords found in frontend categories
+          const validKeywords = {
+            'education': ['school', 'college', 'university', 'institute', 'academy', 'education', 'campus'],
+            'hospital': ['hospital', 'clinic', 'medical', 'health', 'doctor', 'pharmacy', 'nursing'],
+            'mall': ['mall', 'shopping', 'store', 'market', 'plaza', 'retail'],
+            'restaurant': ['restaurant', 'food', 'cafe', 'dining', 'bar', 'bistro', 'bakery'],
+            'bank': ['bank', 'atm', 'finance'],
+            'park': ['park', 'garden', 'recreation']
+          };
+
+          // Get keywords for this filter (or just use the filter itself if not mapped)
+          const keywords = validKeywords[filterKey] || [filterKey];
+
+          // Check if ANY keyword is in the place category
+          // e.g. placeCat="High School" contains "school"? Yes.
+          const isMatch = keywords.some(k => placeCat.includes(k));
+
+          if (!isMatch) {
+            return; // Skip this place (Hide it)
+          }
+        }
+
         if (!place.icon && !place.categoryIcon) {
           const markerEl = document.createElement('div');
           Object.assign(markerEl.style, {

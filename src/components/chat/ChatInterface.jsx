@@ -1,0 +1,635 @@
+"use client";
+
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { Mic, Square, Trash2, Send, X, Volume2, VolumeX } from "lucide-react";
+import "./ChatInterface.css";
+
+// Constants for storage
+const CHAT_HISTORY_KEY = "sumadhura_chat_history";
+const CHAT_MESSAGES_KEY = "sumadhura_chat_messages";
+const SPOKEN_MESSAGES_KEY = "sumadhura_spoken_messages";
+const CHAT_OPEN_STATE_KEY = "sumadhura_chat_open_state";
+const LANGUAGE_KEY = "sumadhura_chat_language";
+
+// Custom error class for quota exceeded
+class QuotaExceededError extends Error {
+  constructor(message, retryAfterSeconds = null) {
+    super(message);
+    this.name = "QuotaExceededError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+// Supported languages
+const LANGUAGES = [
+  { code: "en-US", name: "English", script: "English" },
+  { code: "te-IN", name: "Telugu", script: "తెలుగు" },
+  { code: "ta-IN", name: "Tamil", script: "தமிழ்" },
+  { code: "ml-IN", name: "Malayalam", script: "മലയാളം" },
+  { code: "hi-IN", name: "Hindi", script: "हिंदी" },
+  { code: "mr-IN", name: "Marathi", script: "मराठी" },
+  { code: "bn-IN", name: "Bengali", script: "বাংলা" },
+  { code: "kn-IN", name: "Kannada", script: "ಕನ್ನಡ" },
+  { code: "gu-IN", name: "Gujarati", script: "ગુજરાતી" },
+  { code: "pa-IN", name: "Punjabi", script: "ਪੰਜਾਬੀ" },
+  { code: "or-IN", name: "Odia", script: "ଓଡ଼ିଆ" },
+  { code: "ur-IN", name: "Urdu", script: "اردو" },
+  { code: "as-IN", name: "Assamese", script: "অসমীয়া" },
+];
+
+// Language code mapping for browser language detection
+const LANGUAGE_CODE_MAP = {
+  en: "en-US",
+  te: "te-IN",
+  ta: "ta-IN",
+  ml: "ml-IN",
+  hi: "hi-IN",
+  mr: "mr-IN",
+  bn: "bn-IN",
+  kn: "kn-IN",
+  gu: "gu-IN",
+  pa: "pa-IN",
+  or: "or-IN",
+  ur: "ur-IN",
+  as: "as-IN",
+};
+
+// Detect user's preferred language from browser/system settings
+const detectUserLanguage = () => {
+  try {
+    const saved = localStorage.getItem(LANGUAGE_KEY);
+    if (saved) return saved;
+
+    if (typeof window !== "undefined" && navigator.languages) {
+      for (const lang of navigator.languages) {
+        const langParts = lang.split("-");
+        const langCode = langParts[0]?.toLowerCase();
+        if (!langCode) continue;
+
+        if (LANGUAGE_CODE_MAP[langCode]) {
+          return LANGUAGE_CODE_MAP[langCode];
+        }
+      }
+    }
+
+    if (typeof window !== "undefined" && navigator.language) {
+      const langParts = navigator.language.split("-");
+      const langCode = langParts[0]?.toLowerCase();
+      if (langCode && LANGUAGE_CODE_MAP[langCode]) {
+        return LANGUAGE_CODE_MAP[langCode];
+      }
+    }
+  } catch (error) {
+    console.warn("Error detecting language:", error);
+  }
+  return "en-US";
+};
+
+// Global functions to manage chat open state across pages
+export const getChatOpenState = () => {
+  try {
+    const saved = localStorage.getItem(CHAT_OPEN_STATE_KEY);
+    return saved === "true";
+  } catch (error) {
+    console.warn("Error reading chat open state:", error);
+    return false;
+  }
+};
+
+export const setChatOpenState = (isOpen) => {
+  try {
+    localStorage.setItem(CHAT_OPEN_STATE_KEY, isOpen.toString());
+  } catch (error) {
+    console.warn("Error saving chat open state:", error);
+  }
+};
+
+// Helper function to normalize history format
+const normalizeHistory = (history) => {
+  return history.map((item) => {
+    if (item.content) {
+      return { role: item.role, content: item.content };
+    } else if (item.parts && item.parts.length > 0) {
+      const text = item.parts.map((part) => part.text || "").join("");
+      return { role: item.role, content: text };
+    } else {
+      return { role: item.role, content: "" };
+    }
+  });
+};
+
+const ChatInterface = () => {
+  const router = useRouter();
+  const pathname = usePathname();
+  // const dispatch = useAppDispatch();
+  const selectedMapId = "10km"; // Mocked
+  const filterConfigs = []; // Mocked
+  const filterLoading = false; // Mocked
+  // const activeMapFilterIds = useAppSelector((state) => state.filter.activeMapFilterIds);
+  // const { setLandmarkId } = useLandmark();
+  const setLandmarkId = () => {}; // Mocked
+
+  const API_URL = "/api/chat";
+
+  const [messages, setMessages] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [inputValue, setInputValue] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [selectedLanguage, setSelectedLanguage] = useState("en-US");
+  const [isListening, setIsListening] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioContextRef = useRef(null);
+  const activeAudioElementRef = useRef(null);
+  const eventSourceRef = useRef(null);
+  const audioQueueRef = useRef([]);
+  const isPlayingQueueRef = useRef(false);
+
+  const messagesEndRef = useRef(null);
+
+  // Load initial data
+  useEffect(() => {
+    try {
+      const savedMessages = localStorage.getItem(CHAT_MESSAGES_KEY);
+      const savedHistory = localStorage.getItem(CHAT_HISTORY_KEY);
+
+      const parsedMessages = savedMessages ? JSON.parse(savedMessages) : null;
+      const parsedHistory = savedHistory ? JSON.parse(savedHistory) : [];
+
+      if (parsedMessages && parsedMessages.length > 0) {
+        setMessages(parsedMessages);
+      } else {
+        setMessages([
+          {
+            role: "assistant",
+            content: "Hi! How can I help you with the location map today?",
+            id: "welcome-msg-" + Date.now(),
+          },
+        ]);
+      }
+      setHistory(parsedHistory);
+      setSelectedLanguage(detectUserLanguage());
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  // Save data
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (messages.length > 0) {
+        localStorage.setItem(CHAT_MESSAGES_KEY, JSON.stringify(messages));
+      }
+      if (history.length > 0) {
+        localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(history));
+      }
+      localStorage.setItem(LANGUAGE_KEY, selectedLanguage);
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [messages, history, selectedLanguage]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Audio Management
+  const stopAudio = () => {
+    // Stop inline audio
+    if (activeAudioElementRef.current) {
+      activeAudioElementRef.current.pause();
+      activeAudioElementRef.current.currentTime = 0;
+      activeAudioElementRef.current = null;
+    }
+
+    // Stop streaming audio
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      audioContextRef.current.close().catch(console.error);
+      audioContextRef.current = null;
+    }
+
+    audioQueueRef.current = [];
+    isPlayingQueueRef.current = false;
+    setIsPlaying(false);
+  };
+
+  const playInlineAudio = (base64Audio, contentType) => {
+    stopAudio();
+    if (!base64Audio) return;
+
+    try {
+      const audioUrl = `data:${contentType};base64,${base64Audio}`;
+      const audio = new Audio(audioUrl);
+      activeAudioElementRef.current = audio;
+
+      audio.onended = () => setIsPlaying(false);
+
+      audio
+        .play()
+        .then(() => {
+          setIsPlaying(true);
+        })
+        .catch((e) => {
+          console.warn("Audio autoplay blocked:", e);
+          setIsPlaying(false);
+        });
+    } catch (e) {
+      console.error("Error playing inline audio:", e);
+    }
+  };
+
+  const playStreamAudio = (url) => {
+    stopAudio();
+    if (!url) {
+      console.warn("playStreamAudio called with empty URL");
+      return;
+    }
+
+    // Validate URL format
+    try {
+      new URL(url, window.location.origin);
+    } catch (e) {
+      console.error("Invalid audio stream URL:", url, e);
+      setIsPlaying(false);
+      return;
+    }
+
+    console.log("Starting audio stream from:", url);
+    setIsPlaying(true);
+
+    try {
+      // Initialize AudioContext
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioContext();
+      audioContextRef.current = audioCtx;
+
+      const eventSource = new EventSource(url);
+      eventSourceRef.current = eventSource;
+
+      eventSource.onopen = () => {
+        console.log("Audio stream connected");
+      };
+
+      const processQueue = () => {
+        if (isPlayingQueueRef.current || audioQueueRef.current.length === 0)
+          return;
+
+        if (
+          !audioContextRef.current ||
+          audioContextRef.current.state === "closed"
+        )
+          return;
+
+        const buffer = audioQueueRef.current.shift();
+        isPlayingQueueRef.current = true;
+
+        const source = audioContextRef.current.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContextRef.current.destination);
+
+        source.onended = () => {
+          isPlayingQueueRef.current = false;
+          processQueue();
+        };
+
+        source.start(0);
+      };
+
+      eventSource.onmessage = async (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          // Handle end of stream
+          if (data.type === "end" || data.status === "done") {
+            console.log("Audio stream ended");
+            eventSource.close();
+            eventSourceRef.current = null;
+            return;
+          }
+
+          // Handle audio content
+          const audioContent = data.audio || data.audio_content;
+          if (audioContent) {
+            const binaryString = window.atob(audioContent);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+
+            // Decode audio data
+            const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
+
+            audioQueueRef.current.push(audioBuffer);
+            processQueue();
+          }
+        } catch (e) {
+          console.error("Error processing stream chunk:", e);
+        }
+      };
+
+      eventSource.onerror = (err) => {
+        console.error("EventSource failed:", {
+          error: err,
+          readyState: eventSource.readyState,
+          url: url,
+          readyStateText:
+            eventSource.readyState === EventSource.CONNECTING
+              ? "CONNECTING"
+              : eventSource.readyState === EventSource.OPEN
+              ? "OPEN"
+              : eventSource.readyState === EventSource.CLOSED
+              ? "CLOSED"
+              : "UNKNOWN",
+        });
+
+        if (eventSource.readyState === EventSource.CLOSED) {
+          console.warn("EventSource connection closed. Stopping audio.");
+          stopAudio();
+        } else if (eventSource.readyState === EventSource.CONNECTING) {
+          console.warn(
+            "EventSource failed to connect. This might be a network or server issue."
+          );
+        }
+      };
+    } catch (e) {
+      console.error("Error setting up audio stream:", e);
+      setIsPlaying(false);
+    }
+  };
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      stopAudio();
+    };
+  }, []);
+
+  const handleSendMessage = async (textOverride = null) => {
+    const text = textOverride || inputValue.trim();
+    if (!text || isLoading) return;
+
+    // Stop any playing audio when user sends a new message
+    stopAudio();
+
+    const userMsg = { role: "user", content: text, id: Date.now().toString() };
+    setMessages((prev) => [...prev, userMsg]);
+    setInputValue("");
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          history: history,
+          language_code: selectedLanguage,
+          map_type: selectedMapId,
+          project_id: "shalimar-evara",
+          current_slug: pathname,
+          user_id: localStorage.getItem("chat_user_id") || "guest",
+          session_id:
+            localStorage.getItem("chat_session_id") || `session_${Date.now()}`,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          const retryAfter = errorData.retry_after || 60;
+          throw new QuotaExceededError(
+            "Usage limit exceeded. Please try again later.",
+            retryAfter
+          );
+        }
+        const backendMessage =
+          errorData.message || errorData.detail || errorData.error;
+        throw new Error(backendMessage || `API Error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Chat API Response:", data);
+
+      const assistantMsg = {
+        role: "assistant",
+        content: data.response || "I couldn't generate a response.",
+        id: (Date.now() + 1).toString(),
+      };
+
+      setMessages((prev) => [...prev, assistantMsg]);
+
+      if (data.history) {
+        setHistory(normalizeHistory(data.history));
+      }
+
+      // 1. Handle Navigation
+      if (data.navigation_target) {
+        console.log("Navigating to:", data.navigation_target);
+        router.push(data.navigation_target);
+      }
+
+      // 2. Handle External URLs
+      if (data.external_url) {
+        console.log("Opening external URL:", data.external_url);
+        window.open(data.external_url, "_blank");
+      }
+
+      // 3. Handle Location Highlighting
+      if (data.highlighted_locations) {
+        handleHighlightLocations(data.highlighted_locations);
+      }
+
+      // 4. Handle Unit Highlighting
+      if (data.highlighted_units) {
+        handleHighlightUnits(data.highlighted_units);
+      }
+
+      // 5. Handle Audio (Priority: Inline > Stream)
+      if (data.audio_content && data.audio_content_type) {
+        playInlineAudio(data.audio_content, data.audio_content_type);
+      } else if (data.audio_stream_url) {
+        // Fallback to basic logging/handling for stream if inline not present
+        playStreamAudio(data.audio_stream_url);
+      }
+    } catch (err) {
+      console.error("Chat Error:", err);
+      let errorMessage = "Sorry, I encountered an error. Please try again.";
+
+      if (err instanceof QuotaExceededError) {
+        errorMessage =
+          "You've reached the request limit. Please wait a moment.";
+      } else if (err.message.includes("401") || err.message.includes("403")) {
+        errorMessage = "Authentication failed. Please refresh the page.";
+      } else if (err.message) {
+        errorMessage = `Error: ${err.message}`;
+      }
+
+      setError(errorMessage);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: errorMessage,
+          id: (Date.now() + 1).toString(),
+          isError: true,
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleHighlightLocations = (locations) => {
+    if (!locations || locations.length === 0) return;
+    const batchEvent = new CustomEvent("CHAT_HIGHLIGHT_LOCATION", {
+      detail: {
+        all_locations: locations,
+        location_type: locations[0]?.location_type,
+      },
+    });
+    window.dispatchEvent(batchEvent);
+  };
+
+  const handleHighlightUnits = (units) => {
+    if (!units || units.length === 0) return;
+    console.log("Highlighting units:", units);
+    const unitEvent = new CustomEvent("CHAT_HIGHLIGHT_UNIT", {
+      detail: { units },
+    });
+    window.dispatchEvent(unitEvent);
+  };
+
+  const startVoiceInput = () => {
+    if (
+      typeof window !== "undefined" &&
+      ("webkitSpeechRecognition" in window || "SpeechRecognition" in window)
+    ) {
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.lang = selectedLanguage || "en-IN";
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => setIsListening(true);
+      recognition.onend = () => setIsListening(false);
+      recognition.onerror = (e) => {
+        console.error("Speech recognition error", e);
+        setIsListening(false);
+      };
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          setInputValue(transcript);
+          handleSendMessage(transcript);
+        }
+      };
+      recognition.start();
+    } else {
+      alert("Voice input is not supported in this browser.");
+    }
+  };
+
+  const clearChatHistory = () => {
+    if (confirm("Clear chat history?")) {
+      setMessages([
+        {
+          role: "assistant",
+          content: "History cleared.",
+          id: Date.now().toString(),
+        },
+      ]);
+      setHistory([]);
+      localStorage.removeItem(CHAT_MESSAGES_KEY);
+      localStorage.removeItem(CHAT_HISTORY_KEY);
+    }
+  };
+
+  return (
+    <div className="chat-container">
+      <div className="chat-header">
+        <div>
+          <div className="chat-header-title">Location Assistant</div>
+          <div className="chat-header-subtitle">Ask me about nearby places</div>
+        </div>
+        <select
+          className="language-dropdown"
+          value={selectedLanguage}
+          onChange={(e) => setSelectedLanguage(e.target.value)}
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.name}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={clearChatHistory}
+          className="ml-auto text-white/80 hover:text-white"
+          title="Clear chat history"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+
+      <div className="chat-messages">
+        {messages.map((msg) => (
+          <div key={msg.id} className={`message-wrapper ${msg.role}`}>
+            <div className={`message ${msg.role}`}>
+              <div className="message-content">{msg.content}</div>
+            </div>
+          </div>
+        ))}
+        {isLoading && (
+          <div className="message-wrapper assistant">
+            <div className="message assistant">
+              <div className="typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="chat-input-area">
+        <input
+          type="text"
+          className="chat-input"
+          placeholder={isListening ? "Listening..." : "Type your question..."}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+          disabled={isLoading}
+        />
+        <button
+          className={`icon-button ${isListening ? "mic-active" : ""}`}
+          onClick={() => startVoiceInput()}
+          disabled={isLoading}
+          title="Voice Input"
+        >
+          <Mic size={16} />
+        </button>
+        <button
+          className="icon-button send-button"
+          onClick={() => handleSendMessage()}
+          disabled={!inputValue.trim() || isLoading}
+          title="Send message"
+        >
+          <Send size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default ChatInterface;
