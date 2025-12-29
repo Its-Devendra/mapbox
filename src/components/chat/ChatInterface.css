@@ -274,7 +274,7 @@
 /* Chat Button (Floating) */
 .chat-floating-button {
     position: fixed;
-    bottom: 32px;
+    bottom: 12px;
     right: 20px;
     width: 54px;
     height: 54px;
@@ -303,7 +303,7 @@
 /* Chat Widget Container */
 .chat-widget-container {
     position: fixed;
-    bottom: 50px;
+    bottom: 30px;
     right: 24px;
     width: 320px;
     height: 520px;

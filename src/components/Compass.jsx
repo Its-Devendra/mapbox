@@ -71,7 +71,7 @@ export default function Compass({
       } absolute right-2 sm:right-4 z-40 transition-all duration-500 ease-out ${
         isShifted
           ? "opacity-0 pointer-events-none sm:opacity-100 sm:pointer-events-auto sm:bottom-57"
-          : "bottom-[72px] sm:bottom-8 md:bottom-24"
+          : "bottom-[72px] sm:bottom-8 md:bottom-[74px]"
       }`}
       title="Click to reset to North"
     >

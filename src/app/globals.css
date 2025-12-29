@@ -496,15 +496,14 @@ body {
   }
 }
 
-/* Mapbox Attribution - always at bottom right */
+/* Mapbox Attribution - hidden */
 .mapboxgl-ctrl-attrib {
-  position: fixed !important;
-  bottom: 8px !important;
-  right: 8px !important;
-  background: rgba(0, 0, 0, 0.5) !important;
-  padding: 2px 6px !important;
-  border-radius: 4px !important;
-  font-size: 10px !important;
+  display: none !important;
+}
+
+/* Hide the bottom-right control container that contains attribution */
+.mapboxgl-ctrl-bottom-right {
+  display: none !important;
 }
 
 .mapboxgl-ctrl-attrib a {

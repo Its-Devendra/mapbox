@@ -1388,7 +1388,8 @@ export default function MapContainer({
       pitch: 0, // Start flat, animate to tilted during transition
       bearing: 0, // Start neutral, animate to final bearing during transition
       dragRotate: config.dragRotate,
-      pitchWithRotate: config.pitchWithRotate
+      pitchWithRotate: config.pitchWithRotate,
+      attributionControl: false // Hide Mapbox attribution control
       // DO NOT apply maxBounds here - apply AFTER animation completes to prevent freeze
     });
 
