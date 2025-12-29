@@ -3,12 +3,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Mic, Square, Trash2, Send, X, Volume2, VolumeX } from "lucide-react";
-// Removed Redux imports/hooks as they are missing in this environment
-// import { useAppSelector, useAppDispatch } from "@/lib/store/hooks";
-// import { selectSelectedMapId, selectFilterConfigs, selectFilterLoading } from "@/lib/store/selectors";
-// import { setMapFilterIds, setHighlightedMarkerIds } from "@/lib/store/slices/filterSlice";
-// import { setSelectedMapId } from "@/lib/store/slices/mapSlice";
-// import { useLandmark } from "@/lib/hooks/useLandmark";
 import "./ChatInterface.css";
 
 // Constants for storage
@@ -147,6 +141,10 @@ const ChatInterface = () => {
     const [isListening, setIsListening] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const audioContextRef = useRef(null);
+    const activeAudioElementRef = useRef(null);
+    const eventSourceRef = useRef(null);
+    const audioQueueRef = useRef([]);
+    const isPlayingQueueRef = useRef(false);
 
     const messagesEndRef = useRef(null);
 
@@ -195,11 +193,26 @@ const ChatInterface = () => {
 
     // Audio Management
     const stopAudio = () => {
-        if (audioContextRef.current) {
-            audioContextRef.current.pause();
-            audioContextRef.current.currentTime = 0;
+        // Stop inline audio
+        if (activeAudioElementRef.current) {
+            activeAudioElementRef.current.pause();
+            activeAudioElementRef.current.currentTime = 0;
+            activeAudioElementRef.current = null;
+        }
+
+        // Stop streaming audio
+        if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+        }
+
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close().catch(console.error);
             audioContextRef.current = null;
         }
+
+        audioQueueRef.current = [];
+        isPlayingQueueRef.current = false;
         setIsPlaying(false);
     };
 
@@ -210,7 +223,7 @@ const ChatInterface = () => {
         try {
             const audioUrl = `data:${contentType};base64,${base64Audio}`;
             const audio = new Audio(audioUrl);
-            audioContextRef.current = audio;
+            activeAudioElementRef.current = audio;
 
             audio.onended = () => setIsPlaying(false);
 
@@ -229,24 +242,94 @@ const ChatInterface = () => {
         stopAudio();
         if (!url) return;
 
-        // Note: For full streaming support (SSE), we would use EventSource here as per guide.
-        // For now, if the URL is a direct stream info, we might need a specific client.
-        // Assuming audio_stream_url could be a direct media source or SSE endpoint.
-        // Given the guide's SSE example:
         console.log("Starting audio stream from:", url);
+        setIsPlaying(true);
 
         try {
-            const eventSource = new EventSource(url);
-            // Implementation would track chunks and play them using Web Audio API buffer
-            // For this implementation step, we'll log it as "Ready" but rely on inline audio as primary 
-            // per the guide's recommendation.
+            // Initialize AudioContext
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const audioCtx = new AudioContext();
+            audioContextRef.current = audioCtx;
 
-            // Cleanup function would be needed for EventSource
-            return eventSource;
+            const eventSource = new EventSource(url);
+            eventSourceRef.current = eventSource;
+
+            eventSource.onopen = () => {
+                console.log("Audio stream connected");
+            };
+
+            const processQueue = () => {
+                if (isPlayingQueueRef.current || audioQueueRef.current.length === 0) return;
+
+                if (!audioContextRef.current || audioContextRef.current.state === 'closed') return;
+
+                const buffer = audioQueueRef.current.shift();
+                isPlayingQueueRef.current = true;
+
+                const source = audioContextRef.current.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioContextRef.current.destination);
+
+                source.onended = () => {
+                    isPlayingQueueRef.current = false;
+                    processQueue();
+                };
+
+                source.start(0);
+            };
+
+            eventSource.onmessage = async (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    // Handle end of stream
+                    if (data.type === 'end' || data.status === 'done') {
+                        console.log("Audio stream ended");
+                        eventSource.close();
+                        eventSourceRef.current = null;
+                        return;
+                    }
+
+                    // Handle audio content
+                    const audioContent = data.audio || data.audio_content;
+                    if (audioContent) {
+                        const binaryString = window.atob(audioContent);
+                        const len = binaryString.length;
+                        const bytes = new Uint8Array(len);
+                        for (let i = 0; i < len; i++) {
+                            bytes[i] = binaryString.charCodeAt(i);
+                        }
+
+                        // Decode audio data
+                        const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
+
+                        audioQueueRef.current.push(audioBuffer);
+                        processQueue();
+                    }
+                } catch (e) {
+                    console.error("Error processing stream chunk:", e);
+                }
+            };
+
+            eventSource.onerror = (err) => {
+                console.error("EventSource failed:", err);
+                if (eventSource.readyState === EventSource.CLOSED) {
+                    stopAudio();
+                }
+            };
+
         } catch (e) {
             console.error("Error setting up audio stream:", e);
+            setIsPlaying(false);
         }
     };
+
+    // Cleanup audio on unmount
+    useEffect(() => {
+        return () => {
+            stopAudio();
+        };
+    }, []);
 
     const handleSendMessage = async (textOverride = null) => {
         const text = textOverride || inputValue.trim();
