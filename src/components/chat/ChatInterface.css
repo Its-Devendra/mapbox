@@ -271,14 +271,13 @@
     }
 }
 
-/* Chat Button (Floating) */
+/* Chat Button (Floating) - Positioned to be part of right column stack */
 .chat-floating-button {
-    position: fixed;
-    bottom: 12px;
-    right: 20px;
-    width: 54px;
-    height: 54px;
-    border-radius: 30px;
+    position: relative; /* Changed from fixed to relative for flex container */
+    /* Remove bottom/right as container handles positioning */
+    width: 48px;  /* Match recenter: w-12 = 48px */
+    height: 48px;
+    border-radius: 50%;
     background: var(--chat-primary-color, linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%));
     color: white;
     border: none;
@@ -287,8 +286,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 9999;
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 35;
+    flex-shrink: 0; /* Prevent shrinking in flex container */
+}
+
+@media (min-width: 640px) {
+    .chat-floating-button {
+        width: 48px;  /* Consistent size desktop */
+        height: 48px;
+    }
 }
 
 .chat-floating-button:hover {
@@ -303,16 +310,22 @@
 /* Chat Widget Container */
 .chat-widget-container {
     position: fixed;
-    bottom: 30px;
-    right: 24px;
+    bottom: 200px; /* Above button at 140px + gap */
+    right: 12px;
     width: 320px;
-    height: 520px;
-    max-height: calc(100vh - 100px);
+    height: 450px;
+    max-height: calc(100vh - 240px);
     z-index: 9998;
     opacity: 0;
     transform: translateY(20px) scale(0.95);
     pointer-events: none;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (min-width: 640px) {
+    .chat-widget-container {
+        right: 16px;
+    }
 }
 
 .chat-widget-container.open {

@@ -5,6 +5,11 @@ import mapboxgl from "mapbox-gl";
 import { toast } from 'react-toastify';
 import LandmarkCard from "./LandmarkCard";
 import Compass from "./Compass";
+import FullScreenButton from "./FullScreenButton";
+import RecenterButton from "./RecenterButton";
+import MapControlsContainer from "./MapControlsContainer";
+import ChatContainer from "./chat/ChatContainer";
+import RoadTracer from "./RoadTracer";
 import {
   createSVGImage,
   debounce,
@@ -17,6 +22,8 @@ import { bustCache } from '@/utils/cacheUtils';
 import { useMapboxDirections } from "@/hooks/useMapboxDirections";
 import { MAPBOX_CONFIG, SOURCE_IDS, LAYER_IDS } from "@/constants/mapConfig";
 import useCinematicTour from "@/hooks/useCinematicTour";
+import useMapKeyboardShortcuts from "@/hooks/useMapKeyboardShortcuts";
+import { useMarkerManager } from "@/hooks/useMarkerManager";
 
 // Mapbox access token
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
@@ -88,7 +95,8 @@ export default function MapContainer({
   clientBuilding = null,
   project = null,
   introAudio = null,
-  landmarkAudio = null, // New prop for landmark arrival sound
+  landmarkAudio = null, // New prop for landmark audio (narration)
+  arrivalAudio = null, // Custom arrival sound effect
   projectTheme = null,
   mapSettings = null,
   interactive = true
@@ -132,8 +140,19 @@ export default function MapContainer({
   const mapContainerRef = useRef();
   const mapRef = useRef();
   const markersRef = useRef([]);
-  const popupsRef = useRef([])
-    ;
+  const [isInitialCameraAnimationComplete, setIsInitialCameraAnimationComplete] = useState(false);
+  /* State must be declared before useEffect usage */
+  const [isRouteAnimationComplete, setIsRouteAnimationComplete] = useState(false);
+
+  // Reset markers when animation resets (optional, but good for sequences)
+  useEffect(() => {
+    if (!isRouteAnimationComplete) {
+      markersRef.current.forEach(m => m.remove());
+      markersRef.current = [];
+    }
+  }, [isRouteAnimationComplete]);
+
+  const popupsRef = useRef([]);
   const routeRef = useRef(null);
   const activeLandmarkRef = useRef(null);
   const originalViewportRef = useRef(null);
@@ -145,6 +164,7 @@ export default function MapContainer({
   const routeGenerationRef = useRef(0); // Generation counter to track route creation attempts
   const audioRef = useRef(null); // Audio reference
   const landmarkAudioRef = useRef(null); // Ref for landmark audio
+  const arrivalAudioRef = useRef(null); // Ref for custom arrival audio
   const introPlayedRef = useRef(false); // Track if intro has played
   const initialZoomDoneRef = useRef(false); // Track if initial zoom is done
 
@@ -161,6 +181,9 @@ export default function MapContainer({
   const clearRouteRef = useRef(null);
   const cleanupRef = useRef(null);
   const add3DBuildingsRef = useRef(null);
+
+  // Constants
+
 
   // Intro State
   const [showIntroButton, setShowIntroButton] = useState(false); // Show button if autoplay blocks
@@ -180,6 +203,18 @@ export default function MapContainer({
     }
   }, [landmarkAudio]);
 
+  // Update arrivalAudioRef when prop changes
+  useEffect(() => {
+    if (arrivalAudio) {
+      arrivalAudioRef.current = new Audio(arrivalAudio);
+    } else {
+      arrivalAudioRef.current = null;
+    }
+  }, [arrivalAudio]);
+
+  // Initialize Arrival Sound - REMOVED (using playArrivalSound now)
+
+
   // State
   const [selectedLandmark, setSelectedLandmark] = useState(null);
   const [showLandmarkCard, setShowLandmarkCard] = useState(false);
@@ -192,6 +227,8 @@ export default function MapContainer({
 
   // Cinematic Tour Hook
   const { startTour, stopTour, smoothFlyTo, isTourActive, currentStep, totalSteps } = useCinematicTour();
+
+
 
   /**
    * Get map settings with fallbacks
@@ -287,11 +324,12 @@ export default function MapContainer({
         }
 
         // Calculate duration based on audio
-        // Use a reasonable minimum (e.g. 3000ms) just in case audio is very short or duration fails
-        let animationDuration = 3000;
+        // Use a reasonable minimum (e.g. 6000ms) just in case audio is very short or duration fails
+        let animationDuration = 6000;
         if (audio.duration && Number.isFinite(audio.duration)) {
-          animationDuration = audio.duration * 1000;
-          console.log(`🎵 Syncing animation to audio duration: ${animationDuration}ms`);
+          // If audio is longer than 6s, use audio duration. Otherwise clamp to 6s
+          animationDuration = Math.max(6000, audio.duration * 1000);
+          console.log(`🎵 Syncing animation to audio duration (clamped): ${animationDuration}ms`);
         }
 
         // Fly to client building
@@ -344,9 +382,9 @@ export default function MapContainer({
       setShowIntroButton(false);
       console.log('🎵 Manually started audio');
 
-      let animationDuration = 4000; // Default fallback
+      let animationDuration = 6000; // Default fallback
       if (audioRef.current.duration && Number.isFinite(audioRef.current.duration)) {
-        animationDuration = audioRef.current.duration * 1000;
+        animationDuration = Math.max(6000, audioRef.current.duration * 1000);
         console.log(`🎵 Manual Sync: Animation duration set to ${animationDuration}ms`);
       }
 
@@ -367,6 +405,50 @@ export default function MapContainer({
       };
     }).catch(e => console.error('Manual play failed', e));
   };
+
+  // Sound Effect Helper
+  const playArrivalSound = useCallback(() => {
+    // Priority: Play custom audio if available
+    if (arrivalAudioRef.current) {
+      arrivalAudioRef.current.currentTime = 0;
+      arrivalAudioRef.current.volume = 1.0; // 100% Volume
+      arrivalAudioRef.current.play().catch(e => console.warn("Custom arrival audio failed (autoplay blocked?)", e));
+      return;
+    }
+
+    // Fallback: Generate "Ding" sound
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+      osc.frequency.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.5);
+
+      gain.gain.setValueAtTime(1.0, ctx.currentTime); // 100% Volume
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.5);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start();
+      osc.stop(ctx.currentTime + 1.5);
+    } catch (e) {
+      console.warn('Audio play failed', e);
+    }
+  }, []);
+
+  /**
+   * Callback for when route animation completes (memoized to prevent re-renders)
+   */
+  const handleRouteAnimationComplete = useCallback(() => {
+    console.log('✅ Main Sequence: Route Animation Complete');
+    setIsRouteAnimationComplete(true);
+  }, []);
 
   /**
    * Cleanup function for all map resources
@@ -994,9 +1076,12 @@ export default function MapContainer({
 
           // Play sound after animation
           setTimeout(() => {
-            if (routeGenerationRef.current === currentGeneration && landmarkAudioRef.current) {
-              landmarkAudioRef.current.currentTime = 0;
-              landmarkAudioRef.current.play().catch(e => console.warn("Audio play failed", e));
+            if (routeGenerationRef.current === currentGeneration) {
+              playArrivalSound(); // Play generated ding
+              if (landmarkAudioRef.current) {
+                landmarkAudioRef.current.currentTime = 0;
+                landmarkAudioRef.current.play().catch(e => console.warn("Audio play failed", e));
+              }
             }
           }, zoomDuration);
 
@@ -1020,9 +1105,12 @@ export default function MapContainer({
           }, 5000);  // 5 seconds: Professional pacing
 
           // Play sound upon arrival (after flight)
-          if (routeGenerationRef.current === currentGeneration && landmarkAudioRef.current) {
-            landmarkAudioRef.current.currentTime = 0;
-            landmarkAudioRef.current.play().catch(e => console.warn("Audio play failed", e));
+          if (routeGenerationRef.current === currentGeneration) {
+            playArrivalSound(); // Play generated ding
+            if (landmarkAudioRef.current) {
+              landmarkAudioRef.current.currentTime = 0;
+              landmarkAudioRef.current.play().catch(e => console.warn("Audio play failed", e));
+            }
           }
 
           // 2. Hold shot - let viewer appreciate the landmark
@@ -1581,28 +1669,27 @@ export default function MapContainer({
               console.log('🎯 INITIAL_ANIMATION: Using fitBounds (autoFitBounds enabled)', {
                 bounds: markersBounds,
                 padding: config.autoFitPadding,
-                pitch: initialPitch,
-                bearing: config.defaultBearing,
-                viewMode: viewModeRef.current
+                pitch: initialPitch, // Should be 0 for Top view
+                bearing: config.defaultBearing, // Should be -20 or configured
+                duration: 6000 // Enforced slow duration
               });
 
               mapRef.current.fitBounds(markersBounds, {
                 padding: config.autoFitPadding,
                 pitch: initialPitch,
                 bearing: config.defaultBearing ?? 0,
-                duration: durationMs,
+                duration: 6000, // Enforced 6s for auto-fit path
                 essential: true,
                 maxZoom: config.defaultZoom // Don't zoom in more than defaultZoom
               });
             } else {
-              // Fallback to flyTo if no markers found
-              console.log('🎯 INITIAL_ANIMATION: No markers found, using flyTo fallback');
+              // Fallback if no markers
               mapRef.current.flyTo({
                 center: targetCenter,
                 zoom: config.defaultZoom,
                 pitch: initialPitch,
                 bearing: config.defaultBearing ?? 0,
-                duration: durationMs,
+                duration: 6000,
                 essential: true
               });
             }
@@ -1640,17 +1727,17 @@ export default function MapContainer({
             console.log('🏁 INITIAL_ANIMATION COMPLETE: Actual final camera position:', {
               center: [finalCenter.lng, finalCenter.lat],
               zoom: mapRef.current.getZoom(),
-              pitch: mapRef.current.getPitch(),
-              bearing: mapRef.current.getBearing()
             });
-
-            // Apply the real minZoom constraint AFTER animation completes
-            // This allows globe view start (zoom 0) but prevents users from zooming out past minZoom
-            if (!useMinZoomStart && config.minZoom > 0) {
-              console.log('🔒 Applying minZoom constraint after animation:', config.minZoom);
-              mapRef.current.setMinZoom(config.minZoom);
-            }
+            setIsInitialCameraAnimationComplete(true);
           });
+
+          // Apply the real minZoom constraint AFTER animation completes
+          // This allows globe view start (zoom 0) but prevents users from zooming out past minZoom
+          if (!useMinZoomStart && config.minZoom > 0) {
+            console.log('🔒 Applying minZoom constraint after animation:', config.minZoom);
+            mapRef.current.setMinZoom(config.minZoom);
+          }
+
 
           // Setup distance-based pan restriction after animation
           boundsSetupTimeoutRef.current = setTimeout(setupDistanceBounds, durationMs + 500);
@@ -2132,9 +2219,12 @@ export default function MapContainer({
 
       const nearbySource = mapRef.current.getSource(SOURCE_IDS.NEARBY_PLACES);
 
+      // SEQUENCE CONTROL: Hide until route animation completes
+      const effectiveNearbyGeoJSON = isRouteAnimationComplete ? nearbyGeoJSON : { type: 'FeatureCollection', features: [] };
+
       if (nearbySource) {
         // FAST PATH
-        nearbySource.setData(nearbyGeoJSON);
+        nearbySource.setData(effectiveNearbyGeoJSON);
       } else {
         // SLOW PATH
         mapRef.current.addSource(SOURCE_IDS.NEARBY_PLACES, {
@@ -2409,23 +2499,26 @@ export default function MapContainer({
       markersRef.current.forEach(marker => marker.remove());
       markersRef.current = [];
 
-      landmarks.forEach((landmark) => {
-        if (!landmark.icon) {
-          const marker = new mapboxgl.Marker()
-            .setLngLat(landmark.coordinates)
-            .addTo(mapRef.current);
+      // SEQUENCE CONTROL: Only add markers after animation
+      if (isRouteAnimationComplete) {
+        landmarks.forEach((landmark) => {
+          if (!landmark.icon) {
+            const marker = new mapboxgl.Marker()
+              .setLngLat(landmark.coordinates)
+              .addTo(mapRef.current);
 
-          marker.getElement().addEventListener('click', (e) => {
-            e.stopPropagation();
-            setSelectedLandmark(landmark);
-            setShowLandmarkCard(true);
-            if (clientBuilding) {
-              getDirections(landmark);
-            }
-          });
-          markersRef.current.push(marker);
-        }
-      });
+            marker.getElement().addEventListener('click', (e) => {
+              e.stopPropagation();
+              setSelectedLandmark(landmark);
+              setShowLandmarkCard(true);
+              if (clientBuilding) {
+                getDirections(landmark);
+              }
+            });
+            markersRef.current.push(marker);
+          }
+        });
+      }
 
       // 3. Add Nearby HTML Markers (for those without icons)
       nearbyPlaces.forEach((place) => {
@@ -2650,6 +2743,18 @@ export default function MapContainer({
   }, [getMapConfig, calculateAllMarkersBounds]);
 
   /**
+   * Keyboard Shortcuts
+   * Moved here to access resetCamera and handleCloseCard
+   */
+  useMapKeyboardShortcuts({
+    mapRef,
+    resetCamera: resetCamera,       // Use the main reset function (same as Recenter button)
+    setViewMode,
+    closeLandmarkCard: handleCloseCard, // Use main close handler (clears route too)
+    enabled: isMapLoaded && !isTourActive
+  });
+
+  /**
    * Expose functionality via refs or context if needed in future
    */
 
@@ -2662,7 +2767,7 @@ export default function MapContainer({
 
       {/* Cinematic Tour Controls */}
       {isTourActive && (
-        <div className="absolute top-24 right-6 z-40 flex flex-col items-end gap-2 animate-fade-in">
+        <div className="fixed top-24 right-6 z-40 flex flex-col items-end gap-2 animate-fade-in">
           <div className="bg-black/60 backdrop-blur-md text-white px-5 py-3 rounded-xl border border-white/10 shadow-2xl">
 
             <div className="flex items-center gap-2">
@@ -2687,7 +2792,7 @@ export default function MapContainer({
       )}
 
       {/* Top Right Controls Container */}
-      <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-40 flex flex-col items-end gap-3 pointer-events-none">
+      <div className="fixed top-3 right-3 sm:top-4 sm:right-4 z-40 flex flex-col items-end gap-3 pointer-events-none">
 
         {/* View Mode Toggle - Uses filter glass theme controls */}
         <div
@@ -2774,7 +2879,7 @@ export default function MapContainer({
 
       {/* Intro Button Overlay */}
       {showIntroButton && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all duration-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all duration-300">
           <button
             onClick={handleStartIntro}
             className="bg-white text-black px-8 py-3 rounded-full font-bold text-lg shadow-xl hover:scale-105 transition-transform flex items-center gap-2"
@@ -2785,109 +2890,51 @@ export default function MapContainer({
         </div>
       )}
 
-      {/* Compass Component */}
-      <Compass
-        bearing={currentBearing}
-        onResetNorth={() => {
-          if (mapRef.current) {
-            mapRef.current.easeTo({
-              bearing: 0,
-              duration: 500,
-              essential: true
-            });
-          }
-        }}
-        theme={theme}
-        isShifted={showLandmarkCard}
+      {/* Unified Map Controls - Manages Layout for Left, Right, and Card */}
+      <MapControlsContainer
+        leftControls={
+          <>
+            <FullScreenButton theme={theme} />
+            <RecenterButton onClick={resetCamera} theme={theme} />
+          </>
+        }
+        rightControls={
+          <>
+            <ChatContainer />
+            <Compass
+              bearing={currentBearing}
+              onResetNorth={() => {
+                if (mapRef.current) {
+                  mapRef.current.easeTo({
+                    bearing: 0,
+                    duration: 500,
+                    essential: true
+                  });
+                }
+              }}
+              theme={theme}
+            />
+          </>
+        }
+        card={
+          <LandmarkCard
+            landmark={selectedLandmark}
+            clientBuilding={clientBuilding}
+            onClose={handleCloseCard}
+            isVisible={showLandmarkCard}
+            theme={theme}
+            staticLayout={true} // Enforce Static Flow (Layout managed by MapControlsContainer)
+            className="z-30 w-full sm:w-auto sm:max-w-sm lg:max-w-md sm:ml-auto"
+          />
+        }
       />
 
-      {/* Recenter Button - Positioned above Compass, matching Compass styling */}
-      {(() => {
-        // Use same styling logic as Compass component
-        const isGlass = theme.filterGlassEnabled !== false;
-        const bgOpacity = isGlass ? (theme.filterGlassOpacity ?? 25) : (theme.filterTertiaryOpacity ?? 100);
-        const blur = theme.filterGlassBlur ?? 50;
-        const saturation = theme.filterGlassSaturation ?? 200;
-        const borderOpacity = theme.filterBorderOpacity ?? 35;
-        const bgColor = theme.filterTertiary || theme.tertiary || '#ffffff';
-        const textColor = theme.filterSecondary || theme.secondary || '#ffffff';
-
-        const hexToRgba = (hex, alpha) => {
-          if (!hex) return 'rgba(255,255,255,0.25)';
-          let c;
-          if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
-            c = hex.substring(1).split('');
-            if (c.length === 3) c = [c[0], c[0], c[1], c[1], c[2], c[2]];
-            c = '0x' + c.join('');
-            return `rgba(${(c >> 16) & 255}, ${(c >> 8) & 255}, ${c & 255}, ${alpha})`;
-          }
-          return hex;
-        };
-
-        const buttonStyle = {
-          backgroundColor: hexToRgba(bgColor, bgOpacity / 100),
-          borderColor: hexToRgba(bgColor, borderOpacity / 100),
-          ...(isGlass && {
-            backdropFilter: `blur(${blur}px) saturate(${saturation}%)`,
-            WebkitBackdropFilter: `blur(${blur}px) saturate(${saturation}%)`,
-          }),
-        };
-
-        return (
-          <button
-            onClick={resetCamera}
-            className={`recenter-button absolute left-2 sm:left-4 bottom-[72px] sm:bottom-8 z-30 group transition-all duration-300 ${showLandmarkCard ? 'opacity-0 pointer-events-none sm:opacity-100 sm:pointer-events-auto' : ''
-              }`}
-            title="Reset to default view"
-          >
-            <div
-              className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border shadow-lg flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl"
-              style={buttonStyle}
-            >
-              {/* Google Maps Navigation Pointer - Outline */}
-              <svg
-                className="w-5 h-5 sm:w-6 sm:h-6"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke={textColor}
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                {/* Navigation pointer shape - like paper airplane */}
-                <path d="M3 11L22 2L13 21L11 13L3 11Z" />
-              </svg>
-            </div>
-            {/* Tooltip on hover - appears on right since button is on left */}
-            <div
-              className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-lg"
-              style={{
-                backgroundColor: hexToRgba(bgColor, 80 / 100),
-                color: textColor,
-                ...(isGlass && {
-                  backdropFilter: `blur(${blur}px)`,
-                  WebkitBackdropFilter: `blur(${blur}px)`,
-                }),
-              }}
-            >
-              Re-center
-              <div
-                className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent"
-                style={{ borderRightColor: hexToRgba(bgColor, 80 / 100) }}
-              ></div>
-            </div>
-          </button>
-        );
-      })()}
-
-
-
-      <LandmarkCard
-        landmark={selectedLandmark}
-        clientBuilding={clientBuilding}
-        onClose={handleCloseCard}
-        isVisible={showLandmarkCard}
-        theme={theme}
+      {/* Outer Ring Road Animation - Main Driver of the Sequence */}
+      <RoadTracer
+        mapRef={mapRef}
+        isMapLoaded={isMapLoaded}
+        isActive={isMapLoaded && !isTourActive}
+        onAnimationComplete={handleRouteAnimationComplete}
       />
     </>
   );

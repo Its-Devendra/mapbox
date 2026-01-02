@@ -10,12 +10,12 @@ export default function ProjectLogo({ logo, width = 120, height = 40, padding = 
     const logoSrc = useMemo(() => bustCache(logo), [logo]);
 
     const positionClass = position === 'right'
-        ? 'right-2 sm:right-4'
-        : 'left-2 sm:left-3';
+        ? 'right-3 sm:right-4'
+        : 'left-3 sm:left-3'; // Update left-2 to left-3
 
-    // Calculate mobile sizes (50% of original)
-    const mobileWidth = Math.min(width * 0.5, 60);
-    const mobileHeight = Math.min(height * 0.5, 24);
+    // Calculate mobile sizes (85% of original for better visibility)
+    const mobileWidth = Math.min(width * 0.85, 120);
+    const mobileHeight = Math.min(height * 0.85, 40);
 
     const activeTheme = theme || {};
 
@@ -45,7 +45,7 @@ export default function ProjectLogo({ logo, width = 120, height = 40, padding = 
 
     return (
         <div
-            className={`${isPreview ? 'relative mx-auto mt-4' : `absolute top-2 sm:top-4 ${positionClass} z-10 pointer-events-none project-logo-container ${position}`}`}
+            className={`${isPreview ? 'relative mx-auto mt-4' : `fixed top-3 sm:top-4 ${positionClass} z-10 pointer-events-none project-logo-container ${position}`}`}
         >
             <div
                 className={`overflow-hidden shadow-lg flex items-center justify-center transition-all duration-300 ${radiusClass}`}

@@ -450,6 +450,7 @@ function MapPageContent() {
           clientBuilding={CLIENT_BUILDING}
           project={project}
           introAudio={project.introAudio}
+          arrivalAudio={project.arrivalAudio}
           projectTheme={projectTheme}
           mapSettings={mapSettings}
         />

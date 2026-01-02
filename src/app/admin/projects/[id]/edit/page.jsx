@@ -34,7 +34,8 @@ export default function EditProjectPage() {
     clientBuildingIcon: null,
     clientBuildingIconWidth: 40,
     clientBuildingIconHeight: 40,
-    introAudio: null
+    introAudio: null,
+    arrivalAudio: null
   });
 
   useEffect(() => {
@@ -65,7 +66,8 @@ export default function EditProjectPage() {
           clientBuildingIcon: project.clientBuildingIcon || null,
           clientBuildingIconWidth: project.clientBuildingIconWidth || 40,
           clientBuildingIconHeight: project.clientBuildingIconHeight || 40,
-          introAudio: project.introAudio || null
+          introAudio: project.introAudio || null,
+          arrivalAudio: project.arrivalAudio || null
         });
       } else {
         toast.error('Failed to load project');
@@ -414,6 +416,17 @@ export default function EditProjectPage() {
                 onUpload={(url) => setFormData({ ...formData, introAudio: url })}
                 theme={theme}
               />
+              <div className="mt-4">
+                <AudioUploader
+                  label="Arrival Audio (Optional)"
+                  currentAudio={formData.arrivalAudio}
+                  onUpload={(url) => setFormData({ ...formData, arrivalAudio: url })}
+                  theme={theme}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Plays when camera arrives at a landmark. If not provided, a default "Ding" sound is played.
+                </p>
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">

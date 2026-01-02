@@ -9,21 +9,56 @@ export default function LandmarkCard({
   onClose,
   isVisible,
   theme,
-  className = "fixed bottom-[80px] left-2 right-2 max-w-[calc(100vw-16px)] landscape:max-w-xs landscape:right-2 landscape:left-auto landscape:bottom-[70px] sm:left-auto sm:right-4 sm:bottom-20 sm:max-w-sm md:max-w-md"
+  staticLayout = false, // New prop to enable Flow Layout
+  className // Optional override
 }) {
   // Use provided theme or fallback to default
   const cardTheme = theme || {
-    primary: '#1e3a8a',
+    primary: '#0f172a',
     secondary: '#ffffff',
-    tertiary: '#64748b',
-    quaternary: '#f1f5f9'
+    tertiary: '#64748b'
   };
+
+  // Base Layout Classes (Positioning)
+  // Standard spacing: left-3/right-3 (12px). Desktop right-4.
+  // We remove these if staticLayout is true.
+  const fixedClasses = staticLayout
+    ? "w-full max-w-[calc(100vw-24px)] sm:w-auto" // Static width constraints
+    : "fixed bottom-[80px] left-3 right-3 max-w-[calc(100vw-24px)] landscape:max-w-xs landscape:right-3 landscape:left-auto landscape:bottom-[70px] sm:left-auto sm:right-4 sm:bottom-20 sm:max-w-sm md:max-w-md";
+
+  // If className is provided, use it. Otherwise construct from default logic.
+  const containerClassName = className || `${fixedClasses} z-30`;
+
 
   const [distance, setDistance] = useState(null);
   const [duration, setDuration] = useState(null);
   const [loading, setLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isTruncated, setIsTruncated] = useState(false);
+  const descriptionRef = React.useRef(null);
+
+  // Check for truncation whenever description changes or card becomes visible/collapsed
+  useEffect(() => {
+    const checkTruncation = () => {
+      if (descriptionRef.current && !isExpanded) {
+        // scrollHeight > clientHeight indicates text is clamped
+        // We only check when NOT expanded to ensure accurate clamped measurement
+        setIsTruncated(descriptionRef.current.scrollHeight > descriptionRef.current.clientHeight);
+      }
+    };
+
+    // Small delay to ensure render is complete
+    const timer = setTimeout(checkTruncation, 0);
+
+    // Check on resize too
+    window.addEventListener('resize', checkTruncation);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', checkTruncation);
+    };
+  }, [landmark?.description, isVisible, isExpanded]);
 
   // Animate in when becoming visible
   useEffect(() => {
@@ -108,7 +143,7 @@ export default function LandmarkCard({
 
   return (
     <div
-      className={`${className} z-20 w-full landmark-card-container`}
+      className={`${containerClassName} landmark-card-container`}
       style={{
         transform: isAnimating ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.97)',
         opacity: isAnimating ? 1 : 0,
@@ -184,11 +219,28 @@ export default function LandmarkCard({
               {landmark.title}
             </h2>
 
-            {/* Description - Light white text */}
+            {/* Description - Light white text with Read More */}
             {landmark.description && (
-              <p className="text-[11px] leading-snug mb-2.5 line-clamp-2 text-white/70">
-                {landmark.description}
-              </p>
+              <div className="mb-2.5">
+                <p
+                  ref={descriptionRef}
+                  className={`text-[11px] leading-snug text-white/70 ${!isExpanded ? 'line-clamp-2' : ''}`}
+                >
+                  {landmark.description}
+                </p>
+                {(isTruncated || isExpanded) && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsExpanded(!isExpanded);
+                    }}
+                    className="text-[10px] font-bold mt-1 hover:underline focus:outline-none"
+                    style={{ color: cardTheme.secondary }} // Use theme secondary (white) or primary
+                  >
+                    {isExpanded ? 'Read Less' : 'Read More'}
+                  </button>
+                )}
+              </div>
             )}
 
             {/* Stats Row */}

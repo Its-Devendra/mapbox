@@ -179,14 +179,8 @@ input[type="number"] {
     max-height: 36px !important;
   }
 
-  /* Landmark Card - full width on mobile, bottom position */
-  .landmark-card-container {
-    left: 12px !important;
-    right: 12px !important;
-    bottom: 70px !important;
-    max-width: calc(100% - 24px) !important;
-    width: auto !important;
-  }
+  /* Landmark Card - Layout handled by MapControlsContainer/React now */
+  /* .landmark-card-container styles removed to prevent compounding gaps */
 
   .landmark-card-container .card-content {
     padding: 14px !important;
@@ -359,27 +353,18 @@ input[type="number"] {
   }
 }
 
-/* Landscape mobile orientation */
+/* Landscape mobile orientation - Visual Tweaks Only (Layout handled by MapControlsContainer) */
 @media (max-height: 500px) and (orientation: landscape) {
-  .landmark-card-container {
-    left: auto !important;
-    right: 8px !important;
-    bottom: 8px !important;
-    max-width: 240px !important;
-    max-height: calc(100vh - 60px);
-    overflow-y: auto;
-  }
-
-  /* Make card content more compact */
+  /* Make card content more compact visually */
   .landmark-card-container .ios-glass-card {
     padding: 0 !important;
   }
 
   .landmark-card-container .hero-image,
   .landmark-card-container img {
-    width: 80px !important;
-    min-height: 90px !important;
     height: 90px !important;
+    min-height: 90px !important;
+    width: auto !important; /* Allow width to flow */
   }
 
   .landmark-card-container h2 {
@@ -417,12 +402,9 @@ input[type="number"] {
     height: 10px !important;
   }
 
+  /* Filter Bar - Adjust max width but respect layout */
   .filter-bar-container {
-    bottom: 8px !important;
-    left: 8px !important;
-    right: auto !important;
     max-width: calc(100vw - 260px) !important;
-    transform: none !important;
   }
 
   .filter-bar-container .filter-button {
@@ -430,46 +412,18 @@ input[type="number"] {
     font-size: 11px !important;
   }
 
-  /* Compass - smaller in landscape, stays on right */
-  .compass-container {
-    bottom: 8px !important;
-    right: 8px !important;
-  }
-
-  /* When landmark card is visible, compass shifts up above the card */
-  .compass-container.compass-shifted {
-    bottom: 140px !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
-  }
-  
-  .compass-container button {
-    width: 36px !important;
-    height: 36px !important;
-  }
-  
-  .compass-container .compass-needle {
-    width: 20px !important;
-    height: 20px !important;
-  }
+  /* Compass Visual Adjustment - Rely on React props */
+  /* Compass sizing handled by component props now */
   
   .compass-container .compass-label {
     font-size: 5px !important;
   }
 
-  /* Recenter button - smaller in landscape */
-  .recenter-button {
-    bottom: 50px !important;
-  }
-  
-  .recenter-button > div {
-    width: 32px !important;
-    height: 32px !important;
-  }
-  
+  /* Recenter button Visual Adjustment - Rely on React props */
   .recenter-button svg {
-    width: 14px !important;
-    height: 14px !important;
+    /* Keep svg small if needed, but container size is handled by React */
+    /* width: 14px !important; */
+    /* height: 14px !important; */
   }
 
   /* View mode toggle - smaller in landscape */

@@ -12,6 +12,9 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.750.0",
     "@prisma/client": "^6.16.2",
+    "@turf/length": "^7.3.1",
+    "@turf/line-slice-along": "^7.3.1",
+    "@turf/turf": "^7.3.1",
     "bcryptjs": "^3.0.3",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.554.0",
