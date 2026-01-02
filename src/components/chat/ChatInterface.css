@@ -26,7 +26,7 @@
     flex-shrink: 0;
 }
 
-.chat-header > div:first-child {
+.chat-header>div:first-child {
     flex: 1;
     min-width: 0;
 }
@@ -191,7 +191,8 @@
 .chat-input:focus {
     border-color: var(--chat-primary-color, #3b82f6);
     background: white;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1); /* Note: shadow color isn't strictly following the var here, tricky to do with hex var */
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    /* Note: shadow color isn't strictly following the var here, tricky to do with hex var */
 }
 
 .icon-button {
@@ -226,7 +227,8 @@
 }
 
 .send-button:hover {
-    filter: brightness(0.9); /* Replaces specific blue darken */
+    filter: brightness(0.9);
+    /* Replaces specific blue darken */
     color: white;
 }
 
@@ -273,9 +275,11 @@
 
 /* Chat Button (Floating) - Positioned to be part of right column stack */
 .chat-floating-button {
-    position: relative; /* Changed from fixed to relative for flex container */
+    position: relative;
+    /* Changed from fixed to relative for flex container */
     /* Remove bottom/right as container handles positioning */
-    width: 48px;  /* Match recenter: w-12 = 48px */
+    width: 48px;
+    /* Match recenter: w-12 = 48px */
     height: 48px;
     border-radius: 50%;
     background: var(--chat-primary-color, linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%));
@@ -288,12 +292,14 @@
     justify-content: center;
     transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 35;
-    flex-shrink: 0; /* Prevent shrinking in flex container */
+    flex-shrink: 0;
+    /* Prevent shrinking in flex container */
 }
 
 @media (min-width: 640px) {
     .chat-floating-button {
-        width: 48px;  /* Consistent size desktop */
+        width: 48px;
+        /* Consistent size desktop */
         height: 48px;
     }
 }
@@ -310,7 +316,8 @@
 /* Chat Widget Container */
 .chat-widget-container {
     position: fixed;
-    bottom: 200px; /* Above button at 140px + gap */
+    bottom: 200px;
+    /* Above button at 140px + gap */
     right: 12px;
     width: 320px;
     height: 450px;

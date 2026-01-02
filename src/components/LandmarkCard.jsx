@@ -24,7 +24,7 @@ export default function LandmarkCard({
   // We remove these if staticLayout is true.
   const fixedClasses = staticLayout
     ? "w-full max-w-[calc(100vw-24px)] sm:w-auto" // Static width constraints
-    : "fixed bottom-[80px] left-3 right-3 max-w-[calc(100vw-24px)] landscape:max-w-xs landscape:right-3 landscape:left-auto landscape:bottom-[70px] sm:left-auto sm:right-4 sm:bottom-20 sm:max-w-sm md:max-w-md";
+    : "fixed bottom-[80px] left-3 right-auto max-w-[calc(100vw-24px)] landscape:max-w-xs landscape:left-3 landscape:right-auto landscape:bottom-[70px] sm:left-4 sm:right-auto sm:bottom-20 sm:max-w-sm md:max-w-md";
 
   // If className is provided, use it. Otherwise construct from default logic.
   const containerClassName = className || `${fixedClasses} z-30`;

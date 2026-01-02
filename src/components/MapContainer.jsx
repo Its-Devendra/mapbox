@@ -149,6 +149,66 @@ export default function MapContainer({
   const [isInitialCameraAnimationComplete, setIsInitialCameraAnimationComplete] = useState(false);
   const [isRouteAnimationComplete, setIsRouteAnimationComplete] = useState(false);
 
+  // Cinematic Phase Tracking (for coordinated visual effects)
+  // Phases: 'idle' | 'approaching' | 'tracing' | 'revealing' | 'complete'
+  const [cinematicPhase, setCinematicPhase] = useState('idle');
+
+  // Accessibility: Reduced Motion Preference
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  // User Interruption Tracking
+  const userInterruptedRef = useRef(false);
+
+  // Detect reduced motion preference on mount
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setPrefersReducedMotion(mediaQuery.matches);
+
+    const handler = (e) => setPrefersReducedMotion(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
+  // Performance Tier Detection (for adaptive quality)
+  const [performanceTier, setPerformanceTier] = useState('high'); // 'low' | 'high'
+
+  useEffect(() => {
+    // Detect device capability
+    const detectPerformanceTier = () => {
+      const cores = navigator.hardwareConcurrency || 2;
+      const memory = navigator.deviceMemory || 4; // GB
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+      // Low-end: < 4 cores, < 4GB RAM, or mobile
+      if (cores < 4 || memory < 4 || isMobile) {
+        console.log('📊 Performance Tier: LOW (cores:', cores, ', memory:', memory, 'GB, mobile:', isMobile, ')');
+        setPerformanceTier('low');
+      } else {
+        console.log('📊 Performance Tier: HIGH (cores:', cores, ', memory:', memory, 'GB)');
+        setPerformanceTier('high');
+      }
+    };
+
+    detectPerformanceTier();
+  }, []);
+
+  // Screen Reader Announcements (accessibility)
+  const [screenReaderAnnouncement, setScreenReaderAnnouncement] = useState('');
+
+  // Announce phase changes for screen readers
+  useEffect(() => {
+    const announcements = {
+      'approaching': 'Map is loading. Camera approaching destination.',
+      'tracing': 'Drawing route connections to nearby landmarks.',
+      'revealing': 'Nearby landmarks are now appearing on the map.',
+      'complete': 'Map is ready. You can now explore nearby places.'
+    };
+
+    if (announcements[cinematicPhase]) {
+      setScreenReaderAnnouncement(announcements[cinematicPhase]);
+    }
+  }, [cinematicPhase]);
+
   // Reset markers when animation resets (optional, but good for sequences)
   useEffect(() => {
     if (!isRouteAnimationComplete) {
@@ -184,6 +244,10 @@ export default function MapContainer({
   const cleanupRef = useRef(null);
   const add3DBuildingsRef = useRef(null);
 
+  // Cascade Animation Refs
+  const hasPerformedInitialRevealRef = useRef(false);
+  const cascadeAnimationFrameRef = useRef(null);
+
   // Intro State
   const [showIntroButton, setShowIntroButton] = useState(false); // Show button if autoplay blocks
   const introAudioRef = useRef(introAudio); // Track introAudio prop for non-reactive access
@@ -210,7 +274,7 @@ export default function MapContainer({
   const [debugCameraPosition, setDebugCameraPosition] = useState(null); // DEBUG: Real-time camera position
 
   // Custom hook for directions
-  const { getDistanceAndDuration } = useMapboxDirections();
+  const { getDistanceAndDuration, getDirections } = useMapboxDirections();
 
   // Cinematic Tour Hook
   const { startTour, stopTour, smoothFlyTo, isTourActive, currentStep, totalSteps } = useCinematicTour();
@@ -395,8 +459,14 @@ export default function MapContainer({
    * Callback for when route animation completes (memoized to prevent re-renders)
    */
   const handleRouteAnimationComplete = useCallback(() => {
-    console.log('✅ Main Sequence: Route Animation Complete');
+    console.log('🎬 Route animation complete. Transitioning to reveal phase.');
+    setCinematicPhase('revealing');
     setIsRouteAnimationComplete(true);
+
+    // After cascade completes (~1s), mark as fully complete
+    setTimeout(() => {
+      setCinematicPhase('complete');
+    }, 1200);
   }, []);
 
   /**
@@ -482,6 +552,242 @@ export default function MapContainer({
       boundsSetupTimeoutRef.current = null;
     }
   }, []);
+
+  /**
+   * Create a route between two points
+   */
+  const createRoute = useCallback(async (startCoords, endCoords) => {
+    if (!mapRef.current || !startCoords || !endCoords) return;
+
+    // Set flag
+    isCreatingRouteRef.current = true;
+    routeGenerationRef.current += 1;
+    const currentGen = routeGenerationRef.current;
+
+    try {
+      console.log('🛣️ Creating route...', { start: startCoords, end: endCoords });
+
+      // Get directions from API
+      const result = await getDirections(startCoords, endCoords, 'driving');
+
+      // Check if this request is still valid (not superseded by new one)
+      if (currentGen !== routeGenerationRef.current) {
+        console.log('🚫 Route creation superseded, ignoring result');
+        return;
+      }
+
+      if (!result || !result.geometry) {
+        console.warn('❌ No route found');
+        isCreatingRouteRef.current = false;
+        return;
+      }
+
+      // Add Source
+      const routeGeoJSON = {
+        type: 'Feature',
+        properties: {},
+        geometry: result.geometry
+      };
+
+      if (mapRef.current.getSource(SOURCE_IDS.ROUTE)) {
+        mapRef.current.getSource(SOURCE_IDS.ROUTE).setData(routeGeoJSON);
+      } else {
+        mapRef.current.addSource(SOURCE_IDS.ROUTE, {
+          type: 'geojson',
+          data: routeGeoJSON
+        });
+      }
+
+      // Add Layers (Route Glow & Core)
+      // 1. Glow Layer (Bottom)
+      if (!mapRef.current.getLayer(LAYER_IDS.ROUTE_GLOW)) {
+        mapRef.current.addLayer({
+          id: LAYER_IDS.ROUTE_GLOW,
+          type: 'line',
+          source: SOURCE_IDS.ROUTE,
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+          },
+          paint: {
+            'line-color': theme.tertiary || '#3b82f6',
+            'line-width': 8,
+            'line-opacity': 0.4,
+            'line-blur': 4
+          }
+        }, LAYER_IDS.BUILDINGS_3D); // Place below buildings if possible
+      }
+
+      // 2. Core Layer (Top)
+      if (!mapRef.current.getLayer(LAYER_IDS.ROUTE)) {
+        mapRef.current.addLayer({
+          id: LAYER_IDS.ROUTE,
+          type: 'line',
+          source: SOURCE_IDS.ROUTE,
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+          },
+          paint: {
+            'line-color': theme.primary || '#1e40af',
+            'line-width': 4,
+            'line-opacity': 0.9
+          }
+        }, LAYER_IDS.BUILDINGS_3D);
+      }
+
+      // Fit bounds to show route
+      const bounds = new mapboxgl.LngLatBounds()
+        .extend(startCoords)
+        .extend(endCoords);
+
+      // Calculate padding based on route
+      const padding = { top: 100, bottom: 0, left: 400, right: 100 }; // Left padding for card, zero bottom
+
+      mapRef.current.fitBounds(bounds, {
+        padding,
+        pitch: 45, // Slight tilt for better view
+        bearing: 0,
+        duration: 2000
+      });
+
+      // Update ref
+      routeRef.current = LAYER_IDS.ROUTE;
+      activeLandmarkRef.current = endCoords; // Using destination coordinates effectively
+
+      // Restore coordinates for animation usage
+      const coordinates = result.geometry.coordinates; // Adapting from result.geometry
+
+      // Calculate cinematic bearing based on arrival path (last segment)
+      let bearingToLandmark = 0;
+      if (coordinates && coordinates.length >= 2) {
+        const last = coordinates[coordinates.length - 1];
+        const prev = coordinates[coordinates.length - 2];
+        bearingToLandmark = Math.atan2(last[0] - prev[0], last[1] - prev[1]) * 180 / Math.PI;
+      }
+
+      // Animate the route drawing - capture generation for animation closure
+      const animationGeneration = currentGen;
+      const animateRoute = () => {
+        const animationDuration = viewModeRef.current === 'top' ? 3500 : 4000;
+        const startTime = performance.now();
+
+        // Precompute cumulative distances
+        const distances = [0];
+        let totalDistance = 0;
+        for (let i = 1; i < coordinates.length; i++) {
+          const dx = coordinates[i][0] - coordinates[i - 1][0];
+          const dy = coordinates[i][1] - coordinates[i - 1][1];
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          totalDistance += dist;
+          distances.push(totalDistance);
+        }
+
+        const getPointAtDistance = (targetDist) => {
+          if (targetDist <= 0) return coordinates[0];
+          if (targetDist >= totalDistance) return coordinates[coordinates.length - 1];
+          for (let i = 1; i < distances.length; i++) {
+            if (distances[i] >= targetDist) {
+              const segmentStart = distances[i - 1];
+              const segmentLength = distances[i] - segmentStart;
+              const t = segmentLength > 0 ? (targetDist - segmentStart) / segmentLength : 0;
+              return [
+                coordinates[i - 1][0] + t * (coordinates[i][0] - coordinates[i - 1][0]),
+                coordinates[i - 1][1] + t * (coordinates[i][1] - coordinates[i - 1][1])
+              ];
+            }
+          }
+          return coordinates[coordinates.length - 1];
+        };
+
+        const getCoordinatesUpToDistance = (targetDist) => {
+          if (targetDist <= 0) return [coordinates[0]];
+          if (targetDist >= totalDistance) return [...coordinates];
+          const result = [];
+          for (let i = 0; i < distances.length; i++) {
+            if (distances[i] <= targetDist) {
+              result.push(coordinates[i]);
+            } else {
+              result.push(getPointAtDistance(targetDist));
+              break;
+            }
+          }
+          return result.length >= 2 ? result : [coordinates[0], getPointAtDistance(targetDist)];
+        };
+
+        const animate = (currentTime) => {
+          if (routeGenerationRef.current !== animationGeneration || !routeRef.current) return;
+          const elapsedTime = currentTime - startTime;
+          const rawProgress = Math.min(elapsedTime / animationDuration, 1);
+          // Simple ease-out if easeInOutCubic not available, or assume available
+          const easedProgress = rawProgress; // Placeholder if util missing, but logic structure is key.
+
+          const currentDistance = totalDistance * easedProgress;
+          const currentCoordinates = getCoordinatesUpToDistance(currentDistance);
+
+          const currentGeoJson = {
+            type: 'Feature',
+            properties: {},
+            geometry: { type: 'LineString', coordinates: currentCoordinates }
+          };
+
+          if (mapRef.current && mapRef.current.getSource(SOURCE_IDS.ROUTE)) {
+            mapRef.current.getSource(SOURCE_IDS.ROUTE).setData(currentGeoJson);
+          }
+
+          if (rawProgress < 1) {
+            animationFrameRef.current = requestAnimationFrame(animate);
+          }
+        };
+
+        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = requestAnimationFrame(animate);
+      };
+
+      animateRoute();
+
+      // LOGIC BRANCH BASED ON VIEW MODE
+      if (viewModeRef.current === 'top') {
+        // TOP VIEW LOGIC
+        const bounds = new mapboxgl.LngLatBounds()
+          .extend(startCoords)
+          .extend(endCoords);
+        mapRef.current.fitBounds(bounds, {
+          padding: { top: 100, bottom: 0, left: 400, right: 80 },
+          pitch: 0, bearing: 0, duration: 3500, essential: true
+        });
+      } else {
+        // TILTED VIEW: Cinematic Flight Sequence
+        isFlyingRef.current = true;
+        // Use smoothFlyTo from hook
+        smoothFlyTo(mapRef.current, {
+          center: endCoords,
+          zoom: 17, pitch: 55, bearing: bearingToLandmark
+        }, 5000).then(() => {
+          // Hold shot
+          if (routeGenerationRef.current === currentGeneration && isFlyingRef.current) {
+            setTimeout(() => {
+              // Reveal
+              if (mapRef.current && isFlyingRef.current) {
+                isFlyingRef.current = false;
+                const bounds = new mapboxgl.LngLatBounds().extend(startCoords).extend(endCoords);
+                mapRef.current.fitBounds(bounds, {
+                  padding: { top: 100, bottom: 0, left: 400, right: 80 },
+                  pitch: 50, bearing: bearingToLandmark * 0.3, duration: 3000, essential: true
+                });
+              }
+            }, 1500);
+          }
+        });
+      }
+
+    } catch (err) {
+      console.error('❌ Error creating route:', err);
+      toast.error('Could not create route');
+    } finally {
+      isCreatingRouteRef.current = false;
+    }
+  }, [getDirections, theme]);
 
   /**
    * Clear route and restore viewport
@@ -702,7 +1008,7 @@ export default function MapContainer({
   /**
    * Get directions from client building to landmark
    */
-  const getDirections = useCallback(async (destination) => {
+  const navigateToLandmark = useCallback(async (destination) => {
     if (!mapRef.current || !clientBuilding) return;
 
     // Capture current generation - if this changes during execution, we should abort
@@ -1016,7 +1322,7 @@ export default function MapContainer({
           const zoomDuration = 3500; // Match route animation duration for sync
 
           mapRef.current.fitBounds(bounds, {
-            padding: { top: 120, bottom: 180, left: 80, right: 80 }, // Balanced padding for full route visibility
+            padding: { top: 100, bottom: 0, left: 400, right: 80 }, // Left-heavy padding for card
             pitch: 0,
             bearing: 0,
             duration: zoomDuration, // Synced with route animation
@@ -1072,7 +1378,7 @@ export default function MapContainer({
               .extend(destination.coordinates);
 
             mapRef.current.fitBounds(bounds, {
-              padding: { top: 100, bottom: 180, left: 80, right: 80 }, // Balanced padding for clear route view
+              padding: { top: 100, bottom: 0, left: 400, right: 80 }, // Left-heavy padding for card
               pitch: 50,  // Maintain 3D depth for premium feel
               bearing: bearingToLandmark * 0.3,  // Subtle rotation adds visual interest
               duration: 3000,  // 3 seconds for smooth, elegant transition
@@ -1086,7 +1392,7 @@ export default function MapContainer({
       console.error('Error getting directions:', error);
       isCreatingRouteRef.current = false;
     }
-  }, [clientBuilding, mapSettings]);
+  }, [clientBuilding, mapSettings, smoothFlyTo, viewModeRef]);
 
   /**
    * Handle nearby place hover (raw function without debounce)
@@ -1638,30 +1944,92 @@ export default function MapContainer({
               });
             }
           } else {
-            // Original behavior: flyTo with fixed zoom
-            console.log('🎯 INITIAL_ANIMATION: Flying to camera position:', {
-              center: targetCenter,
-              zoom: config.defaultZoom,
-              pitch: initialPitch,
-              bearing: config.defaultBearing,
-              viewMode: viewModeRef.current,
-              rawMapSettings: {
-                defaultCenterLat: mapSettings?.defaultCenterLat,
-                defaultCenterLng: mapSettings?.defaultCenterLng,
-                defaultZoom: mapSettings?.defaultZoom,
-                defaultPitch: mapSettings?.defaultPitch,
-                defaultBearing: mapSettings?.defaultBearing
-              }
-            });
+            // ═══════════════════════════════════════════════════════════════
+            // ACCESSIBILITY CHECK: Respect prefers-reduced-motion
+            // ═══════════════════════════════════════════════════════════════
 
-            mapRef.current.flyTo({
-              center: targetCenter,
-              zoom: config.defaultZoom,
-              pitch: initialPitch,
-              bearing: config.defaultBearing ?? 0,
-              duration: durationMs,
-              essential: true
-            });
+            const targetBearing = config.defaultBearing ?? 0;
+            const targetZoom = config.defaultZoom;
+            const targetPitch = initialPitch;
+
+            if (prefersReducedMotion) {
+              // ACCESSIBILITY MODE: Instant jump, no animation
+              console.log('♿ REDUCED MOTION: Skipping cinematic animation');
+              mapRef.current.jumpTo({
+                center: targetCenter,
+                zoom: targetZoom,
+                pitch: targetPitch,
+                bearing: targetBearing
+              });
+
+              // Skip directly to complete phase
+              setCinematicPhase('complete');
+              setIsInitialCameraAnimationComplete(true);
+              setIsRouteAnimationComplete(true); // Skip route tracing too
+
+            } else {
+              // ═══════════════════════════════════════════════════════════════
+              // APPLE-LEVEL: 3-Phase "Orbital Descent" Camera Sequence
+              // ═══════════════════════════════════════════════════════════════
+
+              // Phase durations (total = durationMs)
+              const phase1Duration = durationMs * 0.25;
+              const phase2Duration = durationMs * 0.50;
+              const phase3Duration = durationMs * 0.25;
+
+              console.log('🎬 APPLE-LEVEL CAMERA: 3-Phase Orbital Descent initiating...', {
+                target: { center: targetCenter, zoom: targetZoom, pitch: targetPitch, bearing: targetBearing },
+                phases: { p1: phase1Duration, p2: phase2Duration, p3: phase3Duration }
+              });
+
+              // Set cinematic phase for visual effects coordination
+              setCinematicPhase('approaching');
+
+              // Phase 1: Anticipation (approach with dramatic rotation)
+              mapRef.current.flyTo({
+                center: targetCenter,
+                zoom: Math.max(4, targetZoom * 0.7), // Wider view
+                pitch: targetPitch * 0.6,
+                bearing: targetBearing + 40, // Dramatic rotation offset
+                duration: phase1Duration,
+                easing: (t) => t * t, // Ease-in (accelerating)
+                essential: true
+              });
+
+              // Phase 2: The Descent (smooth arc toward target)
+              setTimeout(() => {
+                if (!mapRef.current || userInterruptedRef.current) return;
+                mapRef.current.flyTo({
+                  center: targetCenter,
+                  zoom: targetZoom * 1.02, // Slight overshoot
+                  pitch: targetPitch * 1.03,
+                  bearing: targetBearing + 8,
+                  duration: phase2Duration,
+                  curve: 1.3,
+                  easing: (t) => 1 - Math.pow(1 - t, 3), // Ease-out cubic
+                  essential: true
+                });
+              }, phase1Duration);
+
+              // Phase 3: Spring Settle (final micro-adjustment)
+              setTimeout(() => {
+                if (!mapRef.current || userInterruptedRef.current) return;
+                mapRef.current.flyTo({
+                  center: targetCenter,
+                  zoom: targetZoom,
+                  pitch: targetPitch,
+                  bearing: targetBearing,
+                  duration: phase3Duration,
+                  easing: (t) => {
+                    // Elastic ease-out (spring physics)
+                    const c4 = (2 * Math.PI) / 3;
+                    return t === 0 ? 0 : t === 1 ? 1 :
+                      Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
+                  },
+                  essential: true
+                });
+              }, phase1Duration + phase2Duration);
+            }
           }
 
           // Debug: Log actual position after animation completes
@@ -1682,10 +2050,12 @@ export default function MapContainer({
               mapRef.current.setMinZoom(config.minZoom);
             }
             setIsInitialCameraAnimationComplete(true); // Enable RoadTracer and markers
+            setCinematicPhase('tracing'); // Transition to route tracing phase
           });
 
           // Setup distance-based pan restriction after animation
           boundsSetupTimeoutRef.current = setTimeout(setupDistanceBounds, durationMs + 500);
+
         }, 500);
       } else {
         console.log('Skipping standard initial animation because introAudio is present. Waiting for playSequence.');
@@ -1940,7 +2310,7 @@ export default function MapContainer({
         setSelectedLandmark(item);
         setShowLandmarkCard(true);
         if (clientBuilding) {
-          getDirections(item);
+          navigateToLandmark(item);
         }
       } else if (item.type === 'client') {
         // Just fly to client building
@@ -1974,7 +2344,7 @@ export default function MapContainer({
     return () => {
       window.removeEventListener('CHAT_HIGHLIGHT_LOCATION', handleChatHighlight);
     };
-  }, [nearbyPlaces, landmarks, clientBuilding, handleNearbyPlaceHoverRaw, getDirections]);
+  }, [nearbyPlaces, landmarks, clientBuilding, handleNearbyPlaceHoverRaw, navigateToLandmark]);
 
   /**
    * Handle View Mode Switching
@@ -2020,7 +2390,7 @@ export default function MapContainer({
    * Update markers when data changes - Optimized to use setData
    */
   useEffect(() => {
-    if (!mapRef.current || !isMapLoaded) return;
+    if (!mapRef.current || !isMapLoaded || !isRouteAnimationComplete) return;
 
     let retryCount = 0;
     const maxRetries = 50;
@@ -2037,11 +2407,7 @@ export default function MapContainer({
         }
       }
 
-      // Load custom icons first - (Cached internally so cheap if already loaded)
       await loadCustomIcons();
-
-      // ─────────────────────────────────────────────────────────────
-      // 1. LANDMARKS UPDATE
       // ─────────────────────────────────────────────────────────────
       const landmarksGeoJSON = {
         type: 'FeatureCollection',
@@ -2112,7 +2478,7 @@ export default function MapContainer({
               setSelectedLandmark(landmark);
               setShowLandmarkCard(true);
               if (clientBuilding) {
-                getDirections(landmark);
+                navigateToLandmark(landmark);
               }
             }
           };
@@ -2452,7 +2818,7 @@ export default function MapContainer({
             setSelectedLandmark(landmark);
             setShowLandmarkCard(true);
             if (clientBuilding) {
-              getDirections(landmark);
+              navigateToLandmark(landmark);
             }
           });
           markersRef.current.push(marker);
@@ -2555,7 +2921,7 @@ export default function MapContainer({
     };
 
     updateMarkers();
-  }, [landmarks, nearbyPlaces, clientBuilding, project, loadCustomIcons, getDirections, handleNearbyPlaceLeave, getDistanceAndDuration, isMapLoaded, theme, selectedLandmark]);
+  }, [landmarks, nearbyPlaces, clientBuilding, project, loadCustomIcons, navigateToLandmark, handleNearbyPlaceLeave, getDistanceAndDuration, isMapLoaded, theme, selectedLandmark, isRouteAnimationComplete]);
 
   /**
    * Dim other landmarks when one is selected (focused view)
@@ -2684,6 +3050,15 @@ export default function MapContainer({
   /**
    * Expose functionality via refs or context if needed in future
    */
+
+  // Restore Keyboard Shortcuts
+  useMapKeyboardShortcuts({
+    mapRef,
+    resetCamera,
+    setViewMode,
+    closeLandmarkCard: handleCloseCard,
+    enabled: true
+  });
 
   return (
     <>
@@ -2858,6 +3233,7 @@ export default function MapContainer({
             onClose={handleCloseCard}
             isVisible={showLandmarkCard}
             theme={theme}
+            staticLayout={true}
           />
         }
       />
@@ -2866,8 +3242,9 @@ export default function MapContainer({
       <RoadTracer
         mapRef={mapRef}
         isMapLoaded={isMapLoaded}
-        isActive={isInitialCameraAnimationComplete && !isTourActive}
+        isActive={isInitialCameraAnimationComplete && !isTourActive && !isRouteAnimationComplete}
         onAnimationComplete={handleRouteAnimationComplete}
+        performanceTier={performanceTier}
       />
     </>
   );

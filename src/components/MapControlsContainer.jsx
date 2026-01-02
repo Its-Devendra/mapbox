@@ -30,42 +30,34 @@ export default function MapControlsContainer({
     card
 }) {
     return (
-        <div className="fixed inset-x-3 bottom-[64px] [@media(max-height:500px)_and_(orientation:landscape)]:bottom-[20px] sm:inset-x-4 z-40 pointer-events-none flex flex-col justify-end">
-            {/* Unified Dynamic Stack (Bottom-Up) 
-                - Mobile: items-stretch (Card is Full Width).
-                - Desktop: items-stretch (Card manages its own alignment via ml-auto).
-            */}
-            <div className="flex flex-col-reverse w-full">
+        <div className="fixed inset-x-3 bottom-[64px] [@media(max-height:500px)_and_(orientation:landscape)]:bottom-[20px] sm:inset-x-4 z-40 pointer-events-none flex flex-col sm:flex-row items-end justify-between">
 
-                {/* 1. Landmark Card (The Driver) 
-                    - Sits at the very bottom of the stack.
-                    - Mobile: Full Width (stretched by default).
-                    - Desktop: Auto width, Right Aligned via ml-auto on Card.
-                */}
+            {/* LEFT COLUMN: Controls + Card Stack 
+                - Uses flex-col-reverse so Card is at bottom, Controls stack on top.
+                - Card pushes Left Controls up. 
+            */}
+            <div className="flex flex-col-reverse items-start gap-3 pointer-events-none max-w-full sm:max-w-md">
+
+                {/* 1. Landmark Card (Bottom) */}
                 <div className="pointer-events-auto w-full sm:w-auto transition-all duration-300">
                     {card}
                 </div>
 
-                {/* 2. Controls Row (Sits on top of Card) */}
-                <div className="flex justify-between items-end w-full pb-3 transition-all duration-300">
-
-                    {/* Left Controls Group 
-                        - Mobile: Static (Inside Flex). Pushed up by Card.
-                        - Desktop: Fixed (Breakout). Pins to bottom-left.
-                    */}
-                    <div className="pointer-events-auto flex flex-col gap-3 items-start sm:fixed sm:bottom-[80px] sm:left-4">
-                        {leftControls}
-                    </div>
-
-                    {/* Right Controls Group 
-                        - ml-auto ensures it stays Right even if Left Group is fixed (Desktop).
-                    */}
-                    <div className="pointer-events-auto flex flex-col gap-3 items-end ml-auto">
-                        {rightControls}
-                    </div>
+                {/* 2. Left Controls (Top of Stack) */}
+                <div className="pointer-events-auto flex flex-col gap-3 items-start sm:pl-1">
+                    {leftControls}
                 </div>
-
             </div>
+
+            {/* RIGHT COLUMN: Right Controls 
+                - Independent stack.
+                - Fixed to bottom-right (via flex justify-between of parent).
+                - NOT affected by Card heigth changes.
+            */}
+            <div className="pointer-events-auto flex flex-col gap-3 items-end pb-3">
+                {rightControls}
+            </div>
+
         </div>
     );
 }

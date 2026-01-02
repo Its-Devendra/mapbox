@@ -298,6 +298,16 @@ export default function RoadTracer({
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }
+
+            // Clean up layers and source
+            if (mapRef.current) {
+                if (mapRef.current.getLayer(ANIMATION_LAYER_ID)) mapRef.current.removeLayer(ANIMATION_LAYER_ID);
+                if (mapRef.current.getLayer(GLOW_LAYER_ID)) mapRef.current.removeLayer(GLOW_LAYER_ID);
+                if (mapRef.current.getSource(SOURCE_ID)) mapRef.current.removeSource(SOURCE_ID);
+            }
+
+            isAnimatingRef.current = false;
+            layersAddedRef.current = false;
         };
 
     }, [isMapLoaded, isActive, animationMode, duration, onAnimationComplete]);
