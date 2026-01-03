@@ -143,11 +143,18 @@ export default function LandmarkCard({
 
   return (
     <div
-      className={`${containerClassName} landmark-card-container`}
+      className={`${containerClassName} landmark-card-container gpu-accelerated`}
       style={{
-        transform: isAnimating ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.97)',
+        transform: isAnimating
+          ? 'translateY(0) scale(1) rotate(0deg)'
+          : 'translateY(20px) scale(0.95) rotate(-1deg)',
         opacity: isAnimating ? 1 : 0,
-        transition: 'transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease-out',
+        // Apple-quality spring transition with subtle organic rotation
+        transition: `
+          transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+          opacity 0.3s cubic-bezier(0, 0, 0.2, 1)
+        `,
+        willChange: 'transform, opacity',
       }}
     >
       <style jsx>{`
@@ -167,18 +174,28 @@ export default function LandmarkCard({
           boxShadow: '0 4px 24px rgba(0, 0, 0, 0.15)',
         }}
       >
-        {/* Close button */}
+        {/* Close button with Apple press physics */}
         <button
           onClick={onClose}
-          className="absolute top-2 right-2 z-20 w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer"
+          className="absolute top-2 right-2 z-20 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer apple-interactive"
           style={{
-            color: '#ffffff'
+            color: '#ffffff',
+            backgroundColor: 'rgba(0, 0, 0, 0.2)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            transition: `
+              transform 0.15s cubic-bezier(0.22, 1.0, 0.36, 1.0),
+              background-color 0.2s ease-out,
+              box-shadow 0.2s ease-out
+            `,
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
+            e.currentTarget.style.boxShadow = '0 0 12px rgba(255, 255, 255, 0.15)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.25)';
+            e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+            e.currentTarget.style.boxShadow = 'none';
           }}
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

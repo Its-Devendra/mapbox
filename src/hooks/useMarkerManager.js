@@ -122,87 +122,94 @@ export function useMarkerManager({
     }, [nearbyPlaces, activeFilter]);
 
     /**
-     * Update landmark markers on the map
+     * Update landmark markers on the map using DOM Markers
+     * This allows for CSS animations and premium interactions
      */
     const updateLandmarkMarkers = useCallback(async () => {
         if (!mapRef?.current || !isMapLoaded) return;
 
         const map = mapRef.current;
-        if (!map.isStyleLoaded()) return;
+        // if (!map.isStyleLoaded()) return; // DOM markers don't strictly need style loaded, but good practice
 
-        await loadCustomIcons?.();
+        // Clear existing landmark markers first
+        markersRef.current.forEach(marker => marker.remove());
+        markersRef.current = [];
 
-        const landmarksGeoJSON = createLandmarksGeoJSON();
-        const landmarkSource = map.getSource(SOURCE_IDS.LANDMARKS);
+        // We don't need to load custom icons into the map sprite for DOM markers, 
+        // but we might need to ensure they are available as URLs.
+        // Assuming landmark.icon is a URL.
 
-        if (landmarkSource) {
-            landmarkSource.setData(landmarksGeoJSON);
-        } else if (landmarks.length > 0) {
-            map.addSource(SOURCE_IDS.LANDMARKS, {
-                type: 'geojson',
-                data: landmarksGeoJSON
-            });
+        // Ensure no collision with symbol layers if they existed previously
+        if (map.getLayer(LAYER_IDS.LANDMARKS)) map.removeLayer(LAYER_IDS.LANDMARKS);
+        if (map.getSource(SOURCE_IDS.LANDMARKS)) map.removeSource(SOURCE_IDS.LANDMARKS);
 
-            map.addLayer({
-                id: LAYER_IDS.LANDMARKS,
-                type: 'symbol',
-                source: SOURCE_IDS.LANDMARKS,
-                layout: {
-                    'icon-image': [
-                        'case',
-                        ['get', 'hasIcon'],
-                        ['concat', 'landmark-icon-', ['get', 'id']],
-                        ''
-                    ],
-                    'icon-size': MAPBOX_CONFIG?.DEFAULT_MARKER_SIZE || 0.5,
-                    'icon-allow-overlap': true,
-                    'icon-ignore-placement': true,
-                    'icon-anchor': 'bottom'
-                },
-                paint: {
-                    'icon-opacity': 1
-                },
-                filter: ['get', 'hasIcon']
-            });
+        landmarks.forEach((landmark) => {
+            // Create DOM element
+            const el = document.createElement('div');
+            el.className = 'landmark-marker-container';
+            el.id = `landmark-marker-${landmark.id}`;
 
-            // Event handlers
-            const landmarkClickHandler = (e) => {
-                const feature = e.features[0];
-                const landmarkId = feature.properties.id;
-                const landmark = landmarks.find(l => l.id === landmarkId);
+            // Initial state: Hidden if route animation is not complete
+            // This allows the staggered reveal to work later
+            if (!isRouteAnimationComplete) {
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(-40px) scale(0.6)';
+            } else {
+                el.style.opacity = '1';
+                el.style.transform = 'translateY(0) scale(1)';
+            }
 
-                if (landmark) {
-                    e.originalEvent?.preventDefault();
-                    setSelectedLandmark(landmark);
-                    setShowLandmarkCard(true);
-                    if (clientBuilding) {
-                        getDirections?.(landmark);
-                    }
+            // Icon Content
+            const iconUrl = landmark.icon;
+            if (iconUrl) {
+                const img = document.createElement('img');
+                img.src = iconUrl;
+                img.className = 'landmark-icon-image';
+                img.style.width = '100%';
+                img.style.height = '100%';
+                img.style.objectFit = 'contain';
+                el.appendChild(img);
+            }
+
+            // Interactive Events
+            el.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent map click
+                setSelectedLandmark(landmark);
+                setShowLandmarkCard(true);
+                if (clientBuilding) {
+                    getDirections?.(landmark);
                 }
-            };
+            });
 
-            const landmarkEnterHandler = () => {
-                map.getCanvas().style.cursor = 'pointer';
-            };
+            el.addEventListener('mouseenter', () => {
+                el.style.zIndex = '50'; // Bring to front
+                // Optional: Add hover scale effect via class or inline
+            });
 
-            const landmarkLeaveHandler = () => {
-                map.getCanvas().style.cursor = '';
-            };
+            el.addEventListener('mouseleave', () => {
+                el.style.zIndex = 'auto';
+            });
 
-            map.on('click', LAYER_IDS.LANDMARKS, landmarkClickHandler);
-            map.on('mouseenter', LAYER_IDS.LANDMARKS, landmarkEnterHandler);
-            map.on('mouseleave', LAYER_IDS.LANDMARKS, landmarkLeaveHandler);
+            // Create and add Marker
+            const marker = new mapboxgl.Marker({
+                element: el,
+                anchor: 'bottom'
+            })
+                .setLngLat(landmark.coordinates || [landmark.longitude, landmark.latitude])
+                .addTo(map);
 
-            eventHandlersRef.current.push(
-                { event: 'click', layer: LAYER_IDS.LANDMARKS, handler: landmarkClickHandler },
-                { event: 'mouseenter', layer: LAYER_IDS.LANDMARKS, handler: landmarkEnterHandler },
-                { event: 'mouseleave', layer: LAYER_IDS.LANDMARKS, handler: landmarkLeaveHandler }
-            );
-        }
+            // Store reference/metadata on the DOM element for easy sorting later
+            el.dataset.lat = landmark.coordinates ? landmark.coordinates[1] : landmark.latitude;
+            el.dataset.lng = landmark.coordinates ? landmark.coordinates[0] : landmark.longitude;
+            el.dataset.id = landmark.id;
+
+            markersRef.current.push(marker);
+        });
+
     }, [
-        mapRef, isMapLoaded, landmarks, clientBuilding, selectedLandmark,
-        setSelectedLandmark, setShowLandmarkCard, getDirections, loadCustomIcons,
-        createLandmarksGeoJSON, SOURCE_IDS, LAYER_IDS, MAPBOX_CONFIG
+        mapRef, isMapLoaded, landmarks, clientBuilding,
+        selectedLandmark, setSelectedLandmark, setShowLandmarkCard,
+        getDirections, SOURCE_IDS, LAYER_IDS, isRouteAnimationComplete
     ]);
 
     /**

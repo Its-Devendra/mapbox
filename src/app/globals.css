@@ -61,6 +61,38 @@ input[type="number"] {
   transition: all 0.2s ease;
 }
 
+/* 
+ * ═══════════════════════════════════════════════════════════════
+ * LANDMARK MARKERS (DOM Elements)
+ * ═══════════════════════════════════════════════════════════════ 
+ */
+.landmark-marker-container {
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  /* Start hidden for cinematic reveal */
+  opacity: 0;
+  transform: translateY(-40px) scale(0.6);
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease-out;
+  /* Ensure clicks work */
+  pointer-events: auto;
+}
+
+.landmark-icon-image {
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+  transition: transform 0.2s ease;
+}
+
+.landmark-marker-container:hover .landmark-icon-image {
+  transform: scale(1.15);
+}
+
+/* Active drop animation class applied by MapContainer */
+.landmark-marker-container.apple-marker-drop {
+  animation: markerDrop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+
 /* Premium Nearby Popup Styling */
 .nearby-popup-premium .mapboxgl-popup-content {
   background: transparent !important;

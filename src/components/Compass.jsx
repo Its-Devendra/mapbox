@@ -71,9 +71,15 @@ const Compass = React.memo(function Compass({
       <button
         onClick={onResetNorth}
         className="relative w-12 h-12 rounded-full border shadow-lg cursor-pointer 
-                   transition-all duration-300 hover:scale-105 hover:shadow-xl
-                   flex items-center justify-center group"
-        style={containerStyle}
+                   flex items-center justify-center group apple-interactive"
+        style={{
+          ...containerStyle,
+          // Apple spring transition for hover/press
+          transition: `
+            transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+            box-shadow 0.25s ease-out
+          `,
+        }}
         aria-label="Compass - Click to reset to North"
       >
         {/* Outer ring with cardinal directions */}
@@ -114,10 +120,14 @@ const Compass = React.memo(function Compass({
           </span>
         </div>
 
-        {/* Rotating compass needle */}
+        {/* Rotating compass needle with spring physics */}
         <div
-          className="compass-needle relative w-6 h-6 transition-transform duration-150 ease-out"
-          style={{ transform: `rotate(${needleRotation}deg)` }}
+          className="compass-needle relative w-6 h-6"
+          style={{
+            transform: `rotate(${needleRotation}deg)`,
+            // Apple spring-damped rotation - slight overshoot then settle
+            transition: 'transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+          }}
         >
           {/* Needle SVG */}
           <svg

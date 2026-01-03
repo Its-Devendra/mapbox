@@ -229,7 +229,7 @@ export default function FilterBar({
                 <button
                   key={typeof category === 'object' ? (category.id || category.name) : name}
                   onClick={() => handleFilterClick(name)}
-                  className="px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap flex-shrink-0"
+                  className="px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider flex items-center gap-2 cursor-pointer whitespace-nowrap flex-shrink-0 apple-press"
                   style={{
                     backgroundColor: isActive
                       ? (filterTheme.filterPrimary || filterTheme.primary)
@@ -238,8 +238,15 @@ export default function FilterBar({
                       ? (filterTheme.filterSecondary || filterTheme.secondary)
                       : 'rgba(255,255,255,0.7)',
                     boxShadow: isActive
-                      ? '0 2px 10px rgba(0, 0, 0, 0.15)'
+                      ? '0 2px 12px rgba(0, 0, 0, 0.2)'
                       : 'none',
+                    // Apple spring transition for all state changes
+                    transition: `
+                      background-color 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                      color 0.2s ease-out,
+                      box-shadow 0.25s ease-out,
+                      transform 0.15s cubic-bezier(0.22, 1.0, 0.36, 1.0)
+                    `,
                   }}
                 >
                   {renderIcon(category)}
