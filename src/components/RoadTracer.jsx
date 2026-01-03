@@ -181,29 +181,29 @@ export default function RoadTracer({
             if (map.getLayer(ANIMATION_LAYER_ID)) map.removeLayer(ANIMATION_LAYER_ID);
             if (map.getLayer(GLOW_LAYER_ID)) map.removeLayer(GLOW_LAYER_ID);
 
-            // Add glow layer
+            // Add glow layer (The "Aura")
             map.addLayer({
                 id: GLOW_LAYER_ID,
                 type: 'line',
                 source: SOURCE_ID,
                 layout: { 'line-cap': 'round', 'line-join': 'round' },
                 paint: {
-                    'line-color': '#FFFF00',
-                    'line-width': 12,
-                    'line-opacity': 0.6,
-                    'line-blur': 8
+                    'line-color': '#FFA500', // Deep Orange/Gold Glow
+                    'line-width': 12,        // Initial width
+                    'line-opacity': 0.4,
+                    'line-blur': 10          // Soft edges
                 }
             });
 
-            // Add trace layer
+            // Add trace layer (The "Core")
             map.addLayer({
                 id: ANIMATION_LAYER_ID,
                 type: 'line',
                 source: SOURCE_ID,
                 layout: { 'line-cap': 'round', 'line-join': 'round' },
                 paint: {
-                    'line-color': '#FFD700',
-                    'line-width': 5,
+                    'line-color': '#FFFFFF', // Bright White Core for high contrast
+                    'line-width': 4,
                     'line-opacity': 1
                 }
             });
@@ -211,50 +211,100 @@ export default function RoadTracer({
             layersAddedRef.current = true;
         }
 
-        console.log(`▶️ RoadTracer: Starting Custom Animation. Total: ${totalTotalLength.toFixed(2)}km`);
+        // Easing function for smoother flow
+        const easeInOutCubic = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+        console.log(`▶️ RoadTracer: Starting Premium Neon Animation. Total: ${totalTotalLength.toFixed(2)}km`);
         isAnimatingRef.current = true;
         startTimeRef.current = null;
+
+        // ════════════════════════════════════════════════════════════════════════
+        // ⚡ PERFORMANCE OPTIMIZATION: PRE-CALCULATE EVERYTHING ⚡
+        // Avoid all trigonometry inside the animation loop. 
+        // ════════════════════════════════════════════════════════════════════════
+
+        // 1. Map each feature to a cache of distances
+        const featureCache = features.map(feature => {
+            const coords = feature.geometry.coordinates;
+            const dists = [0];
+            let total = 0;
+
+            for (let i = 0; i < coords.length - 1; i++) {
+                const d = getDistance(coords[i], coords[i + 1]);
+                total += d;
+                dists.push(total);
+            }
+            return {
+                coords,
+                dists, // Cumulative distances [0, d1, d2...]
+                totalLength: total
+            };
+        });
 
         const animate = (timestamp) => {
             if (!startTimeRef.current) startTimeRef.current = timestamp;
             const elapsed = timestamp - startTimeRef.current;
-            const progress = Math.min(elapsed / duration, 1);
 
+            // SLOWER, SMOOTHER DURATION
+            const safeDuration = Math.max(duration, 6000);
+            const rawProgress = Math.min(elapsed / safeDuration, 1);
+
+            // Apply Premium Easing
+            const progress = easeInOutCubic(rawProgress);
+
+            // Pulse Geometry (Opacity Only - GPU)
+            const pulse = (Math.sin(elapsed / 300) + 1) / 2;
+            const currentGlowOpacity = 0.3 + (pulse * 0.5);
+
+            if (map.getLayer(GLOW_LAYER_ID)) {
+                map.setPaintProperty(GLOW_LAYER_ID, 'line-opacity', currentGlowOpacity);
+            }
+
+            // Calculate global distance target
+            const targetGlobalDist = totalTotalLength * progress;
+
+            // Build visible features
             let visibleFeatures = [];
 
-            if (animationMode === 'all-at-once' || animationMode === 'parallel') {
-                visibleFeatures = features.map((feature, idx) => {
-                    const len = lengths[idx];
-                    const currentLen = len * progress;
-                    if (currentLen < 0.001) return null;
+            if (animationMode === 'parallel') {
+                // PARALLEL: All routes trace simultaneously 0% -> 100%
+                for (let i = 0; i < featureCache.length; i++) {
+                    const { coords, dists, totalLength } = featureCache[i];
+                    const targetDist = totalLength * progress;
 
-                    const slicedCoords = sliceLineString(feature.geometry.coordinates, currentLen);
-                    return {
-                        type: 'Feature',
-                        geometry: {
-                            type: 'LineString',
-                            coordinates: slicedCoords
-                        }
-                    };
-                }).filter(Boolean);
-            } else {
-                // Sequential Logic
-                const currentGlobalDist = totalTotalLength * progress;
-                let traversed = 0;
-
-                for (let i = 0; i < features.length; i++) {
-                    const feature = features[i];
-                    const len = lengths[i];
-
-                    if (traversed + len <= currentGlobalDist) {
-                        // Fully visible
-                        visibleFeatures.push(feature);
-                        traversed += len;
+                    if (targetDist >= totalLength) {
+                        visibleFeatures.push(features[i]);
                     } else {
-                        // Partially visible - this is the active segment
-                        const remaining = currentGlobalDist - traversed;
-                        if (remaining > 0.001) {
-                            const slicedCoords = sliceLineString(feature.geometry.coordinates, remaining);
+                        // Interpolate this specific feature
+                        let sliceIndex = 0;
+                        // Optimization: Start search from expected index (proportional)
+                        const guess = Math.floor(dists.length * progress);
+                        // Refine with local search
+                        for (let j = (guess > 0 ? guess - 1 : 0); j < dists.length; j++) {
+                            if (dists[j] >= targetDist) {
+                                sliceIndex = j;
+                                break;
+                            }
+                        }
+
+                        if (sliceIndex > 0) {
+                            const prevDist = dists[sliceIndex - 1];
+                            const nextDist = dists[sliceIndex];
+                            const segmentLen = nextDist - prevDist;
+                            const remainder = targetDist - prevDist;
+
+                            const p1 = coords[sliceIndex - 1];
+                            const p2 = coords[sliceIndex];
+                            const t = segmentLen > 0 ? remainder / segmentLen : 0;
+
+                            const newPoint = [
+                                p1[0] + (p2[0] - p1[0]) * t,
+                                p1[1] + (p2[1] - p1[1]) * t
+                            ];
+
+                            const slicedCoords = coords.slice(0, sliceIndex);
+                            slicedCoords.push(newPoint);
+
                             visibleFeatures.push({
                                 type: 'Feature',
                                 geometry: {
@@ -263,7 +313,55 @@ export default function RoadTracer({
                                 }
                             });
                         }
-                        break; // Stop after currently drawing segment
+                    }
+                }
+            } else {
+                // SEQUENTIAL: Fill one, then the next
+                let currentDistAccumulator = 0;
+                for (let i = 0; i < featureCache.length; i++) {
+                    const { coords, dists, totalLength } = featureCache[i];
+
+                    if (currentDistAccumulator + totalLength <= targetGlobalDist) {
+                        visibleFeatures.push(features[i]);
+                        currentDistAccumulator += totalLength;
+                    } else {
+                        const localTarget = targetGlobalDist - currentDistAccumulator;
+
+                        let sliceIndex = 0;
+                        for (let j = 1; j < dists.length; j++) {
+                            if (dists[j] >= localTarget) {
+                                sliceIndex = j;
+                                break;
+                            }
+                        }
+
+                        if (sliceIndex > 0) {
+                            const prevDist = dists[sliceIndex - 1];
+                            const nextDist = dists[sliceIndex];
+                            const segmentLen = nextDist - prevDist;
+                            const remainder = localTarget - prevDist;
+
+                            const p1 = coords[sliceIndex - 1];
+                            const p2 = coords[sliceIndex];
+
+                            const t = segmentLen > 0 ? remainder / segmentLen : 0;
+                            const newPoint = [
+                                p1[0] + (p2[0] - p1[0]) * t,
+                                p1[1] + (p2[1] - p1[1]) * t
+                            ];
+
+                            const slicedCoords = coords.slice(0, sliceIndex);
+                            slicedCoords.push(newPoint);
+
+                            visibleFeatures.push({
+                                type: 'Feature',
+                                geometry: {
+                                    type: 'LineString',
+                                    coordinates: slicedCoords
+                                }
+                            });
+                        }
+                        break; // Stop after cutting feature
                     }
                 }
             }
@@ -274,13 +372,12 @@ export default function RoadTracer({
             }
 
             if (progress >= 1) {
-                // Final state - show everything full
                 if (source) {
                     source.setData({ type: 'FeatureCollection', features });
                 }
                 hasPlayedRef.current = true;
                 isAnimatingRef.current = false;
-                console.log('✅ RoadTracer: Custom Animation Complete');
+                console.log('✅ RoadTracer: Premium Smooth Animation Complete');
                 if (onAnimationComplete) onAnimationComplete();
                 return;
             }

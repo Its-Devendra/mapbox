@@ -1344,17 +1344,21 @@ export default function MapContainer({
 
           // ═══════════════════════════════════════════════════════════════════
           // CINEMATIC FLIGHT: Professional drone-style camera movement
-          // Inspired by real estate cinematography and film techniques
           // ═══════════════════════════════════════════════════════════════════
 
-          // 1. Cinematic approach - smooth with parabolic arc (sweeping motion)
+          // 1. HELICOPTER ENTRY SETUP
+          // Force pitch to 0 (Top Down) instantly before starting the swoop.
+          // This ensures we always animate 0° -> 60° (The "Swoop Up")
+          mapRef.current.setPitch(0);
+
+          // 2. The Flight (Swoop In)
           // Duration: 5 seconds for premium, graceful feel
           await smoothFlyTo(mapRef.current, {
             center: destination.coordinates,
-            zoom: 17,        // Good viewing distance
-            pitch: 55,       // Dramatic but clear angle
+            zoom: 17.5,      // Slightly closer for impact
+            pitch: 60,       // Steep cinematic angle
             bearing: bearingToLandmark  // Arrive facing the landmark
-          }, 5000);  // 5 seconds: Professional pacing
+          }, 5000);
 
           // Play sound upon arrival (after flight)
           if (routeGenerationRef.current === currentGeneration && landmarkAudioRef.current) {
@@ -1362,13 +1366,24 @@ export default function MapContainer({
             landmarkAudioRef.current.play().catch(e => console.warn("Audio play failed", e));
           }
 
-          // 2. Hold shot - let viewer appreciate the landmark
-          // This is crucial for premium feel - never rush past content
+          // 3. DYNAMIC ORBIT (The "Alive" Hold)
+          // Instead of a static hold, slowly rotate around the target.
+          // This keeps the 3D scene feeling immersive.
           if (mapRef.current && routeGenerationRef.current === currentGeneration && isFlyingRef.current) {
-            await new Promise(resolve => setTimeout(resolve, 1500));  // 1.5s pause
+            // Start a slow, linear rotation (Orbit)
+            // We use easeTo with linear easing for a constant velocity feel
+            mapRef.current.easeTo({
+              bearing: bearingToLandmark + 15, // Rotate 15 degrees
+              duration: 4000,                  // Over 4 seconds (slow)
+              easing: (t) => t,                // Linear easing
+              essential: true
+            });
+
+            // Wait for this orbit to finish (or mostly finish) before zooming out
+            await new Promise(resolve => setTimeout(resolve, 3000));
           }
 
-          // 3. Graceful reveal - zoom out to show route context
+          // 4. Graceful reveal - zoom out to show route context
           // Maintains 3D perspective for premium depth feel
           if (mapRef.current && routeGenerationRef.current === currentGeneration && clientBuilding?.coordinates && isFlyingRef.current) {
             isFlyingRef.current = false;
@@ -2809,11 +2824,26 @@ export default function MapContainer({
 
       landmarks.forEach((landmark) => {
         if (!landmark.icon) {
-          const marker = new mapboxgl.Marker()
+          // Create a wrapper for positioning
+          const markerContainer = document.createElement('div');
+          markerContainer.className = 'landmark-marker-container';
+
+          // Create the actual visible, breathing element
+          const markerContent = document.createElement('div');
+          markerContent.innerHTML = `<svg viewBox="0 0 27 41" width="27" height="41">
+            <path fill="#3FB1CE" d="M27,13.5C27,19.07 20.25,27 14.75,34.5C14.02,35.5 12.98,35.5 12.25,34.5C6.75,27 0,19.07 0,13.5C0,6.04 6.04,0 13.5,0C20.96,0 27,6.04 27,13.5Z"/>
+            <path fill="#3FB1CE" opacity="0.3" d="M13.5,2C7.15,2 2,7.15 2,13.5C2,18.44 8.08,26.78 13.5,33.58C18.92,26.78 25,18.44 25,13.5C25,7.15 19.85,2 13.5,2Z"/>
+            <circle fill="#FFFFFF" cx="13.5" cy="13.5" r="5.5"/>
+          </svg>`;
+
+          markerContent.classList.add('animate-marker-breathe');
+          markerContainer.appendChild(markerContent);
+
+          const marker = new mapboxgl.Marker({ element: markerContainer })
             .setLngLat(landmark.coordinates)
             .addTo(mapRef.current);
 
-          marker.getElement().addEventListener('click', (e) => {
+          markerContainer.addEventListener('click', (e) => {
             e.stopPropagation();
             setSelectedLandmark(landmark);
             setShowLandmarkCard(true);
@@ -2855,13 +2885,20 @@ export default function MapContainer({
         }
 
         if (!place.icon && !place.categoryIcon) {
-          const markerEl = document.createElement('div');
-          Object.assign(markerEl.style, {
+          // Wrapper for positioning
+          const markerContainer = document.createElement('div');
+
+          // Breathing inner element
+          const markerInner = document.createElement('div');
+          Object.assign(markerInner.style, {
             width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#8b5cf6',
             border: '2px solid white', boxShadow: '0 1px 3px rgba(0,0,0,0.3)', opacity: '0.7', cursor: 'pointer'
           });
 
-          const marker = new mapboxgl.Marker(markerEl)
+          markerInner.classList.add('animate-marker-breathe');
+          markerContainer.appendChild(markerInner);
+
+          const marker = new mapboxgl.Marker(markerContainer)
             .setLngLat(place.coordinates)
             .addTo(mapRef.current);
 
@@ -3245,6 +3282,7 @@ export default function MapContainer({
         isActive={isInitialCameraAnimationComplete && !isTourActive && !isRouteAnimationComplete}
         onAnimationComplete={handleRouteAnimationComplete}
         performanceTier={performanceTier}
+        animationMode="parallel"
       />
     </>
   );

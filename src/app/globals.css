@@ -35,6 +35,7 @@ input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
+
 input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
@@ -69,11 +70,13 @@ input[type="number"] {
 }
 
 .nearby-popup-premium .mapboxgl-popup-tip {
-  display: none !important; /* Hide the default tip for a cleaner floating look */
+  display: none !important;
+  /* Hide the default tip for a cleaner floating look */
 }
 
 .nearby-popup-premium {
-  z-index: 50; /* Ensure it's above other elements */
+  z-index: 50;
+  /* Ensure it's above other elements */
 }
 
 /* Client Building Tooltip/Tippy Styling - FULLY TRANSPARENT WRAPPER */
@@ -96,7 +99,7 @@ input[type="number"] {
 
 /* Remove any wrapper styling */
 .client-building-tippy .mapboxgl-popup-content-wrapper,
-.client-building-tippy > div {
+.client-building-tippy>div {
   background: transparent !important;
   box-shadow: none !important;
   border: none !important;
@@ -115,12 +118,12 @@ input[type="number"] {
   .nearby-popup-premium {
     max-width: calc(100vw - 32px) !important;
   }
-  
+
   .nearby-popup-premium .mapboxgl-popup-content {
     max-width: calc(100vw - 32px) !important;
     border-radius: 10px !important;
   }
-  
+
   /* Popup close button - larger for touch */
   .mapboxgl-popup-close-button {
     font-size: 20px !important;
@@ -130,27 +133,27 @@ input[type="number"] {
     right: 4px !important;
     top: 4px !important;
   }
-  
+
   /* Popup content adjustments */
   .nearby-popup-premium .popup-content {
     min-width: 180px !important;
     max-width: calc(100vw - 48px) !important;
   }
-  
+
   .nearby-popup-premium .popup-title {
     font-size: 13px !important;
   }
-  
+
   .nearby-popup-premium .popup-category {
     font-size: 9px !important;
     padding: 2px 6px !important;
   }
-  
+
   .nearby-popup-premium .popup-stats {
     flex-wrap: wrap;
     gap: 4px !important;
   }
-  
+
   .nearby-popup-premium .popup-stat {
     padding: 4px 8px !important;
     font-size: 11px !important;
@@ -164,16 +167,20 @@ input[type="number"] {
 
 /* Mobile styles (default - xs to sm: < 640px) */
 @media (max-width: 639px) {
+
   /* Project Logo - much smaller on mobile to prevent overlap */
   .project-logo-container {
     top: 8px !important;
   }
+
   .project-logo-container.left {
     left: 8px !important;
   }
+
   .project-logo-container.right {
     right: 8px !important;
   }
+
   .project-logo-container img {
     max-width: 90px !important;
     max-height: 36px !important;
@@ -214,7 +221,7 @@ input[type="number"] {
     max-width: none !important;
   }
 
-  .filter-bar-container > div {
+  .filter-bar-container>div {
     width: 100% !important;
     padding: 8px 12px !important;
   }
@@ -271,6 +278,7 @@ input[type="number"] {
 
 /* Tablet styles (sm to md: 640px - 1023px) */
 @media (min-width: 640px) and (max-width: 1023px) {
+
   /* Project Logo - medium size on tablet */
   .project-logo-container img {
     max-width: 100px !important;
@@ -309,6 +317,7 @@ input[type="number"] {
 
 /* Desktop styles (md to lg: 1024px+) */
 @media (min-width: 1024px) {
+
   /* Landmark Card - full size */
   .landmark-card-container {
     right: 24px !important;
@@ -336,6 +345,7 @@ input[type="number"] {
 
 /* Touch device optimizations */
 @media (hover: none) and (pointer: coarse) {
+
   /* Larger touch targets */
   .filter-bar-container .filter-button {
     min-height: 44px;
@@ -355,6 +365,7 @@ input[type="number"] {
 
 /* Landscape mobile orientation - Visual Tweaks Only (Layout handled by MapControlsContainer) */
 @media (max-height: 500px) and (orientation: landscape) {
+
   /* Make card content more compact visually */
   .landmark-card-container .ios-glass-card {
     padding: 0 !important;
@@ -364,7 +375,8 @@ input[type="number"] {
   .landmark-card-container img {
     height: 90px !important;
     min-height: 90px !important;
-    width: auto !important; /* Allow width to flow */
+    width: auto !important;
+    /* Allow width to flow */
   }
 
   .landmark-card-container h2 {
@@ -389,7 +401,7 @@ input[type="number"] {
   }
 
   /* Stats row smaller */
-  .landmark-card-container .flex.items-center.gap-2 > div {
+  .landmark-card-container .flex.items-center.gap-2>div {
     padding: 4px 6px !important;
   }
 
@@ -414,7 +426,7 @@ input[type="number"] {
 
   /* Compass Visual Adjustment - Rely on React props */
   /* Compass sizing handled by component props now */
-  
+
   .compass-container .compass-label {
     font-size: 5px !important;
   }
@@ -430,12 +442,12 @@ input[type="number"] {
   .view-mode-toggle {
     padding: 2px !important;
   }
-  
+
   .view-mode-toggle button {
     padding: 4px 8px !important;
     font-size: 10px !important;
   }
-  
+
   .view-mode-toggle svg {
     width: 12px !important;
     height: 12px !important;
@@ -454,7 +466,9 @@ input[type="number"] {
 }
 
 /* High DPI screens */
-@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+@media (-webkit-min-device-pixel-ratio: 2),
+(min-resolution: 192dpi) {
+
   .landmark-marker,
   .client-marker {
     image-rendering: -webkit-optimize-contrast;

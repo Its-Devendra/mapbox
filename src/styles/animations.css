@@ -9,13 +9,23 @@
 
 /* Fade Animations */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes fadeOut {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes fadeInUp {
@@ -23,6 +33,7 @@
     opacity: 0;
     transform: translateY(8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -34,6 +45,7 @@
     opacity: 0;
     transform: translateY(-8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -46,6 +58,7 @@
     opacity: 0;
     transform: scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
@@ -57,6 +70,7 @@
     opacity: 1;
     transform: scale(1);
   }
+
   to {
     opacity: 0;
     transform: scale(0.95);
@@ -68,6 +82,7 @@
     opacity: 0;
     transform: scale(0.9) translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
@@ -80,6 +95,7 @@
     opacity: 0;
     transform: translateX(16px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -91,6 +107,7 @@
     opacity: 0;
     transform: translateX(-16px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -102,6 +119,7 @@
     opacity: 0;
     transform: translateY(100%);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -113,6 +131,7 @@
     opacity: 0;
     transform: translateY(-100%);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -124,15 +143,19 @@
   0% {
     transform: translateX(-100%);
   }
+
   100% {
     transform: translateX(100%);
   }
 }
 
 @keyframes pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.5;
   }
@@ -142,6 +165,7 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -153,12 +177,15 @@
     opacity: 0;
     transform: scale(0.3);
   }
+
   50% {
     transform: scale(1.05);
   }
+
   70% {
     transform: scale(0.9);
   }
+
   100% {
     opacity: 1;
     transform: scale(1);
@@ -166,9 +193,12 @@
 }
 
 @keyframes gentleBounce {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0);
   }
+
   50% {
     transform: translateY(-4px);
   }
@@ -185,6 +215,7 @@
     transform: scale(1);
     opacity: 0.8;
   }
+
   100% {
     transform: scale(2.5);
     opacity: 0;
@@ -197,6 +228,7 @@
     transform: scale(1);
     opacity: 0.6;
   }
+
   100% {
     transform: scale(2);
     opacity: 0;
@@ -205,9 +237,12 @@
 
 /* Subtle glow breathing animation */
 @keyframes glowBreath {
-  0%, 100% {
+
+  0%,
+  100% {
     filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
   }
+
   50% {
     filter: drop-shadow(0 0 16px rgba(59, 130, 246, 0.9));
   }
@@ -215,9 +250,12 @@
 
 /* Gentle float animation */
 @keyframes markerFloat {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0);
   }
+
   50% {
     transform: translateY(-3px);
   }
@@ -225,9 +263,26 @@
 
 /* Attention */
 @keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
-  20%, 40%, 60%, 80% { transform: translateX(2px); }
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: translateX(-2px);
+  }
+
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(2px);
+  }
 }
 
 /* Stagger List Items */
@@ -236,6 +291,7 @@
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -253,40 +309,96 @@
   animation-fill-mode: both;
 }
 
-.animate-fast { animation-duration: var(--duration-fast); }
-.animate-slow { animation-duration: var(--duration-slow); }
-.animate-slower { animation-duration: var(--duration-slower); }
+.animate-fast {
+  animation-duration: var(--duration-fast);
+}
+
+.animate-slow {
+  animation-duration: var(--duration-slow);
+}
+
+.animate-slower {
+  animation-duration: var(--duration-slower);
+}
 
 /* Animation Names */
-.animate-fade-in { animation-name: fadeIn; }
-.animate-fade-out { animation-name: fadeOut; }
-.animate-fade-in-up { animation-name: fadeInUp; }
-.animate-fade-in-down { animation-name: fadeInDown; }
+.animate-fade-in {
+  animation-name: fadeIn;
+}
 
-.animate-scale-in { animation-name: scaleIn; }
-.animate-scale-out { animation-name: scaleOut; }
-.animate-scale-up { animation-name: scaleUp; }
+.animate-fade-out {
+  animation-name: fadeOut;
+}
 
-.animate-slide-in-right { animation-name: slideInRight; }
-.animate-slide-in-left { animation-name: slideInLeft; }
-.animate-slide-in-up { animation-name: slideInUp; }
-.animate-slide-in-down { animation-name: slideInDown; }
+.animate-fade-in-up {
+  animation-name: fadeInUp;
+}
 
-.animate-bounce-in { animation-name: bounceIn; }
-.animate-gentle-bounce { animation-name: gentleBounce; animation-iteration-count: infinite; }
-.animate-shake { animation-name: shake; }
+.animate-fade-in-down {
+  animation-name: fadeInDown;
+}
 
-.animate-spin { animation-name: spin; animation-duration: 1s; animation-timing-function: linear; animation-iteration-count: infinite; }
-.animate-pulse { animation-name: pulse; animation-duration: 2s; animation-timing-function: var(--ease-in-out); animation-iteration-count: infinite; }
+.animate-scale-in {
+  animation-name: scaleIn;
+}
+
+.animate-scale-out {
+  animation-name: scaleOut;
+}
+
+.animate-scale-up {
+  animation-name: scaleUp;
+}
+
+.animate-slide-in-right {
+  animation-name: slideInRight;
+}
+
+.animate-slide-in-left {
+  animation-name: slideInLeft;
+}
+
+.animate-slide-in-up {
+  animation-name: slideInUp;
+}
+
+.animate-slide-in-down {
+  animation-name: slideInDown;
+}
+
+.animate-bounce-in {
+  animation-name: bounceIn;
+}
+
+.animate-gentle-bounce {
+  animation-name: gentleBounce;
+  animation-iteration-count: infinite;
+}
+
+.animate-shake {
+  animation-name: shake;
+}
+
+.animate-spin {
+  animation-name: spin;
+  animation-duration: 1s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.animate-pulse {
+  animation-name: pulse;
+  animation-duration: 2s;
+  animation-timing-function: var(--ease-in-out);
+  animation-iteration-count: infinite;
+}
 
 /* Skeleton Shimmer */
 .animate-shimmer {
-  background: linear-gradient(
-    90deg,
-    var(--color-gray-100) 0%,
-    var(--color-gray-50) 50%,
-    var(--color-gray-100) 100%
-  );
+  background: linear-gradient(90deg,
+      var(--color-gray-100) 0%,
+      var(--color-gray-50) 50%,
+      var(--color-gray-100) 100%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -296,31 +408,77 @@
  * Apply to parent container, children will animate in sequence
  * ═══════════════════════════════════════════════════════════════ */
 
-.stagger-children > * {
+.stagger-children>* {
   animation: staggerFadeIn var(--duration-moderate) var(--ease-out) both;
 }
 
-.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
-.stagger-children > *:nth-child(2) { animation-delay: 50ms; }
-.stagger-children > *:nth-child(3) { animation-delay: 100ms; }
-.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
-.stagger-children > *:nth-child(5) { animation-delay: 200ms; }
-.stagger-children > *:nth-child(6) { animation-delay: 250ms; }
-.stagger-children > *:nth-child(7) { animation-delay: 300ms; }
-.stagger-children > *:nth-child(8) { animation-delay: 350ms; }
-.stagger-children > *:nth-child(9) { animation-delay: 400ms; }
-.stagger-children > *:nth-child(10) { animation-delay: 450ms; }
+.stagger-children>*:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.stagger-children>*:nth-child(2) {
+  animation-delay: 50ms;
+}
+
+.stagger-children>*:nth-child(3) {
+  animation-delay: 100ms;
+}
+
+.stagger-children>*:nth-child(4) {
+  animation-delay: 150ms;
+}
+
+.stagger-children>*:nth-child(5) {
+  animation-delay: 200ms;
+}
+
+.stagger-children>*:nth-child(6) {
+  animation-delay: 250ms;
+}
+
+.stagger-children>*:nth-child(7) {
+  animation-delay: 300ms;
+}
+
+.stagger-children>*:nth-child(8) {
+  animation-delay: 350ms;
+}
+
+.stagger-children>*:nth-child(9) {
+  animation-delay: 400ms;
+}
+
+.stagger-children>*:nth-child(10) {
+  animation-delay: 450ms;
+}
 
 /* ═══════════════════════════════════════════════════════════════
  * TRANSITION UTILITY CLASSES
  * ═══════════════════════════════════════════════════════════════ */
 
-.transition-none { transition: none; }
-.transition-all { transition: var(--transition-all); }
-.transition-colors { transition: var(--transition-colors); }
-.transition-opacity { transition: var(--transition-opacity); }
-.transition-shadow { transition: var(--transition-shadow); }
-.transition-transform { transition: var(--transition-transform); }
+.transition-none {
+  transition: none;
+}
+
+.transition-all {
+  transition: var(--transition-all);
+}
+
+.transition-colors {
+  transition: var(--transition-colors);
+}
+
+.transition-opacity {
+  transition: var(--transition-opacity);
+}
+
+.transition-shadow {
+  transition: var(--transition-shadow);
+}
+
+.transition-transform {
+  transition: var(--transition-transform);
+}
 
 /* ═══════════════════════════════════════════════════════════════
  * HOVER MICRO-INTERACTIONS
@@ -329,8 +487,9 @@
 /* Subtle lift on hover */
 .hover-lift {
   transition: transform var(--duration-normal) var(--ease-out),
-              box-shadow var(--duration-normal) var(--ease-out);
+    box-shadow var(--duration-normal) var(--ease-out);
 }
+
 .hover-lift:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-lg);
@@ -340,6 +499,7 @@
 .hover-scale {
   transition: transform var(--duration-fast) var(--ease-out);
 }
+
 .hover-scale:hover {
   transform: scale(1.02);
 }
@@ -354,6 +514,7 @@
 .press-effect {
   transition: transform var(--duration-instant) var(--ease-out);
 }
+
 .press-effect:active {
   transform: scale(0.98);
 }
@@ -366,6 +527,7 @@
 .backdrop-enter {
   animation: fadeIn var(--duration-normal) var(--ease-out) both;
 }
+
 .backdrop-exit {
   animation: fadeOut var(--duration-fast) var(--ease-in) both;
 }
@@ -374,6 +536,7 @@
 .modal-enter {
   animation: scaleUp var(--duration-moderate) var(--ease-spring) both;
 }
+
 .modal-exit {
   animation: scaleOut var(--duration-fast) var(--ease-in) both;
 }
@@ -382,6 +545,7 @@
 .dropdown-enter {
   animation: fadeInDown var(--duration-fast) var(--ease-out) both;
 }
+
 .dropdown-exit {
   animation: fadeOut var(--duration-instant) var(--ease-in) both;
 }
@@ -390,6 +554,7 @@
 .toast-enter {
   animation: slideInRight var(--duration-moderate) var(--ease-spring) both;
 }
+
 .toast-exit {
   animation: fadeOut var(--duration-fast) var(--ease-in) both;
 }
@@ -399,6 +564,7 @@
  * ═══════════════════════════════════════════════════════════════ */
 
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
@@ -406,4 +572,37 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * MARKER INTERACTION ANIMATIONS
+ * Premium "Alive" feel for map pins
+ * ═══════════════════════════════════════════════════════════════ */
+
+@keyframes markerBreathe {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+.animate-marker-breathe {
+  animation: markerBreathe 3s ease-in-out infinite;
+  transform-origin: bottom center;
+  will-change: transform;
+}
+
+/* Specific Wrapper to ensure Mapbox positioning survives */
+.landmark-marker-container {
+  display: block;
+  width: auto;
+  height: auto;
+  pointer-events: auto;
+  /* Ensure clicks pass through */
+  /* Remove any conflicting transforms if mapbox adds them weirdly, but usually Mapbox adds style inline */
 }
