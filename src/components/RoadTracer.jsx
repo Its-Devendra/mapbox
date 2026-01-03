@@ -1,413 +1,264 @@
 "use client";
 
-import { useEffect, useRef } from 'react';
-
-/**
- * RoadTracer Component - Custom Math Version (No Turf.js)
- *
- * Loads a static GeoJSON file and animates a "trace" effect.
- * Uses custom geometric calculations to avoid heavy library dependencies.
- */
-
-// --- Geometric Helpers ---
-
-function toRad(x) {
-    return x * Math.PI / 180;
-}
-
-function toDeg(x) {
-    return x * 180 / Math.PI;
-}
-
-/**
- * Haversine distance between two [lng, lat] points in kilometers
- */
-function getDistance(coord1, coord2) {
-    const R = 6371; // Earth's radius in km
-    const dLat = toRad(coord2[1] - coord1[1]);
-    const dLng = toRad(coord2[0] - coord1[0]);
-    const lat1 = toRad(coord1[1]);
-    const lat2 = toRad(coord2[1]);
-
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.sin(dLng / 2) * Math.sin(dLng / 2) * Math.cos(lat1) * Math.cos(lat2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-}
-
-/**
- * Calculate total length of a LineString coordinate array in km
- */
-function getLineLength(coordinates) {
-    let total = 0;
-    for (let i = 0; i < coordinates.length - 1; i++) {
-        total += getDistance(coordinates[i], coordinates[i + 1]);
-    }
-    return total;
-}
-
-/**
- * Interpolate a point on a segment [start, end] at a given distance from start
- */
-function getPointAtDistance(start, end, distance, segmentLength) {
-    if (segmentLength === 0) return start;
-    const ratio = distance / segmentLength;
-    const lng = start[0] + (end[0] - start[0]) * ratio;
-    const lat = start[1] + (end[1] - start[1]) * ratio;
-    return [lng, lat];
-}
-
-/**
- * Slice a LineString from the start up to a specific distance in km
- */
-function sliceLineString(coordinates, targetLength) {
-    if (targetLength <= 0) return [coordinates[0], coordinates[0]];
-    // If target is beyond total length (approx), return full
-    // But we calculate precisely
-
-    let traveled = 0;
-    const result = [coordinates[0]];
-
-    for (let i = 0; i < coordinates.length - 1; i++) {
-        const start = coordinates[i];
-        const end = coordinates[i + 1];
-        const segDist = getDistance(start, end);
-
-        if (traveled + segDist >= targetLength) {
-            // The split point is on this segment
-            const remaining = targetLength - traveled;
-            const finalPoint = getPointAtDistance(start, end, remaining, segDist);
-            result.push(finalPoint);
-            return result;
-        }
-
-        result.push(end);
-        traveled += segDist;
-    }
-
-    return result;
-}
+import React, { useEffect, useRef, useCallback } from 'react';
+import { easeInOutCubic } from '@/utils/mapUtils';
 
 export default function RoadTracer({
     mapRef,
     isMapLoaded,
-    isActive = true,
-    animationMode = "sequential",
-    duration = 4000,
+    isActive,
     onAnimationComplete,
-    geoJsonPath = "/data/shalimar.geojson"
+    geojsonRoutes, // GeoJSON FeatureCollection passed from parent
+    theme
 }) {
-    const featuresRef = useRef(null);
-    const animationFrameRef = useRef(null);
-    const startTimeRef = useRef(null);
-    const hasPlayedRef = useRef(false);
-    const isAnimatingRef = useRef(false);
-    const layersAddedRef = useRef(false);
-    const dataLoadedRef = useRef(false);
-    const featureLengthsRef = useRef([]); // Store pre-calculated lengths
+    const requestRef = useRef();
+    const startTimeRef = useRef();
+    const sourceIdRef = useRef('road-tracer-source');
+    const layerIdRef = useRef('road-tracer-layer');
+    const glowLayerIdRef = useRef('road-tracer-glow');
 
-    const ANIMATION_LAYER_ID = 'ring-road-trace';
-    const GLOW_LAYER_ID = 'ring-road-glow';
-    const SOURCE_ID = 'animated-route-source';
+    // Store processed routes: { coordinates: [], totalDistance: number, distances: [] }
+    const routesDataRef = useRef([]);
 
-    // Load GeoJSON once on mount
+    // Cleanup map resources
+    const cleanup = useCallback(() => {
+        if (requestRef.current) cancelAnimationFrame(requestRef.current);
+
+        if (mapRef.current && mapRef.current.isStyleLoaded()) {
+            if (mapRef.current.getLayer(layerIdRef.current)) mapRef.current.removeLayer(layerIdRef.current);
+            if (mapRef.current.getLayer(glowLayerIdRef.current)) mapRef.current.removeLayer(glowLayerIdRef.current);
+            if (mapRef.current.getLayer('road-tracer-outer-glow')) mapRef.current.removeLayer('road-tracer-outer-glow');
+            if (mapRef.current.getSource(sourceIdRef.current)) mapRef.current.removeSource(sourceIdRef.current);
+        }
+    }, [mapRef]);
+
+    // Main Logic
     useEffect(() => {
-        if (dataLoadedRef.current) return;
+        // Wait for map, activation, and data
+        if (!mapRef.current || !isMapLoaded || !isActive || !geojsonRoutes?.features?.length) {
+            // If becomes inactive, cleanup
+            if (!isActive) cleanup();
+            return;
+        }
 
-        fetch(geoJsonPath)
-            .then(res => res.json())
-            .then(data => {
-                if (data.features && data.features.length > 0) {
-                    const validFeatures = data.features.filter(f =>
-                        f.geometry &&
-                        (f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString') &&
-                        f.geometry.coordinates.length > 1
-                    );
+        let isMounted = true;
+        console.log('🚀 RoadTracer: Starting GeoJSON route tracing...', { routes: geojsonRoutes.features.length });
 
-                    // Flatten MultiLineStrings or treat complex geometries simplistically
-                    // For RoadTracer, we strictly assume LineString for standard animation
-                    // If MultiLineString, we take the longest segment or just treat first
-                    const simpleFeatures = validFeatures.map(f => {
-                        if (f.geometry.type === 'MultiLineString') {
-                            // Convert to LineString (take first line) for simplicity or iterate
-                            // Let's assume standard LineString for the specific 'shalimar' route
-                            return {
-                                type: 'Feature',
-                                geometry: {
-                                    type: 'LineString',
-                                    coordinates: f.geometry.coordinates[0]
-                                }
-                            };
-                        }
-                        return f;
-                    });
+        const startTracing = async () => {
+            // 1. Process GeoJSON routes directly
+            const validRoutes = geojsonRoutes.features.filter(f => f.geometry && f.geometry.type === 'LineString');
 
-                    // Pre-calculate lengths
-                    const lengths = simpleFeatures.map(f => getLineLength(f.geometry.coordinates));
+            if (validRoutes.length === 0) {
+                console.warn('RoadTracer: No valid LineString features found in GeoJSON');
+                if (onAnimationComplete) onAnimationComplete();
+                return;
+            }
 
-                    console.log(`📁 RoadTracer: Loaded ${simpleFeatures.length} features. Total Lengths:`, lengths);
-
-                    featuresRef.current = simpleFeatures;
-                    featureLengthsRef.current = lengths;
-                    dataLoadedRef.current = true;
+            // 2. Pre-process routes for animation
+            routesDataRef.current = validRoutes.map((feature) => {
+                const coordinates = feature.geometry.coordinates;
+                // Precompute distances for interpolation
+                const distances = [0];
+                let totalDistance = 0;
+                for (let i = 1; i < coordinates.length; i++) {
+                    const dx = coordinates[i][0] - coordinates[i - 1][0];
+                    const dy = coordinates[i][1] - coordinates[i - 1][1];
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    totalDistance += dist;
+                    distances.push(totalDistance);
                 }
-            })
-            .catch(err => console.error('❌ RoadTracer: Failed to load GeoJSON', err));
-    }, [geoJsonPath]);
+                return { coordinates, totalDistance, distances };
+            });
 
-    // Animation Effect
-    useEffect(() => {
-        // Guard checks
-        if (!mapRef?.current || !isMapLoaded || !dataLoadedRef.current || !featuresRef.current) return;
-        if (!isActive) return;
-        if (hasPlayedRef.current) return;
-        if (isAnimatingRef.current) return;
+            // 3. Setup Source and Layers
+            const map = mapRef.current;
+            const sourceId = sourceIdRef.current;
 
-        const map = mapRef.current;
-        const features = featuresRef.current;
-        const lengths = featureLengthsRef.current;
-        const totalTotalLength = lengths.reduce((a, b) => a + b, 0);
+            // Layer IDs for multi-pass glow
+            const visibleLayerId = layerIdRef.current; // Core (Top)
+            const innerGlowId = glowLayerIdRef.current; // Inner Glow (Middle)
+            const outerGlowId = 'road-tracer-outer-glow'; // Outer Glow (Bottom)
 
-        // Setup layers
-        if (!layersAddedRef.current) {
-            if (!map.getSource(SOURCE_ID)) {
-                map.addSource(SOURCE_ID, {
+            // Color from theme
+            // Cinematic Liquid Gold Palette
+            const atmosphereColor = '#b45309'; // Deep Sienna (Base)
+            const plasmaColor = '#f59e0b'; // Electric Gold (Body)
+            const filamentColor = '#fffbeb'; // Champagne (Hot Core)
+
+            // Motion Curve: Swift Out (Quintic) - Fast attack, elegant settle
+            const swiftEaseOut = (t) => 1 - Math.pow(1 - t, 5);
+
+            // 1. Atmosphere (Ambient Spill - Grounds the light)
+            if (!map.getSource(sourceId)) {
+                map.addSource(sourceId, {
                     type: 'geojson',
                     data: { type: 'FeatureCollection', features: [] }
                 });
             }
 
-            // Remove existing layers if present
-            if (map.getLayer(ANIMATION_LAYER_ID)) map.removeLayer(ANIMATION_LAYER_ID);
-            if (map.getLayer(GLOW_LAYER_ID)) map.removeLayer(GLOW_LAYER_ID);
-
-            // Add glow layer (The "Aura")
-            map.addLayer({
-                id: GLOW_LAYER_ID,
-                type: 'line',
-                source: SOURCE_ID,
-                layout: { 'line-cap': 'round', 'line-join': 'round' },
-                paint: {
-                    'line-color': '#FFA500', // Deep Orange/Gold Glow
-                    'line-width': 12,        // Initial width
-                    'line-opacity': 0.4,
-                    'line-blur': 10          // Soft edges
-                }
-            });
-
-            // Add trace layer (The "Core")
-            map.addLayer({
-                id: ANIMATION_LAYER_ID,
-                type: 'line',
-                source: SOURCE_ID,
-                layout: { 'line-cap': 'round', 'line-join': 'round' },
-                paint: {
-                    'line-color': '#FFFFFF', // Bright White Core for high contrast
-                    'line-width': 4,
-                    'line-opacity': 1
-                }
-            });
-
-            layersAddedRef.current = true;
-        }
-
-        // Easing function for smoother flow
-        const easeInOutCubic = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-
-        console.log(`▶️ RoadTracer: Starting Premium Neon Animation. Total: ${totalTotalLength.toFixed(2)}km`);
-        isAnimatingRef.current = true;
-        startTimeRef.current = null;
-
-        // ════════════════════════════════════════════════════════════════════════
-        // ⚡ PERFORMANCE OPTIMIZATION: PRE-CALCULATE EVERYTHING ⚡
-        // Avoid all trigonometry inside the animation loop. 
-        // ════════════════════════════════════════════════════════════════════════
-
-        // 1. Map each feature to a cache of distances
-        const featureCache = features.map(feature => {
-            const coords = feature.geometry.coordinates;
-            const dists = [0];
-            let total = 0;
-
-            for (let i = 0; i < coords.length - 1; i++) {
-                const d = getDistance(coords[i], coords[i + 1]);
-                total += d;
-                dists.push(total);
+            if (!map.getLayer(outerGlowId)) {
+                map.addLayer({
+                    id: outerGlowId,
+                    type: 'line',
+                    source: sourceId,
+                    layout: { 'line-join': 'round', 'line-cap': 'round' },
+                    paint: {
+                        'line-color': atmosphereColor,
+                        'line-width': 32, // Massive dispersion
+                        'line-opacity': 0.3,
+                        'line-blur': 24 // Soft ambient finish
+                    }
+                });
             }
-            return {
-                coords,
-                dists, // Cumulative distances [0, d1, d2...]
-                totalLength: total
+
+            // 2. Plasma (The Body - Vibrant Gold)
+            if (!map.getLayer(innerGlowId)) {
+                map.addLayer({
+                    id: innerGlowId,
+                    type: 'line',
+                    source: sourceId,
+                    layout: { 'line-join': 'round', 'line-cap': 'round' },
+                    paint: {
+                        'line-color': plasmaColor,
+                        'line-width': 8,
+                        'line-opacity': 0.8,
+                        'line-blur': 6 // Medium blur for plasma look
+                    }
+                });
+            }
+
+            // 3. Filament (The Energy Source - Blurs into plasma)
+            if (!map.getLayer(visibleLayerId)) {
+                map.addLayer({
+                    id: visibleLayerId,
+                    type: 'line',
+                    source: sourceId,
+                    layout: { 'line-join': 'round', 'line-cap': 'round' },
+                    paint: {
+                        'line-color': filamentColor,
+                        'line-width': 3,
+                        'line-opacity': 1.0,
+                        'line-blur': 2 // CRITICAL: Melts the core into the gold
+                    }
+                });
+            }
+
+            // 4. Start Animation Loop
+            startTimeRef.current = performance.now();
+            const duration = 4000; // Increased duration for slower animation
+            const fadeDuration = 1000; // 1s fade out
+            let isTraceFinished = false;
+
+            const animate = (time) => {
+                const elapsed = time - startTimeRef.current;
+                const progress = Math.min(elapsed / duration, 1);
+
+                // Tracing phase - only update geometry if not finished
+                if (!isTraceFinished) {
+                    // Use Swift Out curve (defined above) for Apple-grade motion
+                    const easedProgress = swiftEaseOut(progress);
+
+                    const features = routesDataRef.current.map(routeData => {
+                        const { coordinates, totalDistance, distances } = routeData;
+                        const targetDist = totalDistance * easedProgress;
+
+                        // Get partial coordinates
+                        const currentCoords = [];
+                        if (targetDist <= 0) {
+                            currentCoords.push(coordinates[0]);
+                        } else if (targetDist >= totalDistance) {
+                            currentCoords.push(...coordinates);
+                        } else {
+                            for (let i = 0; i < distances.length; i++) {
+                                if (distances[i] <= targetDist) {
+                                    currentCoords.push(coordinates[i]);
+                                } else {
+                                    // Interpolate last point
+                                    const segmentStart = distances[i - 1];
+                                    const segmentLen = distances[i] - segmentStart;
+                                    const t = (targetDist - segmentStart) / segmentLen;
+                                    const p1 = coordinates[i - 1];
+                                    const p2 = coordinates[i];
+                                    const newPt = [
+                                        p1[0] + t * (p2[0] - p1[0]),
+                                        p1[1] + t * (p2[1] - p1[1])
+                                    ];
+                                    currentCoords.push(newPt);
+                                    break;
+                                }
+                            }
+                        }
+
+                        return {
+                            type: 'Feature',
+                            geometry: {
+                                type: 'LineString',
+                                coordinates: currentCoords.length > 1 ? currentCoords : [coordinates[0], coordinates[0]]
+                            }
+                        };
+                    });
+
+                    // Update Data
+                    if (map.getSource(sourceId)) {
+                        map.getSource(sourceId).setData({
+                            type: 'FeatureCollection',
+                            features: features
+                        });
+                    }
+
+                    if (progress >= 1) {
+                        isTraceFinished = true;
+                    }
+                }
+
+                // Completion and Fade out
+                if (progress >= 1) {
+                    const fadeElapsed = elapsed - duration;
+                    const fadeProgress = Math.min(fadeElapsed / fadeDuration, 1);
+                    const opacity = 1 - fadeProgress;
+
+                    // Apply fade to layers
+                    // Apply fade to layers
+                    requestAnimationFrame(() => {
+                        if (map.getLayer(visibleLayerId)) {
+                            map.setPaintProperty(visibleLayerId, 'line-opacity', 1.0 * opacity);
+                        }
+                        if (map.getLayer(innerGlowId)) {
+                            map.setPaintProperty(innerGlowId, 'line-opacity', 0.8 * opacity);
+                        }
+                        if (map.getLayer(outerGlowId)) {
+                            map.setPaintProperty(outerGlowId, 'line-opacity', 0.4 * opacity);
+                        }
+                    });
+
+                    if (fadeProgress < 1) {
+                        requestRef.current = requestAnimationFrame(animate);
+                    } else {
+                        console.log('🏁 RoadTracer: Animation and fade out complete');
+                        // Clean up source data to ensure it's gone
+                        if (map.getSource(sourceId)) {
+                            map.getSource(sourceId).setData({
+                                type: 'FeatureCollection',
+                                features: []
+                            });
+                        }
+                        if (onAnimationComplete) onAnimationComplete();
+                    }
+                } else {
+                    requestRef.current = requestAnimationFrame(animate);
+                }
             };
-        });
 
-        const animate = (timestamp) => {
-            if (!startTimeRef.current) startTimeRef.current = timestamp;
-            const elapsed = timestamp - startTimeRef.current;
-
-            // SLOWER, SMOOTHER DURATION
-            const safeDuration = Math.max(duration, 6000);
-            const rawProgress = Math.min(elapsed / safeDuration, 1);
-
-            // Apply Premium Easing
-            const progress = easeInOutCubic(rawProgress);
-
-            // Pulse Geometry (Opacity Only - GPU)
-            const pulse = (Math.sin(elapsed / 300) + 1) / 2;
-            const currentGlowOpacity = 0.3 + (pulse * 0.5);
-
-            if (map.getLayer(GLOW_LAYER_ID)) {
-                map.setPaintProperty(GLOW_LAYER_ID, 'line-opacity', currentGlowOpacity);
-            }
-
-            // Calculate global distance target
-            const targetGlobalDist = totalTotalLength * progress;
-
-            // Build visible features
-            let visibleFeatures = [];
-
-            if (animationMode === 'parallel') {
-                // PARALLEL: All routes trace simultaneously 0% -> 100%
-                for (let i = 0; i < featureCache.length; i++) {
-                    const { coords, dists, totalLength } = featureCache[i];
-                    const targetDist = totalLength * progress;
-
-                    if (targetDist >= totalLength) {
-                        visibleFeatures.push(features[i]);
-                    } else {
-                        // Interpolate this specific feature
-                        let sliceIndex = 0;
-                        // Optimization: Start search from expected index (proportional)
-                        const guess = Math.floor(dists.length * progress);
-                        // Refine with local search
-                        for (let j = (guess > 0 ? guess - 1 : 0); j < dists.length; j++) {
-                            if (dists[j] >= targetDist) {
-                                sliceIndex = j;
-                                break;
-                            }
-                        }
-
-                        if (sliceIndex > 0) {
-                            const prevDist = dists[sliceIndex - 1];
-                            const nextDist = dists[sliceIndex];
-                            const segmentLen = nextDist - prevDist;
-                            const remainder = targetDist - prevDist;
-
-                            const p1 = coords[sliceIndex - 1];
-                            const p2 = coords[sliceIndex];
-                            const t = segmentLen > 0 ? remainder / segmentLen : 0;
-
-                            const newPoint = [
-                                p1[0] + (p2[0] - p1[0]) * t,
-                                p1[1] + (p2[1] - p1[1]) * t
-                            ];
-
-                            const slicedCoords = coords.slice(0, sliceIndex);
-                            slicedCoords.push(newPoint);
-
-                            visibleFeatures.push({
-                                type: 'Feature',
-                                geometry: {
-                                    type: 'LineString',
-                                    coordinates: slicedCoords
-                                }
-                            });
-                        }
-                    }
-                }
-            } else {
-                // SEQUENTIAL: Fill one, then the next
-                let currentDistAccumulator = 0;
-                for (let i = 0; i < featureCache.length; i++) {
-                    const { coords, dists, totalLength } = featureCache[i];
-
-                    if (currentDistAccumulator + totalLength <= targetGlobalDist) {
-                        visibleFeatures.push(features[i]);
-                        currentDistAccumulator += totalLength;
-                    } else {
-                        const localTarget = targetGlobalDist - currentDistAccumulator;
-
-                        let sliceIndex = 0;
-                        for (let j = 1; j < dists.length; j++) {
-                            if (dists[j] >= localTarget) {
-                                sliceIndex = j;
-                                break;
-                            }
-                        }
-
-                        if (sliceIndex > 0) {
-                            const prevDist = dists[sliceIndex - 1];
-                            const nextDist = dists[sliceIndex];
-                            const segmentLen = nextDist - prevDist;
-                            const remainder = localTarget - prevDist;
-
-                            const p1 = coords[sliceIndex - 1];
-                            const p2 = coords[sliceIndex];
-
-                            const t = segmentLen > 0 ? remainder / segmentLen : 0;
-                            const newPoint = [
-                                p1[0] + (p2[0] - p1[0]) * t,
-                                p1[1] + (p2[1] - p1[1]) * t
-                            ];
-
-                            const slicedCoords = coords.slice(0, sliceIndex);
-                            slicedCoords.push(newPoint);
-
-                            visibleFeatures.push({
-                                type: 'Feature',
-                                geometry: {
-                                    type: 'LineString',
-                                    coordinates: slicedCoords
-                                }
-                            });
-                        }
-                        break; // Stop after cutting feature
-                    }
-                }
-            }
-
-            const source = map.getSource(SOURCE_ID);
-            if (source) {
-                source.setData({ type: 'FeatureCollection', features: visibleFeatures });
-            }
-
-            if (progress >= 1) {
-                if (source) {
-                    source.setData({ type: 'FeatureCollection', features });
-                }
-                hasPlayedRef.current = true;
-                isAnimatingRef.current = false;
-                console.log('✅ RoadTracer: Premium Smooth Animation Complete');
-                if (onAnimationComplete) onAnimationComplete();
-                return;
-            }
-
-            animationFrameRef.current = requestAnimationFrame(animate);
+            requestRef.current = requestAnimationFrame(animate);
         };
 
-        // Small start delay
-        const timer = setTimeout(() => {
-            animationFrameRef.current = requestAnimationFrame(animate);
-        }, 500);
+        startTracing();
 
         return () => {
-            clearTimeout(timer);
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-            }
-
-            // Clean up layers and source
-            if (mapRef.current) {
-                if (mapRef.current.getLayer(ANIMATION_LAYER_ID)) mapRef.current.removeLayer(ANIMATION_LAYER_ID);
-                if (mapRef.current.getLayer(GLOW_LAYER_ID)) mapRef.current.removeLayer(GLOW_LAYER_ID);
-                if (mapRef.current.getSource(SOURCE_ID)) mapRef.current.removeSource(SOURCE_ID);
-            }
-
-            isAnimatingRef.current = false;
-            layersAddedRef.current = false;
+            isMounted = false;
+            cleanup();
         };
+    }, [mapRef, isMapLoaded, isActive, geojsonRoutes, theme, cleanup, onAnimationComplete]);
 
-    }, [isMapLoaded, isActive, animationMode, duration, onAnimationComplete]);
-
-    return null;
+    return null; // Logic only component
 }

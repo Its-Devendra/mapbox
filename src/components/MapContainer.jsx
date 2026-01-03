@@ -274,6 +274,7 @@ export default function MapContainer({
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [currentBearing, setCurrentBearing] = useState(0);
   const [debugCameraPosition, setDebugCameraPosition] = useState(null); // DEBUG: Real-time camera position
+  const [geojsonRoutes, setGeojsonRoutes] = useState(null);
 
   // Custom hook for directions
   const { getDistanceAndDuration, getDirections } = useMapboxDirections();
@@ -1410,6 +1411,17 @@ export default function MapContainer({
     }
   }, [clientBuilding, mapSettings, smoothFlyTo, viewModeRef]);
 
+  // Fetch static GeoJSON routes
+  useEffect(() => {
+    fetch('/data/shalimar.geojson')
+      .then(res => res.json())
+      .then(data => {
+        console.log('🗺️ Loaded static routes:', data);
+        setGeojsonRoutes(data);
+      })
+      .catch(err => console.error('Failed to load static routes:', err));
+  }, []);
+
   /**
    * Handle nearby place hover (raw function without debounce)
    */
@@ -2489,7 +2501,8 @@ export default function MapContainer({
             'icon-anchor': 'bottom'
           },
           paint: {
-            'icon-opacity': ['case', ['get', 'isSelected'], 1, ['any', ['get', 'hasSelectedLandmark'], ['!', ['get', 'isSelected']]], 0.3, 1]
+            // Use coalesce to handle null/undefined values safely
+            'icon-opacity': 1  // Default to full opacity; dimming is handled by separate useEffect
           },
           filter: ['get', 'hasIcon']
         });
@@ -2533,7 +2546,8 @@ export default function MapContainer({
             'icon-anchor': 'bottom'
           },
           paint: {
-            'icon-opacity': ['case', ['get', 'hasSelectedLandmark'], 0.3, MAPBOX_CONFIG.NEARBY_PLACE_OPACITY]
+            // Default to configured opacity; dimming is handled by separate useEffect
+            'icon-opacity': MAPBOX_CONFIG.NEARBY_PLACE_OPACITY ?? 1
           },
           filter: ['get', 'hasIcon']
         });
@@ -2640,52 +2654,74 @@ export default function MapContainer({
       }
 
       // ─────────────────────────────────────────────────────────────
-      // STAGGERED REVEAL LOOP (ONLY ONCE) or INSTANT UPDATE
+      // DISTANCE-BASED WAVE ANIMATION (The "Sonic Ripple")
+      // Uses setTimeout to progressively reveal icons by distance
       // ─────────────────────────────────────────────────────────────
 
-      const visibleLandmarks = [];
-      const visibleNearby = [];
-      let currentIndex = 0;
+      // 1. Calculate Max Distance for Normalization
+      const maxDistance = allItems.length > 0
+        ? Math.max(...allItems.map(item => item.distance))
+        : 1;
 
-      // Animation options
-      const DELAY_MS = 80;
+      // 2. Feature collections that grow over time
+      const landmarkFeatures = [];
+      const nearbyFeatures = [];
 
-      // Logic for instant update (subsequent runs)
-      const instantUpdate = () => {
-        // Landmarks
-        const landmarksGeoJSON = {
-          type: 'FeatureCollection',
-          features: allItems.filter(i => i.type === 'landmark').map(i => {
-            const landmark = i.data;
-            // Add HTML marker if needed
+      // 3. Wave Animation Settings
+      const WAVE_DURATION = 3500; // Total time for wave to complete (ms) - Slow for immersive feel
+      const timeoutIds = []; // Track timeouts for cleanup
+
+      // 4. Process each item with a calculated delay
+      allItems.forEach((item, index) => {
+        // Calculate delay based on distance
+        const delay = (item.distance / maxDistance) * WAVE_DURATION;
+
+        const timeoutId = setTimeout(() => {
+          if (!isActive || !mapRef.current) return;
+          console.log(`🌊 Wave: Revealing item ${index + 1}/${allItems.length} at delay ${delay.toFixed(0)}ms (distance: ${item.distance.toFixed(2)}km)`);
+
+          if (item.type === 'landmark') {
+            const landmark = item.data;
+
+            // Add to GeoJSON
+            landmarkFeatures.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: landmark.coordinates },
+              properties: {
+                id: landmark.id, title: landmark.title, description: landmark.description,
+                hasIcon: !!landmark.icon, isSelected: selectedLandmark?.id === landmark.id
+              }
+            });
+
+            // Update source immediately
+            mapRef.current.getSource(SOURCE_IDS.LANDMARKS)?.setData({
+              type: 'FeatureCollection', features: [...landmarkFeatures]
+            });
+
+            // Add HTML Marker if no icon
             if (!landmark.icon) {
-              // Check if marker already exists to avoid duplication/flicker
-              // We cleared markersRef above, so we must recreate or improve logic to not clear above
-              // For now, we recreate but without 'animate-marker-drop' class for instant feel
               const markerContainer = document.createElement('div');
-              markerContainer.className = 'landmark-marker-container'; // No animation class
+              markerContainer.className = 'landmark-marker-container animate-apple-pop';
               const markerContent = document.createElement('div');
               markerContent.innerHTML = `<svg viewBox="0 0 27 41" width="27" height="41"><path fill="#3FB1CE" d="M27,13.5C27,19.07 20.25,27 14.75,34.5C14.02,35.5 12.98,35.5 12.25,34.5C6.75,27 0,19.07 0,13.5C0,6.04 6.04,0 13.5,0C20.96,0 27,6.04 27,13.5Z"/><path fill="#3FB1CE" opacity="0.3" d="M13.5,2C7.15,2 2,7.15 2,13.5C2,18.44 8.08,26.78 13.5,33.58C18.92,26.78 25,18.44 25,13.5C25,7.15 19.85,2 13.5,2Z"/><circle fill="#FFFFFF" cx="13.5" cy="13.5" r="5.5"/></svg>`;
               markerContent.classList.add('animate-marker-breathe');
               markerContainer.appendChild(markerContent);
-              const marker = new mapboxgl.Marker({ element: markerContainer }).setLngLat(landmark.coordinates).addTo(mapRef.current);
-              markerContainer.addEventListener('click', (e) => { e.stopPropagation(); setSelectedLandmark(landmark); setShowLandmarkCard(true); if (clientBuilding) navigateToLandmark(landmark); });
+              const marker = new mapboxgl.Marker({ element: markerContainer })
+                .setLngLat(landmark.coordinates)
+                .addTo(mapRef.current);
+              markerContainer.addEventListener('click', (e) => {
+                e.stopPropagation();
+                setSelectedLandmark(landmark);
+                setShowLandmarkCard(true);
+                if (clientBuilding) navigateToLandmark(landmark);
+              });
               markersRef.current.push(marker);
             }
-            return {
-              type: 'Feature', geometry: { type: 'Point', coordinates: landmark.coordinates },
-              properties: { id: landmark.id, title: landmark.title, description: landmark.description, hasIcon: !!landmark.icon, isSelected: selectedLandmark?.id === landmark.id }
-            };
-          })
-        };
-        mapRef.current.getSource(SOURCE_IDS.LANDMARKS)?.setData(landmarksGeoJSON);
 
-        // Nearby Places
-        const nearbyGeoJSON = {
-          type: 'FeatureCollection',
-          features: allItems.filter(i => i.type === 'nearby').map(i => {
-            const place = i.data;
-            // Add HTML marker if needed (reuse filter logic)
+          } else if (item.type === 'nearby') {
+            const place = item.data;
+
+            // Filter Logic
             let shouldShow = true;
             if (externalCategoryFilter) {
               const filterKey = String(externalCategoryFilter).toLowerCase().replace(/s$/, '');
@@ -2694,154 +2730,63 @@ export default function MapContainer({
               const keywords = validKeywords[filterKey] || [filterKey];
               if (!keywords.some(k => placeCat.includes(k))) shouldShow = false;
             }
-            if (shouldShow && !place.icon && !place.categoryIcon) {
+
+            if (!shouldShow) return;
+
+            // Add to GeoJSON
+            nearbyFeatures.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: place.coordinates },
+              properties: {
+                id: place.id, title: place.title, categoryName: place.categoryName || '',
+                hasIcon: !!(place.icon || place.categoryIcon), hasSelectedLandmark: !!selectedLandmark
+              }
+            });
+
+            // Update source immediately
+            mapRef.current.getSource(SOURCE_IDS.NEARBY_PLACES)?.setData({
+              type: 'FeatureCollection', features: [...nearbyFeatures]
+            });
+
+            // Add HTML Marker if no icon
+            if (!place.icon && !place.categoryIcon) {
               const markerContainer = document.createElement('div');
-              // No animation class
+              markerContainer.className = 'animate-apple-pop';
               const markerInner = document.createElement('div');
               Object.assign(markerInner.style, { width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#8b5cf6', border: '2px solid white', boxShadow: '0 1px 3px rgba(0,0,0,0.3)', opacity: '0.7', cursor: 'pointer' });
               markerInner.classList.add('animate-marker-breathe');
               markerContainer.appendChild(markerInner);
-              const marker = new mapboxgl.Marker(markerContainer).setLngLat(place.coordinates).addTo(mapRef.current);
-              // ... events ...
-              const showPlacePopup = async () => { if (nearbyPlacePopupRef.current) nearbyPlacePopupRef.current.remove(); const popup = new mapboxgl.Popup({ offset: MAPBOX_CONFIG.POPUP_OFFSET, closeButton: true, closeOnClick: false, className: 'nearby-popup-premium' }).setLngLat(place.coordinates).setHTML(`<div class="bg-white p-2 rounded shadow">Loading...</div>`).addTo(mapRef.current); nearbyPlacePopupRef.current = popup; popupsRef.current.push(popup); try { const result = await getDistanceAndDuration(clientBuilding.coordinates, place.coordinates); if (result && nearbyPlacePopupRef.current === popup) popup.setHTML(`<div class="bg-white p-2 rounded shadow"><b>${place.title}</b><br>${formatDistance(result.distance)}</div>`); } catch (e) { } };
+              const marker = new mapboxgl.Marker(markerContainer)
+                .setLngLat(place.coordinates)
+                .addTo(mapRef.current);
+
+              // Events
+              const showPlacePopup = async () => {
+                if (nearbyPlacePopupRef.current) nearbyPlacePopupRef.current.remove();
+                const popup = new mapboxgl.Popup({ offset: MAPBOX_CONFIG.POPUP_OFFSET, closeButton: true, closeOnClick: false, className: 'nearby-popup-premium' }).setLngLat(place.coordinates).setHTML(`<div class="bg-white p-2 rounded shadow">Loading...</div>`).addTo(mapRef.current);
+                nearbyPlacePopupRef.current = popup; popupsRef.current.push(popup);
+                try { const result = await getDistanceAndDuration(clientBuilding.coordinates, place.coordinates); if (result && nearbyPlacePopupRef.current === popup) popup.setHTML(`<div class="bg-white p-2 rounded shadow"><b>${place.title}</b><br>${formatDistance(result.distance)}</div>`); } catch (e) { }
+              };
               markerContainer.addEventListener('click', (e) => { e.stopPropagation(); showPlacePopup(); });
               markerContainer.addEventListener('mouseenter', () => showPlacePopup());
               markerContainer.addEventListener('mouseleave', () => { setTimeout(() => { if (nearbyPlacePopupRef.current && nearbyPlacePopupRef.current.placeId === place.id) { nearbyPlacePopupRef.current.remove(); nearbyPlacePopupRef.current = null; } }, 100); });
               markersRef.current.push(marker);
             }
-
-            return {
-              type: 'Feature', geometry: { type: 'Point', coordinates: place.coordinates },
-              properties: { id: place.id, title: place.title, categoryName: place.categoryName || '', hasIcon: !!(place.icon || place.categoryIcon), hasSelectedLandmark: !!selectedLandmark }
-            };
-          })
-        };
-        mapRef.current.getSource(SOURCE_IDS.NEARBY_PLACES)?.setData(nearbyGeoJSON);
-      };
-
-
-      const revealNext = () => {
-        if (!isActive || !mapRef.current) return;
-        if (currentIndex >= allItems.length) {
-          console.log('✅ All icons revealed.');
-          return;
-        }
-
-        const item = allItems[currentIndex];
-        currentIndex++;
-
-        if (item.type === 'landmark') {
-          const landmark = item.data;
-          const geoJsonFeature = {
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: landmark.coordinates },
-            properties: {
-              id: landmark.id, title: landmark.title, description: landmark.description,
-              hasIcon: !!landmark.icon, isSelected: selectedLandmark?.id === landmark.id
-            }
-          };
-          visibleLandmarks.push(geoJsonFeature);
-
-          // Update Source
-          mapRef.current.getSource(SOURCE_IDS.LANDMARKS)?.setData({
-            type: 'FeatureCollection', features: visibleLandmarks
-          });
-
-          // Handle HTML Marker (if no icon)
-          if (!landmark.icon) {
-            const markerContainer = document.createElement('div');
-            markerContainer.className = 'landmark-marker-container animate-marker-drop'; // Added animation class
-            const markerContent = document.createElement('div');
-            markerContent.innerHTML = `<svg viewBox="0 0 27 41" width="27" height="41"><path fill="#3FB1CE" d="M27,13.5C27,19.07 20.25,27 14.75,34.5C14.02,35.5 12.98,35.5 12.25,34.5C6.75,27 0,19.07 0,13.5C0,6.04 6.04,0 13.5,0C20.96,0 27,6.04 27,13.5Z"/><path fill="#3FB1CE" opacity="0.3" d="M13.5,2C7.15,2 2,7.15 2,13.5C2,18.44 8.08,26.78 13.5,33.58C18.92,26.78 25,18.44 25,13.5C25,7.15 19.85,2 13.5,2Z"/><circle fill="#FFFFFF" cx="13.5" cy="13.5" r="5.5"/></svg>`;
-            markerContent.classList.add('animate-marker-breathe');
-            markerContainer.appendChild(markerContent);
-
-            const marker = new mapboxgl.Marker({ element: markerContainer })
-              .setLngLat(landmark.coordinates)
-              .addTo(mapRef.current);
-
-            markerContainer.addEventListener('click', (e) => {
-              e.stopPropagation();
-              setSelectedLandmark(landmark);
-              setShowLandmarkCard(true);
-              if (clientBuilding) navigateToLandmark(landmark);
-            });
-            markersRef.current.push(marker);
           }
+        }, delay);
 
-        } else if (item.type === 'nearby') {
-          const place = item.data;
-          const geoJsonFeature = {
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: place.coordinates },
-            properties: {
-              id: place.id, title: place.title, categoryName: place.categoryName || '',
-              hasIcon: !!(place.icon || place.categoryIcon), hasSelectedLandmark: !!selectedLandmark
-            }
-          };
-          visibleNearby.push(geoJsonFeature);
+        timeoutIds.push(timeoutId);
+      });
 
-          // Update Source
-          mapRef.current.getSource(SOURCE_IDS.NEARBY_PLACES)?.setData({
-            type: 'FeatureCollection', features: visibleNearby
-          });
-
-          // Handle HTML Marker (if no icon)
-          // AND check filter logic
-          // ... (Filter logic logic reused)
-          let shouldShow = true;
-          if (externalCategoryFilter) {
-            const filterKey = String(externalCategoryFilter).toLowerCase().replace(/s$/, '');
-            const placeCat = (place.categoryName || place.category || '').toLowerCase();
-            const validKeywords = { 'education': ['school', 'college', 'university', 'institute', 'academy', 'education', 'campus'], 'hospital': ['hospital', 'clinic', 'medical', 'health', 'doctor', 'pharmacy', 'nursing'], 'mall': ['mall', 'shopping', 'store', 'market', 'plaza', 'retail'], 'restaurant': ['restaurant', 'food', 'cafe', 'dining', 'bar', 'bistro', 'bakery'], 'bank': ['bank', 'atm', 'finance'], 'park': ['park', 'garden', 'recreation'] };
-            const keywords = validKeywords[filterKey] || [filterKey];
-            if (!keywords.some(k => placeCat.includes(k))) shouldShow = false;
-          }
-
-          if (shouldShow && !place.icon && !place.categoryIcon) {
-            const markerContainer = document.createElement('div');
-            markerContainer.className = 'animate-marker-drop'; // Added animation class
-            const markerInner = document.createElement('div');
-            Object.assign(markerInner.style, { width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#8b5cf6', border: '2px solid white', boxShadow: '0 1px 3px rgba(0,0,0,0.3)', opacity: '0.7', cursor: 'pointer' });
-            markerInner.classList.add('animate-marker-breathe');
-            markerContainer.appendChild(markerInner);
-
-            const marker = new mapboxgl.Marker(markerContainer)
-              .setLngLat(place.coordinates)
-              .addTo(mapRef.current);
-
-            // ... (Events logic reused simplified) ...
-            const showPlacePopup = async () => {
-              if (nearbyPlacePopupRef.current) nearbyPlacePopupRef.current.remove();
-              const popup = new mapboxgl.Popup({ offset: MAPBOX_CONFIG.POPUP_OFFSET, closeButton: true, closeOnClick: false, className: 'nearby-popup-premium' }).setLngLat(place.coordinates).setHTML(`<div class="bg-white p-2 rounded shadow">Loading...</div>`).addTo(mapRef.current);
-              nearbyPlacePopupRef.current = popup; popupsRef.current.push(popup);
-              try { const result = await getDistanceAndDuration(clientBuilding.coordinates, place.coordinates); if (result && nearbyPlacePopupRef.current === popup) popup.setHTML(`<div class="bg-white p-2 rounded shadow"><b>${place.title}</b><br>${formatDistance(result.distance)}</div>`); } catch (e) { }
-            };
-            markerContainer.addEventListener('click', (e) => { e.stopPropagation(); showPlacePopup(); });
-            markerContainer.addEventListener('mouseenter', () => showPlacePopup());
-            markerContainer.addEventListener('mouseleave', () => { setTimeout(() => { if (nearbyPlacePopupRef.current && nearbyPlacePopupRef.current.placeId === place.id) { nearbyPlacePopupRef.current.remove(); nearbyPlacePopupRef.current = null; } }, 100); });
-            markersRef.current.push(marker);
-          }
-        }
-
-        // Schedule next
-        if (isActive) {
-          cascadeAnimationFrameRef.current = setTimeout(revealNext, DELAY_MS);
-        }
-      };
-
-      // ─────────────────────────────────────────────────────────────
-      // DECIDE TO CASCADE OR UPDATE INSTANTLY
-      // ─────────────────────────────────────────────────────────────
-
-      // If we haven't done the initial reveal yet, do the cascade
-      if (!hasPerformedInitialRevealRef.current) {
+      // 5. Mark initial reveal complete after wave finishes
+      const completeTimeoutId = setTimeout(() => {
         hasPerformedInitialRevealRef.current = true;
-        revealNext();
-      } else {
-        // Already revealed? Just update instantly.
-        instantUpdate();
-      }
+        console.log('✅ Wave animation complete. All icons revealed.');
+      }, WAVE_DURATION + 500);
+      timeoutIds.push(completeTimeoutId);
+
+      // Store timeout IDs for cleanup
+      cascadeAnimationFrameRef.current = timeoutIds;
 
     };
 
@@ -2849,7 +2794,10 @@ export default function MapContainer({
 
     return () => {
       isActive = false;
-      if (cascadeAnimationFrameRef.current) clearTimeout(cascadeAnimationFrameRef.current);
+      // Clear all pending timeouts
+      if (Array.isArray(cascadeAnimationFrameRef.current)) {
+        cascadeAnimationFrameRef.current.forEach(id => clearTimeout(id));
+      }
     };
   }, [landmarks, nearbyPlaces, clientBuilding, project, loadCustomIcons, navigateToLandmark, handleNearbyPlaceLeave, getDistanceAndDuration, isMapLoaded, theme, isRouteAnimationComplete, externalCategoryFilter]);
 
@@ -3187,8 +3135,10 @@ export default function MapContainer({
         isMapLoaded={isMapLoaded}
         isActive={isInitialCameraAnimationComplete && !isTourActive && !isRouteAnimationComplete}
         onAnimationComplete={handleRouteAnimationComplete}
-        performanceTier={performanceTier}
-        animationMode="parallel"
+        geojsonRoutes={geojsonRoutes}
+        landmarks={landmarks}
+        clientBuilding={clientBuilding}
+        theme={theme}
       />
     </>
   );

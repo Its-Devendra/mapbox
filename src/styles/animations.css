@@ -675,6 +675,45 @@
   animation-fill-mode: both;
 }
 
+/* Premium Apple-Pop Animation - Immersive Version */
+.animate-apple-pop {
+  animation-name: applePop;
+  animation-duration: 1s;
+  animation-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1.5);
+  /* More dramatic spring overshoot */
+  animation-fill-mode: both;
+  will-change: transform, opacity, filter;
+}
+
+@keyframes applePop {
+  0% {
+    opacity: 0;
+    transform: scale(0) translateY(30px);
+    filter: blur(12px) brightness(1.5);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.25) translateY(-12px);
+    filter: blur(0px) brightness(1.2) drop-shadow(0 0 8px rgba(255, 188, 4, 0.6));
+  }
+
+  70% {
+    transform: scale(0.9) translateY(6px);
+    filter: blur(0px) brightness(1);
+  }
+
+  85% {
+    transform: scale(1.05) translateY(-2px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: none;
+  }
+}
+
 .animate-gentle-bounce {
   animation-name: gentleBounce;
   animation-iteration-count: infinite;
