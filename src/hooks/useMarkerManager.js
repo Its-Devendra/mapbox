@@ -143,21 +143,22 @@ export function useMarkerManager({
         if (map.getLayer(LAYER_IDS.LANDMARKS)) map.removeLayer(LAYER_IDS.LANDMARKS);
         if (map.getSource(SOURCE_IDS.LANDMARKS)) map.removeSource(SOURCE_IDS.LANDMARKS);
 
-        landmarks.forEach((landmark) => {
+        landmarks.forEach((landmark, index) => {
             // Create DOM element
             const el = document.createElement('div');
             el.className = 'landmark-marker-container';
             el.id = `landmark-marker-${landmark.id}`;
 
-            // Initial state: Hidden if route animation is not complete
-            // This allows the staggered reveal to work later
-            if (!isRouteAnimationComplete) {
-                el.style.opacity = '0';
-                el.style.transform = 'translateY(-40px) scale(0.6)';
-            } else {
-                el.style.opacity = '1';
-                el.style.transform = 'translateY(0) scale(1)';
-            }
+            // NEW: Category tagging for cascade reveal
+            el.dataset.category = landmark.categoryName?.toLowerCase() || 'landmark';
+            el.dataset.markerType = 'landmark';
+            el.dataset.index = index.toString();
+
+            // Initial state: ALWAYS hidden - cascade will reveal them
+            // This prevents the old "all at once" behavior
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(-40px) scale(0.6)';
+            el.style.transition = 'none'; // CSS animation will handle it
 
             // Icon Content
             const iconUrl = landmark.icon;

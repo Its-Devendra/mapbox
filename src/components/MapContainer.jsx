@@ -248,6 +248,7 @@ export default function MapContainer({
 
   // Cascade Animation Refs
   const hasPerformedInitialRevealRef = useRef(false);
+  const hasStartedIconCascadeRef = useRef(false); // NEW: Track if cascade has been triggered at 80%
   const cascadeAnimationFrameRef = useRef(null);
 
   // Intro State
@@ -459,17 +460,84 @@ export default function MapContainer({
 
 
   /**
+   * Apple-Grade Category Cascade Reveal
+   * Reveals icons in category waves with staggered timing
+   */
+  const triggerCategoryReveal = useCallback(() => {
+    console.log('✨ Triggering category cascade reveal...');
+
+    // Category order (customize based on importance)
+    const categoryOrder = [
+      'landmark',      // Main attractions first
+      'hospital',      // Essential services
+      'education',     // Schools
+      'shopping',      // Retail
+      'transport',     // Transit
+      'restaurant',    // Dining
+      'entertainment', // Fun
+      'other'          // Everything else
+    ];
+
+    const categoryDelay = 120; // ms between category waves
+    const iconDelay = 60;      // ms between icons within category
+
+    let totalDelay = 0;
+
+    categoryOrder.forEach((category, categoryIndex) => {
+      // Find all markers for this category
+      const markers = document.querySelectorAll(`[data-category="${category}"][data-marker-type="landmark"]`);
+
+      markers.forEach((el, iconIndex) => {
+        const delay = categoryIndex * categoryDelay + iconIndex * iconDelay;
+
+        // Schedule the reveal
+        setTimeout(() => {
+          el.classList.add('animate-apple-pop');
+        }, delay);
+
+        totalDelay = Math.max(totalDelay, delay);
+      });
+    });
+
+    // Also reveal any uncategorized markers
+    const uncategorized = document.querySelectorAll('[data-marker-type="landmark"]:not(.animate-apple-pop)');
+    uncategorized.forEach((el, i) => {
+      setTimeout(() => {
+        el.classList.add('animate-apple-pop');
+      }, totalDelay + i * iconDelay);
+    });
+
+    console.log(`✨ Cascade scheduled for ${document.querySelectorAll('[data-marker-type="landmark"]').length} markers`);
+  }, []);
+
+  /**
+   * Handle route progress for seamless orchestration
+   * Triggers icon cascade at 80% route completion (before route finishes)
+   */
+  const handleRouteProgress = useCallback((progress) => {
+    // Trigger cascade at 80% - creates seamless overlap
+    if (progress >= 0.8 && !hasStartedIconCascadeRef.current) {
+      hasStartedIconCascadeRef.current = true;
+      console.log('🎬 Route at 80% - Starting icon cascade early for seamless feel');
+      setCinematicPhase('revealing');
+      triggerCategoryReveal();
+    }
+  }, [triggerCategoryReveal]);
+
+  /**
    * Callback for when route animation completes (memoized to prevent re-renders)
    */
   const handleRouteAnimationComplete = useCallback(() => {
-    console.log('🎬 Route animation complete. Transitioning to reveal phase.');
-    setCinematicPhase('revealing');
+    console.log('🎬 Route animation complete. Finalizing reveal phase.');
     setIsRouteAnimationComplete(true);
 
-    // After cascade completes (~1s), mark as fully complete
+    // Reset cascade flag for potential replay
+    hasStartedIconCascadeRef.current = false;
+
+    // Mark as fully complete after a short delay
     setTimeout(() => {
       setCinematicPhase('complete');
-    }, 1200);
+    }, 800);
   }, []);
 
   /**
@@ -3135,6 +3203,7 @@ export default function MapContainer({
         isMapLoaded={isMapLoaded}
         isActive={isInitialCameraAnimationComplete && !isTourActive && !isRouteAnimationComplete}
         onAnimationComplete={handleRouteAnimationComplete}
+        onProgress={handleRouteProgress} // NEW: Enables seamless icon cascade at 80%
         geojsonRoutes={geojsonRoutes}
         landmarks={landmarks}
         clientBuilding={clientBuilding}

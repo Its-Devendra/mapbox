@@ -8,6 +8,7 @@ export default function RoadTracer({
     isMapLoaded,
     isActive,
     onAnimationComplete,
+    onProgress, // NEW: Reports progress (0.0 to 1.0) each frame for seamless orchestration
     geojsonRoutes, // GeoJSON FeatureCollection passed from parent
     theme
 }) {
@@ -153,6 +154,9 @@ export default function RoadTracer({
                 const elapsed = time - startTimeRef.current;
                 const progress = Math.min(elapsed / duration, 1);
 
+                // Report progress for seamless orchestration (icons can start at 80%)
+                if (onProgress) onProgress(progress);
+
                 // Tracing phase - only update geometry if not finished
                 if (!isTraceFinished) {
                     // Use Swift Out curve (defined above) for Apple-grade motion
@@ -258,7 +262,7 @@ export default function RoadTracer({
             isMounted = false;
             cleanup();
         };
-    }, [mapRef, isMapLoaded, isActive, geojsonRoutes, theme, cleanup, onAnimationComplete]);
+    }, [mapRef, isMapLoaded, isActive, geojsonRoutes, theme, cleanup, onAnimationComplete, onProgress]);
 
     return null; // Logic only component
 }
